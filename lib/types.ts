@@ -66,33 +66,44 @@ export interface Recommendation {
   };
 }
 
+export interface AiSignalParsed {
+  ticker: string;
+  company_name: string;
+  timestamp: string;
+  signal: Signal;
+  signal_confidence: number;
+  price_data: {
+    current_price: number;
+    target_price_1: number;
+    target_price_2: number;
+    stop_loss: number;
+  };
+  risk_assessment: {
+    risk_level: "LOW" | "MEDIUM" | "HIGH";
+    risk_reward_ratio: string;
+    liquidity_risk: "LOW" | "MEDIUM" | "HIGH";
+  };
+  analysis_summary: {
+    technical_reason: string;
+    fundamental_reason: string;
+    overall_logic: string;
+  };
+}
+
+export interface AiSignalProviderSummary {
+  provider: "anthropic" | "gemini" | "groq" | "openrouter";
+  ok: boolean;
+  signal?: Signal;
+  confidence?: number;
+  error?: string;
+}
+
 export interface AiSignal {
   companyCode: number;
   symbol: string;
   createdAt: Date;
-  raw: string;
-  parsed: {
-    ticker: string;
-    company_name: string;
-    timestamp: string;
-    signal: Signal;
-    signal_confidence: number;
-    price_data: {
-      current_price: number;
-      target_price_1: number;
-      target_price_2: number;
-      stop_loss: number;
-    };
-    risk_assessment: {
-      risk_level: "LOW" | "MEDIUM" | "HIGH";
-      risk_reward_ratio: string;
-      liquidity_risk: "LOW" | "MEDIUM" | "HIGH";
-    };
-    analysis_summary: {
-      technical_reason: string;
-      fundamental_reason: string;
-      overall_logic: string;
-    };
-  } | null;
-  error?: string;
+  consensus: AiSignalParsed;
+  agreement: number;
+  providersUsed: number;
+  providers: AiSignalProviderSummary[];
 }

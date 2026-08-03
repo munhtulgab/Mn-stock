@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getStockDetail } from "@/lib/data";
 import { fetchCompanyNews } from "@/lib/mse/news";
-import { AiNotConfiguredError, generateAiSignal } from "@/lib/ai/analyst";
+import { fetchNewsSources } from "@/lib/mse/newsSources";
+import { getSettings } from "@/lib/settings";
+import {
+  AllProvidersFailedError,
+  NoProviderConfiguredError,
+  generateMultiProviderSignal,
+} from "@/lib/ai/multiAnalyst";
 import type { AiSignal } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -34,6 +40,8 @@ export async function GET(
     }
   }
 
+  const settings = await getSettings(db);
+
   let news: Awaited<ReturnType<typeof fetchCompanyNews>> = [];
   try {
     news = await fetchCompanyNews(detail.security.companyCode, 8);
@@ -41,29 +49,47 @@ export async function GET(
     console.error("news fetch failed", err);
   }
 
+  let externalNews: Awaited<ReturnType<typeof fetchNewsSources>> = [];
+  if (settings.newsSources.length > 0) {
+    try {
+      externalNews = await fetchNewsSources(settings.newsSources);
+    } catch (err) {
+      console.error("external news source fetch failed", err);
+    }
+  }
+
   try {
-    const { raw, parsed } = await generateAiSignal({
+    const result = await generateMultiProviderSignal(settings, {
       security: detail.security,
       prices: detail.priceHistory,
       financials: detail.financials,
       recommendation: detail.recommendation,
       news,
+      externalNews,
     });
 
     const doc: AiSignal = {
       companyCode: detail.security.companyCode,
       symbol: detail.security.symbol,
       createdAt: new Date(),
-      raw,
-      parsed,
+      consensus: result.consensus,
+      agreement: result.agreement,
+      providersUsed: result.providersUsed,
+      providers: result.providers,
     };
     await db.collection<AiSignal>("aiSignals").insertOne(doc);
     return NextResponse.json(doc);
   } catch (err) {
-    if (err instanceof AiNotConfiguredError) {
+    if (err instanceof NoProviderConfiguredError) {
       return NextResponse.json(
         { error: "AI_NOT_CONFIGURED", message: err.message },
         { status: 501 },
+      );
+    }
+    if (err instanceof AllProvidersFailedError) {
+      return NextResponse.json(
+        { error: "AI_ALL_PROVIDERS_FAILED", message: err.message },
+        { status: 502 },
       );
     }
     console.error("AI signal generation failed", err);

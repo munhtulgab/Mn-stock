@@ -35,9 +35,17 @@ export default function RootLayout({
             <Link href="/" className="font-semibold tracking-tight">
               MSE Хөрөнгийн Зөвлөх
             </Link>
-            <span className="text-xs text-neutral-400">
-              Монголын хөрөнгийн биржийн нээлттэй өгөгдөлд үндэслэсэн
-            </span>
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-neutral-400 hidden sm:inline">
+                Монголын хөрөнгийн биржийн нээлттэй өгөгдөлд үндэслэсэн
+              </span>
+              <Link
+                href="/settings"
+                className="text-xs text-neutral-400 hover:text-neutral-200"
+              >
+                Тохиргоо
+              </Link>
+            </div>
           </div>
         </header>
         <main className="flex-1">{children}</main>

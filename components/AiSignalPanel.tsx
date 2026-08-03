@@ -17,6 +17,13 @@ const RISK_LABEL: Record<string, string> = {
   HIGH: "Өндөр",
 };
 
+const PROVIDER_LABEL: Record<string, string> = {
+  anthropic: "Claude",
+  gemini: "Gemini",
+  groq: "Groq",
+  openrouter: "OpenRouter",
+};
+
 export default function AiSignalPanel({ symbol }: { symbol: string }) {
   const [state, setState] = useState<State>({ status: "idle" });
 
@@ -48,7 +55,7 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-sm">AI дүн шинжилгээ (LLM)</h2>
+        <h2 className="font-semibold text-sm">AI дүн шинжилгээ (олон LLM)</h2>
         {state.status === "ready" && (
           <button
             onClick={() => load(true)}
@@ -75,8 +82,11 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
       {state.status === "not_configured" && (
         <p className="text-sm text-neutral-400">
           AI дүн шинжилгээ ажиллуулахын тулд{" "}
-          <code className="text-neutral-200">ANTHROPIC_API_KEY</code>{" "}
-          орчны хувьсагчийг тохируулах шаардлагатай.
+          <a href="/settings" className="underline text-neutral-200">
+            Тохиргоо
+          </a>{" "}
+          хуудсан дээр дор хаяж нэг API түлхүүр (Claude, Gemini, Groq эсвэл
+          OpenRouter) тохируулах шаардлагатай.
         </p>
       )}
 
@@ -84,49 +94,70 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
         <p className="text-sm text-rose-400">{state.message}</p>
       )}
 
-      {state.status === "ready" && state.data.parsed && (
+      {state.status === "ready" && (
         <div className="space-y-3 text-sm">
-          <div className="flex items-center gap-3">
-            <SignalBadge signal={state.data.parsed.signal} />
+          <div className="flex flex-wrap items-center gap-3">
+            <SignalBadge signal={state.data.consensus.signal} />
             <span className="text-neutral-400">
-              Итгэлцлийн түвшин: {state.data.parsed.signal_confidence}%
+              Итгэлцлийн түвшин: {state.data.consensus.signal_confidence}%
+            </span>
+            <span className="text-neutral-400">
+              Тохиролцоо: {Math.round(state.data.agreement * 100)}% (
+              {state.data.providersUsed} үйлчилгээнээс)
             </span>
             <span className="text-neutral-500 text-xs">
               {new Date(state.data.createdAt).toLocaleString("mn-MN")}
             </span>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            {state.data.providers.map((p) => (
+              <span
+                key={p.provider}
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 ${
+                  p.ok
+                    ? "bg-neutral-800/60 text-neutral-300 ring-neutral-700"
+                    : "bg-rose-500/10 text-rose-400 ring-rose-500/20"
+                }`}
+                title={p.error}
+              >
+                {PROVIDER_LABEL[p.provider] ?? p.provider}
+                {p.ok ? `: ${p.signal} (${p.confidence}%)` : ": алдаа"}
+              </span>
+            ))}
+          </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Stat label="Одоогийн ханш" value={state.data.parsed.price_data.current_price} />
-            <Stat label="Зорилтот 1" value={state.data.parsed.price_data.target_price_1} />
-            <Stat label="Зорилтот 2" value={state.data.parsed.price_data.target_price_2} />
-            <Stat label="Stop-loss" value={state.data.parsed.price_data.stop_loss} />
+            <Stat label="Одоогийн ханш" value={state.data.consensus.price_data.current_price} />
+            <Stat label="Зорилтот 1" value={state.data.consensus.price_data.target_price_1} />
+            <Stat label="Зорилтот 2" value={state.data.consensus.price_data.target_price_2} />
+            <Stat label="Stop-loss" value={state.data.consensus.price_data.stop_loss} />
           </div>
 
           <div className="flex flex-wrap gap-4 text-xs text-neutral-400">
             <span>
-              Эрсдэл: {RISK_LABEL[state.data.parsed.risk_assessment.risk_level]}
+              Эрсдэл: {RISK_LABEL[state.data.consensus.risk_assessment.risk_level]}
             </span>
             <span>
-              Эрсдэл/Ашгийн харьцаа: {state.data.parsed.risk_assessment.risk_reward_ratio}
+              Эрсдэл/Ашгийн харьцаа: {state.data.consensus.risk_assessment.risk_reward_ratio}
             </span>
             <span>
-              Хөрвөх чадварын эрсдэл: {RISK_LABEL[state.data.parsed.risk_assessment.liquidity_risk]}
+              Хөрвөх чадварын эрсдэл: {RISK_LABEL[state.data.consensus.risk_assessment.liquidity_risk]}
             </span>
           </div>
 
           <div className="space-y-2 pt-2 border-t border-neutral-800">
             <p>
               <span className="text-neutral-400">Техник: </span>
-              {state.data.parsed.analysis_summary.technical_reason}
+              {state.data.consensus.analysis_summary.technical_reason}
             </p>
             <p>
               <span className="text-neutral-400">Фундаментал: </span>
-              {state.data.parsed.analysis_summary.fundamental_reason}
+              {state.data.consensus.analysis_summary.fundamental_reason}
             </p>
             <p>
               <span className="text-neutral-400">Дүгнэлт: </span>
-              {state.data.parsed.analysis_summary.overall_logic}
+              {state.data.consensus.analysis_summary.overall_logic}
             </p>
           </div>
         </div>
