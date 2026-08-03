@@ -98,7 +98,7 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
                 {row.lastPrice === null ? (
                   <span className="text-app-muted">—</span>
                 ) : (
-                  <Num value={row.lastPrice} digits={2} />
+                  <Num value={row.lastPrice} digits={2} suffix="₮" />
                 )}
               </div>
               <div className="text-xs">

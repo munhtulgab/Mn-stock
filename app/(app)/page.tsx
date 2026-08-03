@@ -107,7 +107,7 @@ export default async function HomePage() {
             >
               <div className="text-xs font-semibold text-app-text truncate">{r.symbol}</div>
               <div className="text-[11px] text-app-muted truncate">
-                <Num value={r.lastPrice ?? 0} digits={2} />
+                <Num value={r.lastPrice ?? 0} digits={2} suffix="₮" />
               </div>
               <div className="text-[11px] mt-0.5">
                 <Pct value={r.changePct} />
@@ -255,14 +255,19 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
         <Link
           key={r.symbol}
           href={`/stock/${r.symbol}`}
-          className="shrink-0 w-32 rounded-2xl border border-app-border bg-app-card p-3"
+          className="shrink-0 w-44 rounded-2xl border border-app-border bg-app-card p-3"
         >
-          <div className="text-sm font-semibold text-app-text truncate">{r.symbol}</div>
-          <div className="text-xs text-app-muted">
-            <Num value={r.lastPrice ?? 0} digits={2} suffix="₮" />
+          <div className="flex items-center gap-1.5">
+            <StockAvatar symbol={r.symbol} size={18} />
+            <span className="text-sm font-semibold text-app-text truncate">{r.symbol}</span>
           </div>
-          <div className="text-xs mt-1">
-            <Pct value={r.changePct} />
+          <div className="flex items-baseline justify-between gap-2 mt-2">
+            <span className="text-xs text-app-text">
+              <Num value={r.lastPrice ?? 0} digits={2} suffix="₮" />
+            </span>
+            <span className="text-xs">
+              <Pct value={r.changePct} />
+            </span>
           </div>
         </Link>
       ))}

@@ -21,6 +21,12 @@ function fmt(value: number | null | undefined, digits = 2): string {
   });
 }
 
+/** Same as fmt, with the currency mark appended for money-valued figures. */
+function money(value: number | null | undefined, digits = 2): string {
+  const text = fmt(value, digits);
+  return text === "—" ? text : `${text}\u00A0₮`;
+}
+
 function sma(values: number[], period: number, index: number): number | null {
   if (index + 1 < period) return null;
   const window = values.slice(index + 1 - period, index + 1);
@@ -85,7 +91,7 @@ export default async function StockDetailPage({
         <div className="flex items-start gap-2">
           <div className="text-right">
             <div className="text-2xl text-app-text">
-              {last ? <Num value={last.close} digits={2} /> : <span className="text-app-muted">—</span>}
+              {last ? <Num value={last.close} digits={2} suffix="₮" /> : <span className="text-app-muted">—</span>}
             </div>
             <div className="text-sm">
               <Pct value={changePct} />
@@ -125,8 +131,8 @@ export default async function StockDetailPage({
         <div className="rounded-2xl border border-app-border bg-app-card p-4">
           <h2 className="text-sm font-semibold text-app-text mb-3">Техник үзүүлэлт</h2>
           <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
-            <Metric label="SMA20" value={fmt(recommendation.indicators.sma20)} />
-            <Metric label="SMA50" value={fmt(recommendation.indicators.sma50)} />
+            <Metric label="SMA20" value={money(recommendation.indicators.sma20)} />
+            <Metric label="SMA50" value={money(recommendation.indicators.sma50)} />
             <Metric label="RSI(14)" value={fmt(recommendation.indicators.rsi14, 1)} />
             <Metric
               label="Момент 20х"
@@ -136,8 +142,8 @@ export default async function StockDetailPage({
                   : `${fmt(recommendation.indicators.momentum20)}%`
               }
             />
-            <Metric label="52 долоо хоногийн дээд" value={fmt(recommendation.indicators.weekHigh52)} />
-            <Metric label="52 долоо хоногийн доод" value={fmt(recommendation.indicators.weekLow52)} />
+            <Metric label="52 долоо хоногийн дээд" value={money(recommendation.indicators.weekHigh52)} />
+            <Metric label="52 долоо хоногийн доод" value={money(recommendation.indicators.weekLow52)} />
           </dl>
         </div>
 
@@ -152,10 +158,10 @@ export default async function StockDetailPage({
                 label="Захын дундаж P/E"
                 value={marketMedianPe === null ? "—" : fmt(marketMedianPe, 2)}
               />
-              <Metric label="EPS" value={fmt(financials.eps)} />
+              <Metric label="EPS" value={money(financials.eps)} />
               <Metric label="ROE %" value={fmt(financials.roe)} />
               <Metric label="ROA %" value={fmt(financials.roa)} />
-              <Metric label="Цэвэр ашиг" value={fmt(financials.netProfit, 0)} />
+              <Metric label="Цэвэр ашиг" value={money(financials.netProfit, 0)} />
             </dl>
           ) : (
             <p className="text-xs text-app-muted">Мэдээлэл олдсонгүй.</p>
