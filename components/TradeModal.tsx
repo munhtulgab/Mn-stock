@@ -3,14 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import Num from "./Num";
 import type { OrderSide } from "@/lib/types";
-
-function fmt(value: number, digits = 2): string {
-  return value.toLocaleString("mn-MN", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-}
 
 export default function TradeModal({
   symbol,
@@ -97,14 +91,14 @@ export default function TradeModal({
 
               <div className="text-sm text-app-muted">
                 Ханш:{" "}
-                <span className="text-app-text font-semibold">
-                  {currentPrice ? fmt(currentPrice) : "—"}₮
+                <span className="text-app-text">
+                  {currentPrice ? <Num value={currentPrice} digits={2} suffix="₮" /> : "—"}
                 </span>
               </div>
 
               {open === "BUY" ? (
                 <div className="text-xs text-app-muted">
-                  Бэлэн мөнгө: <span className="text-app-text font-medium">{fmt(cashBalance, 0)}₮</span>
+                  Бэлэн мөнгө: <span className="text-app-text"><Num value={cashBalance} digits={2} suffix="₮" /></span>
                 </div>
               ) : (
                 <div className="text-xs text-app-muted">
@@ -126,7 +120,7 @@ export default function TradeModal({
 
               <div className="flex items-center justify-between text-sm">
                 <span className="text-app-muted">Нийт дүн</span>
-                <span className="font-bold text-app-text tabular-nums">{fmt(total, 0)}₮</span>
+                <span className="text-app-text text-base"><Num value={total} digits={2} suffix="₮" /></span>
               </div>
 
               {error && (

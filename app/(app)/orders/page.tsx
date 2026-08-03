@@ -3,15 +3,9 @@ import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getTransactions } from "@/lib/portfolio";
 import StockAvatar from "@/components/StockAvatar";
+import Num from "@/components/Num";
 
 export const dynamic = "force-dynamic";
-
-function fmt(value: number, digits = 2): string {
-  return value.toLocaleString("mn-MN", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-}
 
 export default async function OrdersPage() {
   const db = await getDb();
@@ -52,10 +46,11 @@ export default async function OrdersPage() {
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-sm font-semibold tabular-nums text-app-text">
-                  {t.quantity} ш × {fmt(t.price)}₮
+                <div className="text-sm text-app-text">
+                  <span className="text-app-muted text-xs">{t.quantity} ш × </span>
+                  <Num value={t.price} digits={2} suffix="₮" />
                 </div>
-                <div className="text-xs text-app-muted tabular-nums">{fmt(t.total, 0)}₮</div>
+                <div className="text-xs text-app-muted"><Num value={t.total} digits={2} suffix="₮" /></div>
               </div>
             </div>
           ))}

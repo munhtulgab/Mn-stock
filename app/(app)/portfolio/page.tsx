@@ -3,15 +3,9 @@ import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary } from "@/lib/portfolio";
 import StockAvatar from "@/components/StockAvatar";
+import Num, { Pct } from "@/components/Num";
 
 export const dynamic = "force-dynamic";
-
-function fmt(value: number, digits = 0): string {
-  return value.toLocaleString("mn-MN", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-}
 
 export default async function PortfolioPage() {
   const db = await getDb();
@@ -26,8 +20,8 @@ export default async function PortfolioPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-xs text-app-muted">Нийт үнэ цэнэ</div>
-            <div className="text-2xl font-bold tabular-nums text-app-text">
-              {fmt(portfolio.totalValue)}₮
+            <div className="text-2xl text-app-text">
+              <Num value={portfolio.totalValue} digits={2} suffix="₮" />
             </div>
           </div>
           <div
@@ -36,7 +30,8 @@ export default async function PortfolioPage() {
             }`}
           >
             <div>
-              {portfolio.todayGain >= 0 ? "▲" : "▼"} {fmt(Math.abs(portfolio.todayGain))}₮
+              <span className="text-[0.82em]">{portfolio.todayGain >= 0 ? "▲" : "▼"} </span>
+              <Num value={Math.abs(portfolio.todayGain)} digits={2} suffix="₮" />
             </div>
             <div className="text-xs font-normal text-app-muted">өнөөдөр</div>
           </div>
@@ -44,37 +39,30 @@ export default async function PortfolioPage() {
         <div className="grid grid-cols-2 gap-3 pt-4 border-t border-app-border">
           <div>
             <div className="text-xs text-app-muted">Бэлэн мөнгө</div>
-            <div className="text-sm font-semibold tabular-nums text-app-text">
-              {fmt(portfolio.cashBalance)}₮
+            <div className="text-sm text-app-text">
+              <Num value={portfolio.cashBalance} digits={2} suffix="₮" />
             </div>
           </div>
           <div>
             <div className="text-xs text-app-muted">Хувьцааны үнэ цэнэ</div>
-            <div className="text-sm font-semibold tabular-nums text-app-text">
-              {fmt(portfolio.holdingsValue)}₮
+            <div className="text-sm text-app-text">
+              <Num value={portfolio.holdingsValue} digits={2} suffix="₮" />
             </div>
           </div>
           <div>
             <div className="text-xs text-app-muted">Нийт ашиг/алдагдал</div>
             <div
-              className={`text-sm font-semibold tabular-nums ${
+              className={`text-sm ${
                 portfolio.totalGainLoss >= 0 ? "text-app-positive" : "text-app-negative"
               }`}
             >
-              {portfolio.totalGainLoss >= 0 ? "+" : ""}
-              {fmt(portfolio.totalGainLoss)}₮
+              <Num value={portfolio.totalGainLoss} digits={2} suffix="₮" showSign />
             </div>
           </div>
           <div>
             <div className="text-xs text-app-muted">Ашгийн хувь</div>
-            <div
-              className={`text-sm font-semibold tabular-nums ${
-                (portfolio.totalGainLossPct ?? 0) >= 0 ? "text-app-positive" : "text-app-negative"
-              }`}
-            >
-              {portfolio.totalGainLossPct === null
-                ? "—"
-                : `${portfolio.totalGainLossPct >= 0 ? "+" : ""}${fmt(portfolio.totalGainLossPct, 2)}%`}
+            <div className="text-sm">
+              <Pct value={portfolio.totalGainLossPct} />
             </div>
           </div>
         </div>
@@ -101,20 +89,15 @@ export default async function PortfolioPage() {
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-app-text text-sm">{h.symbol}</div>
                   <div className="text-xs text-app-muted">
-                    {h.quantity} ширхэг · дундаж {fmt(h.avgCost, 2)}₮
+                    {h.quantity} ширхэг · дундаж {h.avgCost.toFixed(2)}₮
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold tabular-nums text-app-text">
-                    {fmt(h.marketValue)}₮
+                  <div className="text-sm text-app-text">
+                    <Num value={h.marketValue} digits={2} suffix="₮" />
                   </div>
-                  <div
-                    className={`text-xs font-medium tabular-nums ${
-                      h.gainLoss >= 0 ? "text-app-positive" : "text-app-negative"
-                    }`}
-                  >
-                    {h.gainLoss >= 0 ? "+" : ""}
-                    {fmt(h.gainLossPct ?? 0, 1)}%
+                  <div className="text-xs">
+                    <Pct value={h.gainLossPct} />
                   </div>
                 </div>
               </Link>

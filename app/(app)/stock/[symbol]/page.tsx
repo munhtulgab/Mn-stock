@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getStockDetail } from "@/lib/data";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import SignalBadge from "@/components/SignalBadge";
+import Num, { Pct } from "@/components/Num";
 import PriceChart, { type ChartPoint } from "@/components/PriceChart";
 import AiSignalPanel from "@/components/AiSignalPanel";
 import TradeModal from "@/components/TradeModal";
@@ -83,23 +84,11 @@ export default async function StockDetailPage({
         </div>
         <div className="flex items-start gap-2">
           <div className="text-right">
-            <div className="text-2xl font-bold tabular-nums text-app-text">
-              {fmt(last?.close ?? null)}
+            <div className="text-2xl text-app-text">
+              {last ? <Num value={last.close} digits={2} /> : <span className="text-app-muted">—</span>}
             </div>
-            <div
-              className={`text-sm tabular-nums font-semibold ${
-                changePct === null
-                  ? "text-app-muted"
-                  : changePct > 0
-                    ? "text-app-positive"
-                    : changePct < 0
-                      ? "text-app-negative"
-                      : "text-app-muted"
-              }`}
-            >
-              {changePct === null
-                ? "—"
-                : `${changePct > 0 ? "▲+" : changePct < 0 ? "▼" : ""}${fmt(changePct)}%`}
+            <div className="text-sm">
+              <Pct value={changePct} />
             </div>
           </div>
           <WatchlistButton symbol={security.symbol} initialActive={inWatchlist} />

@@ -6,26 +6,9 @@ import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getUnreadCount } from "@/lib/notifications";
 import StockAvatar from "@/components/StockAvatar";
 import SignalBadge from "@/components/SignalBadge";
+import Num, { Pct } from "@/components/Num";
 
 export const dynamic = "force-dynamic";
-
-function fmt(value: number, digits = 0): string {
-  return value.toLocaleString("mn-MN", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-}
-
-function Pct({ value, className = "" }: { value: number | null; className?: string }) {
-  if (value === null) return <span className="text-app-muted">—</span>;
-  return (
-    <span
-      className={`${value >= 0 ? "text-app-positive" : "text-app-negative"} ${className}`}
-    >
-      {value >= 0 ? "▲" : "▼"} {fmt(Math.abs(value), 2)}%
-    </span>
-  );
-}
 
 export default async function HomePage() {
   const db = await getDb();
@@ -103,10 +86,13 @@ export default async function HomePage() {
 
       <div className="rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-black">
         <div className="text-xs font-medium opacity-70 mb-1">Багцын үнэ цэнэ</div>
-        <div className="text-3xl font-bold tabular-nums">{fmt(portfolio.totalValue)}₮</div>
+        <div className="text-3xl">
+          <Num value={portfolio.totalValue} digits={2} suffix="₮" />
+        </div>
         <div className="flex items-center gap-2 mt-3 text-sm">
-          <span className="rounded-full bg-black/15 px-2.5 py-1 text-xs font-semibold">
-            {portfolio.todayGain >= 0 ? "▲" : "▼"} {fmt(Math.abs(portfolio.todayGain))}₮
+          <span className="rounded-full bg-black/15 px-2.5 py-1 text-xs">
+            <span className="text-[0.82em]">{portfolio.todayGain >= 0 ? "▲" : "▼"} </span>
+            <Num value={Math.abs(portfolio.todayGain)} digits={2} suffix="₮" />
           </span>
           <span className="opacity-70 text-xs">өнөөдөр</span>
         </div>
@@ -121,10 +107,10 @@ export default async function HomePage() {
               className="rounded-2xl bg-app-card border border-app-border p-3"
             >
               <div className="text-xs font-semibold text-app-text truncate">{r.symbol}</div>
-              <div className="text-[11px] text-app-muted tabular-nums truncate">
-                {fmt(r.lastPrice ?? 0, 2)}
+              <div className="text-[11px] text-app-muted truncate">
+                <Num value={r.lastPrice ?? 0} digits={2} />
               </div>
-              <div className="text-[11px] font-medium tabular-nums mt-0.5">
+              <div className="text-[11px] mt-0.5">
                 <Pct value={r.changePct} />
               </div>
             </Link>
@@ -152,10 +138,10 @@ export default async function HomePage() {
                   <div className="text-xs text-app-muted">{h.quantity} ширхэг</div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold tabular-nums text-app-text">
-                    {fmt(h.marketValue)}₮
+                  <div className="text-sm text-app-text">
+                    <Num value={h.marketValue} digits={2} suffix="₮" />
                   </div>
-                  <div className="text-xs font-medium tabular-nums">
+                  <div className="text-xs">
                     <Pct value={h.gainLossPct} />
                   </div>
                 </div>
@@ -167,20 +153,27 @@ export default async function HomePage() {
 
       {watchlist.length > 0 && (
         <Section title="Хяналтын жагсаалт">
-          <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
+          <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
             {watchlist.map((w) => (
               <Link
                 key={w.symbol}
                 href={`/stock/${w.symbol}`}
-                className="shrink-0 w-36 rounded-2xl border border-app-border bg-app-card p-3"
+                className="block px-4 py-3 active:bg-app-elevated"
               >
-                <StockAvatar symbol={w.symbol} size={32} />
-                <div className="mt-2 text-sm font-semibold text-app-text">{w.symbol}</div>
-                <div className="text-xs text-app-muted tabular-nums">
-                  {fmt(w.currentPrice ?? 0, 2)}₮
+                <div className="flex items-center gap-3">
+                  <StockAvatar symbol={w.symbol} />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-app-text text-sm">{w.symbol}</div>
+                    <div className="text-xs text-app-muted truncate">{w.name}</div>
+                  </div>
                 </div>
-                <div className="text-xs font-medium tabular-nums mt-0.5">
-                  <Pct value={w.changePct} />
+                <div className="flex items-baseline justify-between mt-2.5">
+                  <span className="text-sm text-app-text">
+                    <Num value={w.currentPrice ?? 0} digits={2} suffix="₮" />
+                  </span>
+                  <span className="text-sm">
+                    <Pct value={w.changePct} />
+                  </span>
                 </div>
               </Link>
             ))}
@@ -266,8 +259,10 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
           className="shrink-0 w-32 rounded-2xl border border-app-border bg-app-card p-3"
         >
           <div className="text-sm font-semibold text-app-text truncate">{r.symbol}</div>
-          <div className="text-xs text-app-muted tabular-nums">{fmt(r.lastPrice ?? 0, 2)}₮</div>
-          <div className="text-xs font-medium tabular-nums mt-1">
+          <div className="text-xs text-app-muted">
+            <Num value={r.lastPrice ?? 0} digits={2} suffix="₮" />
+          </div>
+          <div className="text-xs mt-1">
             <Pct value={r.changePct} />
           </div>
         </Link>
