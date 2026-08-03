@@ -7,7 +7,7 @@ export async function callGemini(
   userMessage: string,
 ): Promise<ProviderResult> {
   try {
-    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
