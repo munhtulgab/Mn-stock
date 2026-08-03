@@ -77,9 +77,20 @@ async function getSyncState(db: Db): Promise<SyncState> {
   const state = await db
     .collection<SyncState>("syncState")
     .findOne({ key: "main" });
-  return (
-    state ?? { key: "main", priceCursor: 0, financialsCursor: 0 }
-  );
+  // syncSecuritiesList upserts this same doc with only a subset of fields
+  // set, so coalesce per-field (and guard against a stray NaN ever having
+  // been persisted) rather than falling back to defaults only when the
+  // whole document is missing.
+  return {
+    key: "main",
+    priceCursor: Number.isFinite(state?.priceCursor) ? state!.priceCursor : 0,
+    financialsCursor: Number.isFinite(state?.financialsCursor)
+      ? state!.financialsCursor
+      : 0,
+    lastSecuritiesSyncAt: state?.lastSecuritiesSyncAt,
+    lastFullPriceSyncCompletedAt: state?.lastFullPriceSyncCompletedAt,
+    lastFullFinancialsSyncCompletedAt: state?.lastFullFinancialsSyncCompletedAt,
+  };
 }
 
 export interface SyncBatchResult {
@@ -123,6 +134,7 @@ export async function runSyncBatch(
     })
     .sort({ companyCode: 1 })
     .toArray();
+  console.log(`runSyncBatch: ${active.length} active securities found`);
 
   const state = await getSyncState(db);
   const pricesProcessed: string[] = [];
@@ -130,16 +142,23 @@ export async function runSyncBatch(
   let fullPricePassCompleted = false;
   let fullFinancialsPassCompleted = false;
 
+  // Split the time budget so financials always gets a turn — otherwise a
+  // slow-to-complete price pass (large per-company payloads) can starve it
+  // indefinitely across repeated calls.
+  const priceDeadline = start + maxMs * 0.6;
+  const financialsDeadline = start + maxMs;
+
   let priceCursor = state.priceCursor % Math.max(active.length, 1);
   const priceStart = priceCursor;
   let firstPriceIteration = true;
   while (
     active.length > 0 &&
-    Date.now() - start < maxMs &&
+    Date.now() < priceDeadline &&
     (firstPriceIteration || priceCursor !== priceStart)
   ) {
     firstPriceIteration = false;
     const company = active[priceCursor];
+    if (!company) break;
     try {
       await syncPricesForCompany(db, company.companyCode);
       pricesProcessed.push(company.symbol);
@@ -158,11 +177,12 @@ export async function runSyncBatch(
   let firstFinIteration = true;
   while (
     active.length > 0 &&
-    Date.now() - start < maxMs &&
+    Date.now() < financialsDeadline &&
     (firstFinIteration || financialsCursor !== finStart)
   ) {
     firstFinIteration = false;
     const company = active[financialsCursor];
+    if (!company) break;
     try {
       await syncFinancialsForCompany(db, company.companyCode);
       financialsProcessed.push(company.symbol);

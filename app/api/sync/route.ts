@@ -19,11 +19,18 @@ async function handle(req: NextRequest) {
   const maxMsParam = req.nextUrl.searchParams.get("maxMs");
   const maxMs = maxMsParam ? Number(maxMsParam) : 45_000;
 
-  await ensureIndexes();
-  const db = await getDb();
-  const result = await runSyncBatch(db, { maxMs });
-
-  return NextResponse.json({ ok: true, ...result });
+  try {
+    await ensureIndexes();
+    const db = await getDb();
+    const result = await runSyncBatch(db, { maxMs });
+    return NextResponse.json({ ok: true, ...result });
+  } catch (err) {
+    console.error("sync failed", err);
+    return NextResponse.json(
+      { ok: false, error: (err as Error).message, stack: (err as Error).stack },
+      { status: 500 },
+    );
+  }
 }
 
 export async function GET(req: NextRequest) {
