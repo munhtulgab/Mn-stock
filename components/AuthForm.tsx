@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { UserIcon, LockIcon, PhoneIcon, MailIcon, EyeIcon } from "./icons";
@@ -22,7 +21,6 @@ function Field({
 }
 
 export function LoginForm() {
-  const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -42,11 +40,12 @@ export function LoginForm() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Нэвтрэхэд алдаа гарлаа");
+        setLoading(false);
         return;
       }
-      router.push("/");
-      router.refresh();
-    } finally {
+      window.location.href = "/";
+    } catch {
+      setError("Сүлжээний алдаа гарлаа");
       setLoading(false);
     }
   }
@@ -102,7 +101,6 @@ export function LoginForm() {
 }
 
 export function SignupForm() {
-  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -130,11 +128,12 @@ export function SignupForm() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Бүртгүүлэхэд алдаа гарлаа");
+        setLoading(false);
         return;
       }
-      router.push("/");
-      router.refresh();
-    } finally {
+      window.location.href = "/";
+    } catch {
+      setError("Сүлжээний алдаа гарлаа");
       setLoading(false);
     }
   }
