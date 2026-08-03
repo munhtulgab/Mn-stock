@@ -26,6 +26,10 @@
   --color-app-positive-bg: #0e2a1d;
   --color-app-negative: #ff5a5f;
   --color-app-negative-bg: #2c1518;
+
+  /* Floating tab bar */
+  --color-nav-surface: #17181c;
+  --color-nav-active: #3d3ae6;
 }
 
 html {

@@ -3,6 +3,14 @@
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 
+const ITEMS = [
+  { href: "/", label: "Нүүр", icon: PieIcon },
+  { href: "/discover", label: "Зах зээл", icon: TrendIcon },
+  { href: "/portfolio", label: "Багц", icon: CertificateIcon },
+  { href: "/orders", label: "Захиалга", icon: ReceiptIcon },
+  { href: "/profile", label: "Профайл", icon: PersonIcon },
+];
+
 /**
  * Renders inside <Link>, so it can read that link's own transition state.
  * Without it a tap gives no feedback until the server responds and the tab
@@ -12,24 +20,16 @@ function PendingDot() {
   const { pending } = useLinkStatus();
   if (!pending) return null;
   return (
-    <span className="nav-pending absolute top-1 right-1/2 translate-x-4 w-1.5 h-1.5 rounded-full bg-brand" />
+    <span className="nav-pending absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-white" />
   );
 }
-
-const ITEMS = [
-  { href: "/", label: "Нүүр", icon: HomeIcon },
-  { href: "/discover", label: "Зах зээл", icon: SearchIcon },
-  { href: "/portfolio", label: "Багц", icon: PortfolioIcon },
-  { href: "/orders", label: "Захиалга", icon: OrdersIcon },
-  { href: "/profile", label: "Профайл", icon: ProfileIcon },
-];
 
 export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="sticky bottom-0 z-20 border-t border-app-border bg-app-card/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto max-w-md grid grid-cols-5">
+    <nav className="sticky bottom-0 z-20 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-linear-to-t from-app-bg via-app-bg to-transparent">
+      <div className="mx-auto max-w-md flex items-center justify-between gap-1 rounded-full bg-nav-surface p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
@@ -37,13 +37,16 @@ export default function BottomNav() {
               key={href}
               href={href}
               prefetch
-              className={`relative flex flex-col items-center gap-1 py-2.5 text-[11px] transition-colors active:opacity-60 ${
-                active ? "text-brand" : "text-app-muted"
+              aria-label={label}
+              className={`relative flex items-center justify-center gap-2 rounded-full transition-all active:scale-95 ${
+                active
+                  ? "bg-nav-active text-white px-4 py-2.5 font-semibold text-sm"
+                  : "text-white/85 w-11 h-11"
               }`}
             >
               <PendingDot />
-              <Icon active={active} />
-              {label}
+              <Icon />
+              {active && <span className="whitespace-nowrap">{label}</span>}
             </Link>
           );
         })}
@@ -52,91 +55,59 @@ export default function BottomNav() {
   );
 }
 
-function HomeIcon({ active }: { active: boolean }) {
+const STROKE = {
+  stroke: "currentColor",
+  strokeWidth: 1.8,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  fill: "none",
+};
+
+function PieIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1v-8.5Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-        fill={active ? "currentColor" : "none"}
-        fillOpacity={active ? 0.12 : 0}
-      />
+    <svg width="22" height="22" viewBox="0 0 24 24" className="shrink-0">
+      <circle cx="12" cy="12" r="8.5" {...STROKE} />
+      <path d="M12 3.5A8.5 8.5 0 0 1 20.5 12H12V3.5Z" fill="currentColor" />
+      <path d="M12 3.5v8.5h8.5" {...STROKE} />
     </svg>
   );
 }
 
-function SearchIcon({ active }: { active: boolean }) {
+function TrendIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <circle
-        cx="11"
-        cy="11"
-        r="7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        fill={active ? "currentColor" : "none"}
-        fillOpacity={active ? 0.12 : 0}
-      />
-      <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <svg width="22" height="22" viewBox="0 0 24 24" className="shrink-0">
+      <path d="M4 4v16h16" {...STROKE} />
+      <path d="m7.5 15.5 3.5-3.8 2.6 2.4L19 8" {...STROKE} />
+      <path d="M14.9 8H19v4.1" {...STROKE} />
     </svg>
   );
 }
 
-function PortfolioIcon({ active }: { active: boolean }) {
+function CertificateIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <rect
-        x="4"
-        y="5"
-        width="16"
-        height="15"
-        rx="2.5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        fill={active ? "currentColor" : "none"}
-        fillOpacity={active ? 0.12 : 0}
-      />
-      <path d="M8 10h8M8 14h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <svg width="22" height="22" viewBox="0 0 24 24" className="shrink-0">
+      <rect x="2.8" y="4.5" width="13.4" height="10.5" rx="1" {...STROKE} />
+      <path d="M5.8 8.3h7.4M5.8 11.4h4.6" {...STROKE} />
+      <circle cx="17.2" cy="14.4" r="3.1" {...STROKE} />
+      <path d="m15.4 16.9-.5 3.6 2.3-1.4 2.3 1.4-.5-3.6" {...STROKE} />
     </svg>
   );
 }
 
-function OrdersIcon({ active }: { active: boolean }) {
+function ReceiptIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M6 3v18l3-2 3 2 3-2 3 2V3H6Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-        fill={active ? "currentColor" : "none"}
-        fillOpacity={active ? 0.12 : 0}
-      />
-      <path d="M9 8h6M9 12h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <svg width="22" height="22" viewBox="0 0 24 24" className="shrink-0">
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" {...STROKE} />
+      <path d="M9.5 8h5M9.5 12h5" {...STROKE} />
     </svg>
   );
 }
 
-function ProfileIcon({ active }: { active: boolean }) {
+function PersonIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <circle
-        cx="12"
-        cy="8"
-        r="3.3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        fill={active ? "currentColor" : "none"}
-        fillOpacity={active ? 0.12 : 0}
-      />
-      <path
-        d="M5 20c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+    <svg width="22" height="22" viewBox="0 0 24 24" className="shrink-0">
+      <circle cx="12" cy="8" r="3.4" {...STROKE} />
+      <path d="M5 20c1.2-3.7 4-5.5 7-5.5s5.8 1.8 7 5.5" {...STROKE} />
     </svg>
   );
 }
