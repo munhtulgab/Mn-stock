@@ -91,8 +91,7 @@ export default async function HomePage() {
         </div>
         <div className="flex items-center gap-2 mt-3 text-sm">
           <span className="rounded-full bg-black/15 px-2.5 py-1 text-xs">
-            <span className="text-[0.82em]">{portfolio.todayGain >= 0 ? "▲" : "▼"} </span>
-            <Num value={Math.abs(portfolio.todayGain)} digits={2} suffix="₮" />
+            <Num value={portfolio.todayGain} digits={2} suffix="₮" showSign />
           </span>
           <span className="opacity-70 text-xs">өнөөдөр</span>
         </div>
@@ -158,24 +157,20 @@ export default async function HomePage() {
               <Link
                 key={w.symbol}
                 href={`/stock/${w.symbol}`}
-                className="shrink-0 w-52 rounded-2xl border border-app-border bg-app-card px-3 py-2.5 active:bg-app-elevated"
+                className="shrink-0 w-60 rounded-2xl border border-app-border bg-app-card px-4 py-3 active:bg-app-elevated"
               >
-                <div className="flex items-center gap-2.5">
-                  <StockAvatar symbol={w.symbol} size={28} />
+                <div className="flex items-center gap-3">
+                  <StockAvatar symbol={w.symbol} size={40} />
                   <div className="min-w-0">
-                    <div className="font-semibold text-app-text text-[13px] leading-tight">
-                      {w.symbol}
-                    </div>
-                    <div className="text-[11px] text-app-muted truncate leading-tight">
-                      {w.name}
-                    </div>
+                    <div className="font-semibold text-app-text text-sm">{w.symbol}</div>
+                    <div className="text-xs text-app-muted truncate">{w.name}</div>
                   </div>
                 </div>
-                <div className="flex items-baseline justify-between mt-1.5">
-                  <span className="text-xs text-app-text">
+                <div className="flex items-baseline justify-between mt-2.5">
+                  <span className="text-sm text-app-text">
                     <Num value={w.currentPrice ?? 0} digits={2} suffix="₮" />
                   </span>
-                  <span className="text-xs">
+                  <span className="text-sm">
                     <Pct value={w.changePct} />
                   </span>
                 </div>

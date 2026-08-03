@@ -30,8 +30,7 @@ export default async function PortfolioPage() {
             }`}
           >
             <div>
-              <span className="text-[0.82em]">{portfolio.todayGain >= 0 ? "▲" : "▼"} </span>
-              <Num value={Math.abs(portfolio.todayGain)} digits={2} suffix="₮" />
+              <Num value={portfolio.todayGain} digits={2} suffix="₮" showSign />
             </div>
             <div className="text-xs font-normal text-app-muted">өнөөдөр</div>
           </div>

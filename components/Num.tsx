@@ -28,7 +28,7 @@ export default function Num({
   className?: string;
 }) {
   const { whole, frac } = split(value, digits);
-  const sign = value < 0 ? "−" : showSign ? "+" : "";
+  const sign = value < 0 ? "-" : showSign ? "+" : "";
 
   return (
     <span className={`tabular-nums ${className}`}>
@@ -36,15 +36,14 @@ export default function Num({
         {sign}
         {whole}
       </span>
-      <span className="text-[0.82em] font-medium">
-        {frac}
-        {suffix}
-      </span>
+      {/* Only the decimals step down; the unit keeps the whole number's size. */}
+      <span className="text-[0.82em] font-medium">{frac}</span>
+      {suffix && <span className="font-medium">{suffix}</span>}
     </span>
   );
 }
 
-/** Percentage with an up/down arrow and the positive/negative colour applied. */
+/** Percentage carrying its own +/- sign and the positive/negative colour. */
 export function Pct({
   value,
   digits = 2,
@@ -59,9 +58,8 @@ export function Pct({
   }
   const tone = value >= 0 ? "text-app-positive" : "text-app-negative";
   return (
-    <span className={`${tone} ${className}`}>
-      <span className="text-[0.82em]">{value >= 0 ? "▲" : "▼"} </span>
-      <Num value={value} digits={digits} suffix="%" />
+    <span className={tone}>
+      <Num value={value} digits={digits} suffix="%" showSign className={className} />
     </span>
   );
 }
