@@ -1,3 +1,9 @@
+import {
+  extractRetryAfterSeconds,
+  formatRetryAfter,
+  stripRetryAfterTag,
+} from "@/lib/ai/retryAfter";
+
 const PROVIDER_LABEL: Record<string, string> = {
   anthropic: "Claude",
   gemini: "Gemini",
@@ -7,7 +13,7 @@ const PROVIDER_LABEL: Record<string, string> = {
 
 interface Rule {
   test: (msg: string) => boolean;
-  message: (provider: string) => string;
+  message: (provider: string, retrySeconds: number | null) => string;
 }
 
 const RULES: Rule[] = [
@@ -18,8 +24,10 @@ const RULES: Rule[] = [
   },
   {
     test: (m) => /RESOURCE_EXHAUSTED|429|rate.?limit|quota/i.test(m),
-    message: (p) =>
-      `${p}: Хүсэлтийн хязгаар (quota) дүүрсэн байна. Түр хүлээгээд дахин оролдоно уу, эсвэл API түлхүүрийн багцаа шинэчилнэ үү.`,
+    message: (p, retrySeconds) =>
+      retrySeconds !== null
+        ? `${p}: Хүсэлтийн хязгаар (quota) дүүрсэн байна. ${formatRetryAfter(retrySeconds)} дараа дахин хүсэлт илгээх боломжтой.`
+        : `${p}: Хүсэлтийн хязгаар (quota) дүүрсэн байна. Түр хүлээгээд дахин оролдоно уу, эсвэл API түлхүүрийн багцаа шинэчилнэ үү.`,
   },
   {
     test: (m) => /API_KEY_INVALID|API key not valid|invalid.?api.?key|401|Unauthorized|Incorrect API key/i.test(m),
@@ -58,11 +66,17 @@ const RULES: Rule[] = [
  */
 export function humanizeProviderError(provider: string, rawError: string): string {
   const label = PROVIDER_LABEL[provider] ?? provider;
-  const message = rawError.startsWith(`${label}: `)
+  const withoutPrefix = rawError.startsWith(`${label}: `)
     ? rawError.slice(label.length + 2)
     : rawError;
+  // Only trust a retry hint on a message that hasn't been through this
+  // function before — on a re-humanized cached doc the tag is already
+  // gone, which correctly stops us from showing a stale countdown for an
+  // error that may be hours old by the time it's re-read.
+  const retrySeconds = extractRetryAfterSeconds(withoutPrefix);
+  const message = stripRetryAfterTag(withoutPrefix);
   for (const rule of RULES) {
-    if (rule.test(message)) return rule.message(label);
+    if (rule.test(message)) return rule.message(label, retrySeconds);
   }
   return `${label}: ${message}`;
 }

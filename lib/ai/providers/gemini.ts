@@ -1,6 +1,26 @@
 import { MSE_ANALYST_SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
 import { parseAiSignal } from "@/lib/ai/schema";
+import { withRetryAfter } from "@/lib/ai/retryAfter";
 import type { ProviderResult } from "./types";
+
+interface GeminiErrorDetail {
+  "@type"?: string;
+  retryDelay?: string;
+}
+
+/** Gemini reports rate-limit backoff as e.g. {"retryDelay": "23s"} inside
+ * error.details, alongside an ErrorInfo entry — pull the number out. */
+function extractGeminiRetrySeconds(bodyText: string): number | null {
+  try {
+    const parsed = JSON.parse(bodyText);
+    const details: GeminiErrorDetail[] = parsed?.error?.details ?? [];
+    const retryInfo = details.find((d) => d.retryDelay);
+    const match = retryInfo?.retryDelay?.match(/^(\d+(?:\.\d+)?)s$/);
+    return match ? Number(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function callGemini(
   apiKey: string,
@@ -32,7 +52,10 @@ export async function callGemini(
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`Gemini API ${res.status}: ${body.slice(0, 300)}`);
+      const retrySeconds = extractGeminiRetrySeconds(body);
+      throw new Error(
+        withRetryAfter(`Gemini API ${res.status}: ${body.slice(0, 300)}`, retrySeconds),
+      );
     }
 
     const data = await res.json();
