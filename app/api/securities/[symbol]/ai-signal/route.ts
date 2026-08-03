@@ -9,7 +9,23 @@ import {
   NoProviderConfiguredError,
   generateMultiProviderSignal,
 } from "@/lib/ai/multiAnalyst";
+import { humanizeProviderError } from "@/lib/ai/errorMessages";
 import type { AiSignal } from "@/lib/types";
+
+/**
+ * Re-runs error humanization over a stored document's provider errors.
+ * Docs are cached for hours, so this keeps old cached results in step
+ * with the current translation rules instead of forever replaying
+ * whatever raw/translated text existed at the moment they were written.
+ */
+function refreshProviderErrors(doc: AiSignal): AiSignal {
+  return {
+    ...doc,
+    providers: doc.providers.map((p) =>
+      p.error ? { ...p, error: humanizeProviderError(p.provider, p.error) } : p,
+    ),
+  };
+}
 
 export const maxDuration = 60;
 
@@ -36,7 +52,7 @@ export async function GET(
         { sort: { createdAt: -1 } },
       );
     if (cached && Date.now() - cached.createdAt.getTime() < CACHE_MS) {
-      return NextResponse.json(cached);
+      return NextResponse.json(refreshProviderErrors(cached));
     }
   }
 

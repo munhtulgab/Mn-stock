@@ -50,11 +50,19 @@ const RULES: Rule[] = [
  * human-readable Mongolian summary, falling back to the raw message
  * (still shown in full, just without a friendly headline) when no known
  * pattern matches so nothing is ever hidden.
+ *
+ * Safe to call on a message that's already been through this function
+ * (e.g. a cached document written before a rule changed) — a leading
+ * "Label: " from a previous pass is stripped before matching so results
+ * never end up double-prefixed.
  */
 export function humanizeProviderError(provider: string, rawError: string): string {
   const label = PROVIDER_LABEL[provider] ?? provider;
+  const message = rawError.startsWith(`${label}: `)
+    ? rawError.slice(label.length + 2)
+    : rawError;
   for (const rule of RULES) {
-    if (rule.test(rawError)) return rule.message(label);
+    if (rule.test(message)) return rule.message(label);
   }
-  return `${label}: ${rawError}`;
+  return `${label}: ${message}`;
 }
