@@ -352,14 +352,20 @@ export default function SettingsForm({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-app-text">Брэнд</label>
+              <label className="text-sm font-medium text-app-text">Брэнд ID</label>
               <input
+                inputMode="numeric"
                 disabled={!smsEnabled}
-                placeholder="Заавал биш"
+                placeholder="Заавал биш, зөвхөн тоо"
                 value={smsBrand}
                 onChange={(e) => setSmsBrand(e.target.value)}
                 className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
               />
+              {smsBrand.trim() && !/^\d+$/.test(smsBrand.trim()) && (
+                <p className="text-[11px] text-app-negative">
+                  Зөвхөн тоо байх ёстой. Өөр утга оруулбал алгасагдана.
+                </p>
+              )}
             </div>
           </div>
 

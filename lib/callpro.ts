@@ -94,7 +94,11 @@ export async function sendSms(
   const sender = normalizePhone(creds.from) ?? creds.from;
 
   const payload: Record<string, string> = { from: sender, to: recipient, text };
-  if (creds.brand?.trim()) payload.brand = creds.brand.trim();
+  // `brand` is a numeric brand id on CallPro's side. A non-numeric value is
+  // coerced to NaN and surfaces as HTTP 500 "Unknown column 'NaN'", so drop
+  // anything that isn't digits rather than failing the send.
+  const brand = creds.brand?.trim();
+  if (brand && /^\d+$/.test(brand)) payload.brand = brand;
 
   try {
     const res = await fetch(`${BASE_URL}/send`, {
