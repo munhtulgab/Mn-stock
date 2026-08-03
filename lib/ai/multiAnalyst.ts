@@ -8,6 +8,7 @@ import { callOpenRouter } from "@/lib/ai/providers/openrouter";
 import type { ProviderResult } from "@/lib/ai/providers/types";
 import type { ParsedAiSignal } from "@/lib/ai/schema";
 import type { Signal } from "@/lib/types";
+import { humanizeProviderError } from "@/lib/ai/errorMessages";
 
 export class NoProviderConfiguredError extends Error {
   constructor() {
@@ -21,7 +22,9 @@ export class NoProviderConfiguredError extends Error {
 export class AllProvidersFailedError extends Error {
   constructor(public results: ProviderResult[]) {
     super(
-      `All configured AI providers failed: ${results.map((r) => `${r.provider}: ${r.error}`).join("; ")}`,
+      results
+        .map((r) => humanizeProviderError(r.provider, r.error ?? "Тодорхойгүй алдаа"))
+        .join("; "),
     );
     this.name = "AllProvidersFailedError";
   }
@@ -148,7 +151,7 @@ export async function generateMultiProviderSignal(
       ok: r.ok,
       signal: r.parsed?.signal,
       confidence: r.parsed?.signal_confidence,
-      error: r.error,
+      error: r.error ? humanizeProviderError(r.provider, r.error) : undefined,
     })),
   };
 }
