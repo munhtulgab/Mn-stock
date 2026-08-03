@@ -1,0 +1,38 @@
+import * as cheerio from "cheerio";
+import { fetchMseHtml } from "./client";
+
+export interface CompanyNewsItem {
+  title: string;
+  date: string;
+  url: string;
+}
+
+/**
+ * Scrapes the "Холбоотой мэдээ, мэдээлэл" (related news) table shown on a
+ * security's main open.mse.mn profile page.
+ */
+export async function fetchCompanyNews(
+  companyCode: number,
+  limit = 10,
+): Promise<CompanyNewsItem[]> {
+  const html = await fetchMseHtml(`/securities/${companyCode}`);
+  const $ = cheerio.load(html);
+  const items: CompanyNewsItem[] = [];
+
+  $("table.custom_table")
+    .filter((_, table) => $(table).find("th").text().includes("Мэдээний"))
+    .first()
+    .find("tbody tr, tr")
+    .each((_, row) => {
+      const cells = $(row).find("td");
+      if (cells.length < 3) return;
+      const link = $(cells[1]).find("a").first();
+      const title = link.text().trim();
+      const date = $(cells[2]).text().trim();
+      const url = link.attr("href") || "";
+      if (!title) return;
+      items.push({ title, date, url });
+    });
+
+  return items.slice(0, limit);
+}
