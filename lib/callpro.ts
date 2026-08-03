@@ -134,9 +134,9 @@ export async function getSmsBalance(
   operator: "skytel" | "mobicom" | "unitel" = "skytel",
 ): Promise<{ ok: true; balance: SmsBalance } | { ok: false; error: string }> {
   try {
-    // `/tenant-daily` is the path that actually authenticates; the hyphen-less
-    // variant in the PDF answers 400 "Parameter missing" without checking the key.
-    const res = await fetch(`${BASE_URL}/tenant-daily?operator=${operator}`, {
+    // `/tenant-daily` (no slash) falls through to the GET /:unique_id lookup and
+    // answers 404 "Message detail not found" even for a valid key.
+    const res = await fetch(`${BASE_URL}/tenant/daily?operator=${operator}`, {
       headers: { "x-api-key": apiKey },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

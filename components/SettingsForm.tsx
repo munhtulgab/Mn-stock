@@ -101,7 +101,7 @@ export default function SettingsForm({
   const [keyCheck, setKeyCheck] = useState<
     | { kind: "idle" }
     | { kind: "checking" }
-    | { kind: "ok"; total: number; current: number }
+    | { kind: "ok"; remaining: number; total: number; usedToday: number }
     | { kind: "err"; message: string }
   >({ kind: "idle" });
 
@@ -116,8 +116,9 @@ export default function SettingsForm({
       }
       setKeyCheck({
         kind: "ok",
+        remaining: data.balance?.balance ?? 0,
         total: data.balance?.totalMessage ?? 0,
-        current: data.balance?.current ?? 0,
+        usedToday: data.balance?.current ?? 0,
       });
     } catch (err) {
       setKeyCheck({ kind: "err", message: (err as Error).message });
@@ -329,7 +330,8 @@ export default function SettingsForm({
             </button>
             {keyCheck.kind === "ok" && (
               <p className="text-xs text-app-positive">
-                Түлхүүр зөв. Үлдэгдэл: {keyCheck.current} / нийт {keyCheck.total} мессеж
+                Түлхүүр зөв. Үлдэгдэл {keyCheck.remaining} / {keyCheck.total} мессеж
+                {keyCheck.usedToday > 0 && ` · өнөөдөр ${keyCheck.usedToday} илгээсэн`}
               </p>
             )}
             {keyCheck.kind === "err" && (
