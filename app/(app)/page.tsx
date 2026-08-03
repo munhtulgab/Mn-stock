@@ -158,20 +158,24 @@ export default async function HomePage() {
               <Link
                 key={w.symbol}
                 href={`/stock/${w.symbol}`}
-                className="block px-4 py-3 active:bg-app-elevated"
+                className="block px-3 py-2 active:bg-app-elevated"
               >
-                <div className="flex items-center gap-3">
-                  <StockAvatar symbol={w.symbol} />
+                <div className="flex items-center gap-2.5">
+                  <StockAvatar symbol={w.symbol} size={28} />
                   <div className="min-w-0">
-                    <div className="font-semibold text-app-text text-sm">{w.symbol}</div>
-                    <div className="text-xs text-app-muted truncate">{w.name}</div>
+                    <div className="font-semibold text-app-text text-[13px] leading-tight">
+                      {w.symbol}
+                    </div>
+                    <div className="text-[11px] text-app-muted truncate leading-tight">
+                      {w.name}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-baseline justify-between mt-2.5">
-                  <span className="text-sm text-app-text">
+                <div className="flex items-baseline justify-between mt-1.5">
+                  <span className="text-xs text-app-text">
                     <Num value={w.currentPrice ?? 0} digits={2} suffix="₮" />
                   </span>
-                  <span className="text-sm">
+                  <span className="text-xs">
                     <Pct value={w.changePct} />
                   </span>
                 </div>
