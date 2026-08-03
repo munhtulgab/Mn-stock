@@ -70,49 +70,154 @@ async function getRecentPrices(
   return rows.reverse();
 }
 
-export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
-  const securities = await db
-    .collection<Security>("securities")
-    .find({ status: "active" })
-    .sort({ symbol: 1 })
+/**
+ * Latest `limit` price points for every company in a single aggregation.
+ *
+ * Fetching these per-company means one Atlas round trip per listed security
+ * (200+), which dominated page load time. `$topN` keeps the per-group slice on
+ * the server so we transfer only what the indicators actually need.
+ */
+async function getRecentPricesForAll(
+  db: Db,
+  limit = INDICATOR_WINDOW_DAYS,
+): Promise<Map<number, PricePoint[]>> {
+  const groups = await db
+    .collection<PricePoint>("prices")
+    .aggregate<{ _id: number; prices: PricePoint[] }>(
+      [
+        {
+          $group: {
+            _id: "$companyCode",
+            prices: {
+              $topN: {
+                n: limit,
+                sortBy: { date: -1 },
+                output: {
+                  companyCode: "$companyCode",
+                  date: "$date",
+                  open: "$open",
+                  close: "$close",
+                  high: "$high",
+                  low: "$low",
+                  vwap: "$vwap",
+                  volume: "$volume",
+                  turnover: "$turnover",
+                  trades: "$trades",
+                  previousClose: "$previousClose",
+                },
+              },
+            },
+          },
+        },
+      ],
+      { allowDiskUse: true },
+    )
     .toArray();
 
-  const financialsByCompany = await getLatestFinancialsByCompany(db);
+  // $topN yields newest-first; indicators expect chronological order.
+  return new Map(groups.map((g) => [g._id, g.prices.reverse()]));
+}
+
+function buildRow(
+  security: Security,
+  prices: PricePoint[],
+  financials: Financials | null,
+  marketMedianPe: number | null,
+): DashboardRow {
+  const recommendation = computeRecommendation(prices, financials, marketMedianPe);
+  const last = prices.at(-1) ?? null;
+  const prev = prices.length > 1 ? prices[prices.length - 2] : null;
+  const changePct =
+    last && prev && prev.close > 0
+      ? ((last.close - prev.close) / prev.close) * 100
+      : null;
+
+  return {
+    symbol: security.symbol,
+    name: security.name,
+    classification: security.classification,
+    companyCode: security.companyCode,
+    lastPrice: last?.close ?? null,
+    lastDate: last?.date ?? null,
+    changePct,
+    volume: last?.volume ?? null,
+    signal: recommendation.signal,
+    score: recommendation.score,
+  };
+}
+
+export async function computeDashboardRows(db: Db): Promise<DashboardRow[]> {
+  const [securities, financialsByCompany, pricesByCompany] = await Promise.all([
+    db
+      .collection<Security>("securities")
+      .find({ status: "active" })
+      .sort({ symbol: 1 })
+      .toArray(),
+    getLatestFinancialsByCompany(db),
+    getRecentPricesForAll(db),
+  ]);
+
   const marketMedianPe = getMarketMedianPe(financialsByCompany);
 
-  const rows = await Promise.all(
-    securities.map(async (security) => {
-      const prices = await getRecentPrices(db, security.companyCode);
-      const financials = financialsByCompany.get(security.companyCode) ?? null;
-      const recommendation = computeRecommendation(
-        prices,
-        financials,
-        marketMedianPe,
-      );
-      const last = prices.at(-1) ?? null;
-      const prev = prices.length > 1 ? prices[prices.length - 2] : null;
-      const changePct =
-        last && prev && prev.close > 0
-          ? ((last.close - prev.close) / prev.close) * 100
-          : null;
-
-      const row: DashboardRow = {
-        symbol: security.symbol,
-        name: security.name,
-        classification: security.classification,
-        companyCode: security.companyCode,
-        lastPrice: last?.close ?? null,
-        lastDate: last?.date ?? null,
-        changePct,
-        volume: last?.volume ?? null,
-        signal: recommendation.signal,
-        score: recommendation.score,
-      };
-      return row;
-    }),
+  return securities.map((security) =>
+    buildRow(
+      security,
+      pricesByCompany.get(security.companyCode) ?? [],
+      financialsByCompany.get(security.companyCode) ?? null,
+      marketMedianPe,
+    ),
   );
+}
 
-  return rows;
+const SNAPSHOT_KEY = "dashboardRows";
+const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
+
+interface MarketSnapshot {
+  key: string;
+  rows: DashboardRow[];
+  computedAt: Date;
+}
+
+/**
+ * Dashboard rows served from a stored snapshot. MSE publishes prices once a
+ * day, so recomputing indicators for every listed company on each page view is
+ * wasted work; the snapshot turns it into a single small read.
+ */
+export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
+  const snapshots = db.collection<MarketSnapshot>("marketSnapshots");
+  const cached = await snapshots.findOne({ key: SNAPSHOT_KEY });
+
+  if (cached && Date.now() - cached.computedAt.getTime() < SNAPSHOT_TTL_MS) {
+    return cached.rows;
+  }
+
+  try {
+    const rows = await computeDashboardRows(db);
+    await snapshots.updateOne(
+      { key: SNAPSHOT_KEY },
+      { $set: { key: SNAPSHOT_KEY, rows, computedAt: new Date() } },
+      { upsert: true },
+    );
+    return rows;
+  } catch (err) {
+    // A stale snapshot beats an error page if the recompute fails.
+    if (cached) {
+      console.error("dashboard recompute failed, serving stale snapshot", err);
+      return cached.rows;
+    }
+    throw err;
+  }
+}
+
+/** Rebuild the snapshot immediately (called after a sync ingests new prices). */
+export async function refreshDashboardSnapshot(db: Db): Promise<number> {
+  const rows = await computeDashboardRows(db);
+  await db.collection<MarketSnapshot>("marketSnapshots").updateOne(
+    { key: SNAPSHOT_KEY },
+    { $set: { key: SNAPSHOT_KEY, rows, computedAt: new Date() } },
+    { upsert: true },
+  );
+  return rows.length;
 }
 
 export async function getStockDetail(

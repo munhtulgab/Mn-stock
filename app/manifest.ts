@@ -2,14 +2,14 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "MSE Terminal — Хөрөнгийн Зөвлөх",
-    short_name: "MSE Terminal",
+    name: "MSE Invest — Хөрөнгийн Зөвлөх",
+    short_name: "MSE Invest",
     description:
       "Монголын хөрөнгийн биржийн бодит өгөгдөлд үндэслэсэн ханшийн шинжилгээ, авах/зарах санал",
     start_url: "/",
     display: "standalone",
-    background_color: "#000000",
-    theme_color: "#000000",
+    background_color: "#0d0f14",
+    theme_color: "#0d0f14",
     orientation: "portrait-primary",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

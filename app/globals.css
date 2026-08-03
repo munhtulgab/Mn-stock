@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f5f7fb;
-  --foreground: #12142b;
+  --background: #0d0f14;
+  --foreground: #ffffff;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -11,19 +12,20 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Stockit palette */
-  --color-brand: #4c6fff;
-  --color-brand-dark: #3955d8;
-  --color-brand-light: #eef1ff;
-  --color-app-bg: #f5f7fb;
-  --color-app-card: #ffffff;
-  --color-app-border: #ecf0f7;
-  --color-app-text: #12142b;
-  --color-app-muted: #8a8fa3;
-  --color-app-positive: #17c674;
-  --color-app-positive-bg: #e9fbf3;
-  --color-app-negative: #ff6161;
-  --color-app-negative-bg: #ffedec;
+  /* Dark trading palette */
+  --color-brand: #00d16c;
+  --color-brand-dark: #00a857;
+  --color-brand-light: #10291f;
+  --color-app-bg: #0d0f14;
+  --color-app-card: #171a21;
+  --color-app-elevated: #1e222b;
+  --color-app-border: #252932;
+  --color-app-text: #ffffff;
+  --color-app-muted: #8b90a0;
+  --color-app-positive: #00d16c;
+  --color-app-positive-bg: #0e2a1d;
+  --color-app-negative: #ff5a5f;
+  --color-app-negative-bg: #2c1518;
 }
 
 html {
@@ -42,11 +44,26 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d7dcea;
+  background: #2c313c;
   border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-brand);
+}
+
+/*
+ * Navigation pending hint. Starts invisible and fades in only after a short
+ * delay so fast navigations never flash a spinner.
+ */
+@keyframes nav-hint-in {
+  to {
+    opacity: 1;
+  }
+}
+
+.nav-pending {
+  opacity: 0;
+  animation: nav-hint-in 150ms linear 100ms forwards;
 }
 
 @keyframes ticker-scroll {

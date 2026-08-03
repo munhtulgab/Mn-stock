@@ -1,4 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import type { Db } from "mongodb";
 import type { SafeUser, Session, User } from "@/lib/types";
@@ -54,13 +55,18 @@ export async function getUserByToken(db: Db, token: string): Promise<User | null
   return user;
 }
 
-/** Reads the session cookie from a Server Component / Route Handler context. */
-export async function getCurrentUser(db: Db): Promise<User | null> {
+/**
+ * Reads the session cookie from a Server Component / Route Handler context.
+ *
+ * Wrapped in React `cache` so the layout guard and the page body share one
+ * session + user lookup per request instead of each issuing their own.
+ */
+export const getCurrentUser = cache(async (db: Db): Promise<User | null> => {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   return getUserByToken(db, token);
-}
+});
 
 export function getTokenFromCookieHeader(cookieHeader: string | null): string | null {
   if (!cookieHeader) return null;

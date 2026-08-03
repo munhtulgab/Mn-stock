@@ -61,52 +61,108 @@ async function getLatestTwoPrices(
   return { last: rows[0] ?? null, prev: rows[1] ?? null };
 }
 
+/**
+ * Latest two closes for many companies in one round trip. Holdings and
+ * watchlists both need this, and querying per row turned a portfolio of N
+ * positions into N sequential Atlas queries.
+ */
+async function getLatestTwoPricesForMany(
+  db: Db,
+  companyCodes: number[],
+): Promise<Map<number, { last: PricePoint | null; prev: PricePoint | null }>> {
+  const result = new Map<
+    number,
+    { last: PricePoint | null; prev: PricePoint | null }
+  >();
+  if (companyCodes.length === 0) return result;
+
+  const groups = await db
+    .collection<PricePoint>("prices")
+    .aggregate<{ _id: number; prices: PricePoint[] }>([
+      { $match: { companyCode: { $in: companyCodes } } },
+      {
+        $group: {
+          _id: "$companyCode",
+          prices: {
+            $topN: {
+              n: 2,
+              sortBy: { date: -1 },
+              output: {
+                companyCode: "$companyCode",
+                date: "$date",
+                close: "$close",
+                volume: "$volume",
+                previousClose: "$previousClose",
+              },
+            },
+          },
+        },
+      },
+    ])
+    .toArray();
+
+  for (const g of groups) {
+    result.set(g._id, { last: g.prices[0] ?? null, prev: g.prices[1] ?? null });
+  }
+  for (const code of companyCodes) {
+    if (!result.has(code)) result.set(code, { last: null, prev: null });
+  }
+  return result;
+}
+
 export async function getPortfolioSummary(
   db: Db,
   userId: string,
 ): Promise<PortfolioSummary> {
-  const portfolio = await getOrCreatePortfolio(db, userId);
-  const holdingDocs = await db
-    .collection<Holding>("holdings")
-    .find({ userId, quantity: { $gt: 0 } })
-    .toArray();
+  const [portfolio, holdingDocs] = await Promise.all([
+    getOrCreatePortfolio(db, userId),
+    db
+      .collection<Holding>("holdings")
+      .find({ userId, quantity: { $gt: 0 } })
+      .toArray(),
+  ]);
 
-  const securities = await db
-    .collection<Security>("securities")
-    .find({ companyCode: { $in: holdingDocs.map((h) => h.companyCode) } })
-    .toArray();
+  const companyCodes = holdingDocs.map((h) => h.companyCode);
+  const [securities, pricesByCode] = await Promise.all([
+    db
+      .collection<Security>("securities")
+      .find({ companyCode: { $in: companyCodes } })
+      .toArray(),
+    getLatestTwoPricesForMany(db, companyCodes),
+  ]);
   const securityByCode = new Map(securities.map((s) => [s.companyCode, s]));
 
   let holdingsValue = 0;
   let totalCostBasis = 0;
   let todayGain = 0;
 
-  const holdings: HoldingView[] = await Promise.all(
-    holdingDocs.map(async (h) => {
-      const { last, prev } = await getLatestTwoPrices(db, h.companyCode);
-      const currentPrice = last?.close ?? null;
-      const marketValue = (currentPrice ?? h.avgCost) * h.quantity;
-      const costBasis = h.avgCost * h.quantity;
-      const gainLoss = marketValue - costBasis;
-      holdingsValue += marketValue;
-      totalCostBasis += costBasis;
-      if (currentPrice !== null && prev) {
-        todayGain += (currentPrice - prev.close) * h.quantity;
-      }
-      return {
-        companyCode: h.companyCode,
-        symbol: h.symbol,
-        name: securityByCode.get(h.companyCode)?.name ?? h.symbol,
-        quantity: h.quantity,
-        avgCost: h.avgCost,
-        currentPrice,
-        marketValue,
-        costBasis,
-        gainLoss,
-        gainLossPct: costBasis > 0 ? (gainLoss / costBasis) * 100 : null,
-      };
-    }),
-  );
+  const holdings: HoldingView[] = holdingDocs.map((h) => {
+    const { last, prev } = pricesByCode.get(h.companyCode) ?? {
+      last: null,
+      prev: null,
+    };
+    const currentPrice = last?.close ?? null;
+    const marketValue = (currentPrice ?? h.avgCost) * h.quantity;
+    const costBasis = h.avgCost * h.quantity;
+    const gainLoss = marketValue - costBasis;
+    holdingsValue += marketValue;
+    totalCostBasis += costBasis;
+    if (currentPrice !== null && prev) {
+      todayGain += (currentPrice - prev.close) * h.quantity;
+    }
+    return {
+      companyCode: h.companyCode,
+      symbol: h.symbol,
+      name: securityByCode.get(h.companyCode)?.name ?? h.symbol,
+      quantity: h.quantity,
+      avgCost: h.avgCost,
+      currentPrice,
+      marketValue,
+      costBasis,
+      gainLoss,
+      gainLossPct: costBasis > 0 ? (gainLoss / costBasis) * 100 : null,
+    };
+  });
 
   const totalValue = portfolio.cashBalance + holdingsValue;
   const totalGainLoss = holdingsValue - totalCostBasis;
@@ -274,25 +330,33 @@ export async function getWatchlist(
     .find({ userId })
     .sort({ addedAt: -1 })
     .toArray();
-  const securities = await db
-    .collection<Security>("securities")
-    .find({ companyCode: { $in: items.map((i) => i.companyCode) } })
-    .toArray();
+
+  const companyCodes = items.map((i) => i.companyCode);
+  const [securities, pricesByCode] = await Promise.all([
+    db
+      .collection<Security>("securities")
+      .find({ companyCode: { $in: companyCodes } })
+      .toArray(),
+    getLatestTwoPricesForMany(db, companyCodes),
+  ]);
   const securityByCode = new Map(securities.map((s) => [s.companyCode, s]));
 
-  return Promise.all(
-    items.map(async (item) => {
-      const { last, prev } = await getLatestTwoPrices(db, item.companyCode);
-      const changePct =
-        last && prev && prev.close > 0 ? ((last.close - prev.close) / prev.close) * 100 : null;
-      return {
-        ...item,
-        name: securityByCode.get(item.companyCode)?.name ?? item.symbol,
-        currentPrice: last?.close ?? null,
-        changePct,
-      };
-    }),
-  );
+  return items.map((item) => {
+    const { last, prev } = pricesByCode.get(item.companyCode) ?? {
+      last: null,
+      prev: null,
+    };
+    const changePct =
+      last && prev && prev.close > 0
+        ? ((last.close - prev.close) / prev.close) * 100
+        : null;
+    return {
+      ...item,
+      name: securityByCode.get(item.companyCode)?.name ?? item.symbol,
+      currentPrice: last?.close ?? null,
+      changePct,
+    };
+  });
 }
 
 export async function addToWatchlist(db: Db, userId: string, symbol: string): Promise<void> {

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
-import { getDashboardRows } from "@/lib/data";
+import { getDashboardRows, type DashboardRow } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
-import DashboardTable from "@/components/DashboardTable";
 import StockAvatar from "@/components/StockAvatar";
+import SignalBadge from "@/components/SignalBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,17 @@ function fmt(value: number, digits = 0): string {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+}
+
+function Pct({ value, className = "" }: { value: number | null; className?: string }) {
+  if (value === null) return <span className="text-app-muted">—</span>;
+  return (
+    <span
+      className={`${value >= 0 ? "text-app-positive" : "text-app-negative"} ${className}`}
+    >
+      {value >= 0 ? "▲" : "▼"} {fmt(Math.abs(value), 2)}%
+    </span>
+  );
 }
 
 export default async function HomePage() {
@@ -26,71 +37,107 @@ export default async function HomePage() {
 
   const displayName = user?.fullName || user?.username || "";
 
+  const traded = rows.filter((r) => r.changePct !== null);
+  const gainers = traded
+    .filter((r) => r.changePct! > 0)
+    .sort((a, b) => b.changePct! - a.changePct!)
+    .slice(0, 6);
+  const losers = traded
+    .filter((r) => r.changePct! < 0)
+    .sort((a, b) => a.changePct! - b.changePct!)
+    .slice(0, 6);
+  // Untraded listings score 0 across the board; ranking them as "top picks"
+  // would just surface whatever sorts first alphabetically.
+  const topPicks = rows
+    .filter((r) => r.lastPrice !== null && r.score !== 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
   return (
     <div className="px-4 pt-6 pb-4 space-y-6">
-      <div>
-        <p className="text-app-muted text-sm">Сайн байна уу,</p>
-        <h1 className="text-xl font-bold text-app-text">{displayName}! 👋</h1>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-app-muted text-sm">Сайн байна уу,</p>
+          <h1 className="text-xl font-bold text-app-text">{displayName} 👋</h1>
+        </div>
+        <Link
+          href="/discover"
+          aria-label="Хайх"
+          className="w-10 h-10 rounded-full bg-app-card border border-app-border flex items-center justify-center text-app-muted"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+            <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </Link>
       </div>
 
-      <div className="rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-white">
-        <div className="text-xs opacity-80 mb-1">Багцын үнэ цэнэ</div>
+      <div className="rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-black">
+        <div className="text-xs font-medium opacity-70 mb-1">Багцын үнэ цэнэ</div>
         <div className="text-3xl font-bold tabular-nums">{fmt(portfolio.totalValue)}₮</div>
-        <div className="flex items-center gap-2 mt-2 text-sm">
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-              portfolio.todayGain >= 0 ? "bg-white/20" : "bg-black/20"
-            }`}
-          >
+        <div className="flex items-center gap-2 mt-3 text-sm">
+          <span className="rounded-full bg-black/15 px-2.5 py-1 text-xs font-semibold">
             {portfolio.todayGain >= 0 ? "▲" : "▼"} {fmt(Math.abs(portfolio.todayGain))}₮
           </span>
-          <span className="opacity-80">өнөөдөр</span>
+          <span className="opacity-70 text-xs">өнөөдөр</span>
         </div>
       </div>
 
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-app-text text-sm">Миний хөрөнгө</h2>
-          <Link href="/portfolio" className="text-xs text-brand font-medium">
-            Бүгдийг харах
-          </Link>
+      {gainers.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {gainers.slice(0, 3).map((r) => (
+            <Link
+              key={r.symbol}
+              href={`/stock/${r.symbol}`}
+              className="rounded-2xl bg-app-card border border-app-border p-3"
+            >
+              <div className="text-xs font-semibold text-app-text truncate">{r.symbol}</div>
+              <div className="text-[11px] text-app-muted tabular-nums truncate">
+                {fmt(r.lastPrice ?? 0, 2)}
+              </div>
+              <div className="text-[11px] font-medium tabular-nums mt-0.5">
+                <Pct value={r.changePct} />
+              </div>
+            </Link>
+          ))}
         </div>
+      )}
+
+      <Section
+        title="Миний хөрөнгө"
+        action={{ href: "/portfolio", label: "Бүгдийг харах" }}
+      >
         {portfolio.holdings.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-app-border p-5 text-center text-sm text-app-muted">
-            Одоогоор хувьцаа худалдаж аваагүй байна.
-          </div>
+          <Empty>Одоогоор хувьцаа худалдаж аваагүй байна.</Empty>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
-            {portfolio.holdings.slice(0, 6).map((h) => (
+          <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+            {portfolio.holdings.slice(0, 4).map((h) => (
               <Link
                 key={h.symbol}
                 href={`/stock/${h.symbol}`}
-                className="shrink-0 w-36 rounded-2xl border border-app-border bg-app-card p-3"
+                className="flex items-center gap-3 px-4 py-3 active:bg-app-elevated"
               >
-                <StockAvatar symbol={h.symbol} size={32} />
-                <div className="mt-2 text-sm font-semibold text-app-text">{h.symbol}</div>
-                <div className="text-xs text-app-muted">{fmt(h.marketValue)}₮</div>
-                <div
-                  className={`text-xs font-medium ${h.gainLoss >= 0 ? "text-app-positive" : "text-app-negative"}`}
-                >
-                  {h.gainLoss >= 0 ? "+" : ""}
-                  {fmt(h.gainLossPct ?? 0, 1)}%
+                <StockAvatar symbol={h.symbol} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-app-text text-sm">{h.symbol}</div>
+                  <div className="text-xs text-app-muted">{h.quantity} ширхэг</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-semibold tabular-nums text-app-text">
+                    {fmt(h.marketValue)}₮
+                  </div>
+                  <div className="text-xs font-medium tabular-nums">
+                    <Pct value={h.gainLossPct} />
+                  </div>
                 </div>
               </Link>
             ))}
           </div>
         )}
-      </section>
+      </Section>
 
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-app-text text-sm">Хяналтын жагсаалт</h2>
-        </div>
-        {watchlist.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-app-border p-5 text-center text-sm text-app-muted">
-            Хяналтад компани нэмээгүй байна. Компанийн хуудаснаас ★ дарж нэмнэ үү.
-          </div>
-        ) : (
+      {watchlist.length > 0 && (
+        <Section title="Хяналтын жагсаалт">
           <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
             {watchlist.map((w) => (
               <Link
@@ -100,31 +147,102 @@ export default async function HomePage() {
               >
                 <StockAvatar symbol={w.symbol} size={32} />
                 <div className="mt-2 text-sm font-semibold text-app-text">{w.symbol}</div>
-                <div className="text-xs text-app-muted">{fmt(w.currentPrice ?? 0, 2)}₮</div>
-                <div
-                  className={`text-xs font-medium ${
-                    (w.changePct ?? 0) >= 0 ? "text-app-positive" : "text-app-negative"
-                  }`}
-                >
-                  {(w.changePct ?? 0) >= 0 ? "+" : ""}
-                  {fmt(w.changePct ?? 0, 1)}%
+                <div className="text-xs text-app-muted tabular-nums">
+                  {fmt(w.currentPrice ?? 0, 2)}₮
+                </div>
+                <div className="text-xs font-medium tabular-nums mt-0.5">
+                  <Pct value={w.changePct} />
                 </div>
               </Link>
             ))}
           </div>
-        )}
-      </section>
+        </Section>
+      )}
 
-      <section>
-        <h2 className="font-semibold text-app-text text-sm mb-3">Зах зээл</h2>
-        {rows.length === 0 ? (
-          <div className="rounded-2xl border border-app-border bg-app-card p-8 text-center text-app-muted text-sm">
-            Өгөгдөл олдсонгүй.
-          </div>
-        ) : (
-          <DashboardTable rows={rows} />
+      <Section title="Өсөлттэй" action={{ href: "/discover", label: "Зах зээл" }}>
+        <MoverList rows={gainers} />
+      </Section>
+
+      <Section title="Уналттай">
+        <MoverList rows={losers} />
+      </Section>
+
+      {topPicks.length > 0 && (
+      <Section title="Онооны шилдэг" action={{ href: "/discover", label: "Бүгд" }}>
+        <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+          {topPicks.map((r) => (
+            <Link
+              key={r.symbol}
+              href={`/stock/${r.symbol}`}
+              className="flex items-center gap-3 px-4 py-3 active:bg-app-elevated"
+            >
+              <StockAvatar symbol={r.symbol} />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-app-text text-sm">{r.symbol}</div>
+                <div className="text-xs text-app-muted truncate">{r.name}</div>
+              </div>
+              <span className="text-xs tabular-nums text-app-muted shrink-0">{r.score}</span>
+              <SignalBadge signal={r.signal} />
+            </Link>
+          ))}
+        </div>
+      </Section>
+      )}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: { href: string; label: string };
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-app-text text-sm">{title}</h2>
+        {action && (
+          <Link href={action.href} className="text-xs text-brand font-medium">
+            {action.label}
+          </Link>
         )}
-      </section>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-app-border p-5 text-center text-sm text-app-muted">
+      {children}
+    </div>
+  );
+}
+
+function MoverList({ rows }: { rows: DashboardRow[] }) {
+  if (rows.length === 0) {
+    return <Empty>Арилжааны мэдээлэл алга.</Empty>;
+  }
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
+      {rows.map((r) => (
+        <Link
+          key={r.symbol}
+          href={`/stock/${r.symbol}`}
+          className="shrink-0 w-32 rounded-2xl border border-app-border bg-app-card p-3"
+        >
+          <div className="text-sm font-semibold text-app-text truncate">{r.symbol}</div>
+          <div className="text-xs text-app-muted tabular-nums">{fmt(r.lastPrice ?? 0, 2)}₮</div>
+          <div className="text-xs font-medium tabular-nums mt-1">
+            <Pct value={r.changePct} />
+          </div>
+        </Link>
+      ))}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureIndexes } from "@/lib/mongodb";
 import { runSyncBatch } from "@/lib/sync";
 import { checkSignalChangesAndNotify } from "@/lib/signalHistory";
+import { refreshDashboardSnapshot } from "@/lib/data";
 
 export const maxDuration = 300;
 
@@ -35,7 +36,16 @@ async function handle(req: NextRequest) {
       console.error("signal change check failed", err);
     }
 
-    return NextResponse.json({ ok: true, ...result, signalChanges });
+    // Rebuild the dashboard snapshot so the first visitor after a sync doesn't
+    // pay for recomputing indicators across every listed company.
+    let snapshotRows = 0;
+    try {
+      snapshotRows = await refreshDashboardSnapshot(db);
+    } catch (err) {
+      console.error("dashboard snapshot refresh failed", err);
+    }
+
+    return NextResponse.json({ ok: true, ...result, signalChanges, snapshotRows });
   } catch (err) {
     console.error("sync failed", err);
     return NextResponse.json(

@@ -1,10 +1,24 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
+
+/**
+ * Renders inside <Link>, so it can read that link's own transition state.
+ * Without it a tap gives no feedback until the server responds and the tab
+ * feels unresponsive.
+ */
+function PendingDot() {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <span className="nav-pending absolute top-1 right-1/2 translate-x-4 w-1.5 h-1.5 rounded-full bg-brand" />
+  );
+}
 
 const ITEMS = [
   { href: "/", label: "Нүүр", icon: HomeIcon },
+  { href: "/discover", label: "Зах зээл", icon: SearchIcon },
   { href: "/portfolio", label: "Багц", icon: PortfolioIcon },
   { href: "/orders", label: "Захиалга", icon: OrdersIcon },
   { href: "/profile", label: "Профайл", icon: ProfileIcon },
@@ -15,17 +29,19 @@ export default function BottomNav() {
 
   return (
     <nav className="sticky bottom-0 z-20 border-t border-app-border bg-app-card/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto max-w-md grid grid-cols-4">
+      <div className="mx-auto max-w-md grid grid-cols-5">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
             <Link
               key={href}
               href={href}
-              className={`flex flex-col items-center gap-1 py-2.5 text-[11px] ${
+              prefetch
+              className={`relative flex flex-col items-center gap-1 py-2.5 text-[11px] transition-colors active:opacity-60 ${
                 active ? "text-brand" : "text-app-muted"
               }`}
             >
+              <PendingDot />
               <Icon active={active} />
               {label}
             </Link>
@@ -47,6 +63,23 @@ function HomeIcon({ active }: { active: boolean }) {
         fill={active ? "currentColor" : "none"}
         fillOpacity={active ? 0.12 : 0}
       />
+    </svg>
+  );
+}
+
+function SearchIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <circle
+        cx="11"
+        cy="11"
+        r="7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        fill={active ? "currentColor" : "none"}
+        fillOpacity={active ? 0.12 : 0}
+      />
+      <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
