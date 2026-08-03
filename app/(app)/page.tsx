@@ -153,12 +153,12 @@ export default async function HomePage() {
 
       {watchlist.length > 0 && (
         <Section title="Хяналтын жагсаалт">
-          <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+          <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
             {watchlist.map((w) => (
               <Link
                 key={w.symbol}
                 href={`/stock/${w.symbol}`}
-                className="block px-3 py-2 active:bg-app-elevated"
+                className="shrink-0 w-52 rounded-2xl border border-app-border bg-app-card px-3 py-2.5 active:bg-app-elevated"
               >
                 <div className="flex items-center gap-2.5">
                   <StockAvatar symbol={w.symbol} size={28} />
