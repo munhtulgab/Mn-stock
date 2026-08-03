@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { DashboardRow } from "@/lib/data";
 import SignalBadge from "./SignalBadge";
+import StockAvatar from "./StockAvatar";
 
 type SortKey = "symbol" | "lastPrice" | "changePct" | "score";
 
@@ -20,8 +21,8 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
   const [signalFilter, setSignalFilter] = useState<"ALL" | DashboardRow["signal"]>(
     "ALL",
   );
-  const [sortKey, setSortKey] = useState<SortKey>("score");
-  const [sortDir, setSortDir] = useState<1 | -1>(-1);
+  const [sortKey] = useState<SortKey>("score");
+  const [sortDir] = useState<1 | -1>(-1);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -46,15 +47,6 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
     return result;
   }, [rows, query, signalFilter, sortKey, sortDir]);
 
-  function toggleSort(key: SortKey) {
-    if (key === sortKey) {
-      setSortDir((d) => (d === 1 ? -1 : 1));
-    } else {
-      setSortKey(key);
-      setSortDir(-1);
-    }
-  }
-
   const counts = useMemo(
     () => ({
       BUY: rows.filter((r) => r.signal === "BUY").length,
@@ -64,122 +56,78 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
     [rows],
   );
 
-  function sortIndicator(key: SortKey) {
-    if (key !== sortKey) return null;
-    return <span className="text-term-amber ml-0.5">{sortDir === 1 ? "▲" : "▼"}</span>;
-  }
-
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+      <div className="flex flex-col gap-3 mb-3">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="SEARCH SYMBOL / NAME..."
-          className="flex-1 min-w-[220px] bg-black border border-term-border px-3 py-1.5 text-xs uppercase tracking-wide outline-none focus:border-term-amber placeholder:text-term-muted"
+          placeholder="Симбол эсвэл нэрээр хайх..."
+          className="w-full rounded-2xl border border-app-border bg-app-card px-4 py-3 text-sm outline-none focus:border-brand placeholder:text-app-muted"
         />
-        <div className="flex gap-1 text-[11px] uppercase tracking-wider">
+        <div className="flex gap-2 text-xs overflow-x-auto">
           {(["ALL", "BUY", "SELL", "HOLD"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setSignalFilter(f)}
-              className={`px-2.5 py-1.5 border ${
+              className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${
                 signalFilter === f
-                  ? "border-term-amber bg-term-amber text-black font-bold"
-                  : "border-term-border text-term-muted hover:border-term-amber hover:text-term-amber"
+                  ? "bg-brand text-white"
+                  : "bg-app-card border border-app-border text-app-muted"
               }`}
             >
               {f === "ALL"
-                ? `ALL (${rows.length})`
+                ? `Бүгд (${rows.length})`
                 : f === "BUY"
-                  ? `BUY (${counts.BUY})`
+                  ? `Авах (${counts.BUY})`
                   : f === "SELL"
-                    ? `SELL (${counts.SELL})`
-                    : `HOLD (${counts.HOLD})`}
+                    ? `Зарах (${counts.SELL})`
+                    : `Хүлээх (${counts.HOLD})`}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="overflow-x-auto border border-term-border">
-        <table className="w-full text-xs">
-          <thead className="bg-term-panel text-term-amber text-left uppercase tracking-wider">
-            <tr>
-              <th
-                className="px-3 py-2 cursor-pointer select-none border-b border-term-border"
-                onClick={() => toggleSort("symbol")}
+      <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+        {filtered.map((row) => (
+          <Link
+            key={row.symbol}
+            href={`/stock/${row.symbol}`}
+            className="flex items-center gap-3 px-4 py-3 hover:bg-app-bg/60 transition-colors"
+          >
+            <StockAvatar symbol={row.symbol} />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-app-text text-sm">{row.symbol}</div>
+              <div className="text-xs text-app-muted truncate">{row.name}</div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-sm font-semibold tabular-nums text-app-text">
+                {formatNumber(row.lastPrice)}
+              </div>
+              <div
+                className={`text-xs font-medium tabular-nums ${
+                  row.changePct === null
+                    ? "text-app-muted"
+                    : row.changePct > 0
+                      ? "text-app-positive"
+                      : row.changePct < 0
+                        ? "text-app-negative"
+                        : "text-app-muted"
+                }`}
               >
-                Symbol{sortIndicator("symbol")}
-              </th>
-              <th className="px-3 py-2 border-b border-term-border">Компани</th>
-              <th
-                className="px-3 py-2 cursor-pointer select-none text-right border-b border-term-border"
-                onClick={() => toggleSort("lastPrice")}
-              >
-                Last{sortIndicator("lastPrice")}
-              </th>
-              <th
-                className="px-3 py-2 cursor-pointer select-none text-right border-b border-term-border"
-                onClick={() => toggleSort("changePct")}
-              >
-                Chg%{sortIndicator("changePct")}
-              </th>
-              <th
-                className="px-3 py-2 cursor-pointer select-none text-right border-b border-term-border"
-                onClick={() => toggleSort("score")}
-              >
-                Score{sortIndicator("score")}
-              </th>
-              <th className="px-3 py-2 border-b border-term-border">Signal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((row, i) => (
-              <tr
-                key={row.symbol}
-                className={`border-b border-term-border hover:bg-term-amber/5 ${i % 2 === 0 ? "bg-black" : "bg-term-panel"}`}
-              >
-                <td className="px-3 py-1.5 font-bold text-term-amber">
-                  <Link href={`/stock/${row.symbol}`} className="hover:underline">
-                    {row.symbol}
-                  </Link>
-                </td>
-                <td className="px-3 py-1.5 text-term-text truncate max-w-[220px]">
-                  {row.name}
-                </td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-term-text">
-                  {formatNumber(row.lastPrice)}
-                </td>
-                <td
-                  className={`px-3 py-1.5 text-right tabular-nums font-semibold ${
-                    row.changePct === null
-                      ? "text-term-muted"
-                      : row.changePct > 0
-                        ? "text-term-green"
-                        : row.changePct < 0
-                          ? "text-term-red"
-                          : "text-term-muted"
-                  }`}
-                >
-                  {row.changePct === null ? "—" : `${row.changePct > 0 ? "+" : ""}${formatNumber(row.changePct)}%`}
-                </td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-term-text">
-                  {row.score}
-                </td>
-                <td className="px-3 py-1.5">
-                  <SignalBadge signal={row.signal} />
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-term-muted">
-                  Илэрц олдсонгүй.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                {row.changePct === null
+                  ? "—"
+                  : `${row.changePct > 0 ? "+" : ""}${formatNumber(row.changePct)}%`}
+              </div>
+            </div>
+            <SignalBadge signal={row.signal} />
+          </Link>
+        ))}
+        {filtered.length === 0 && (
+          <div className="px-4 py-10 text-center text-app-muted text-sm">
+            Илэрц олдсонгүй.
+          </div>
+        )}
       </div>
     </div>
   );

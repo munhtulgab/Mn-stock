@@ -96,47 +96,43 @@ export default function SettingsForm({
   }
 
   return (
-    <div className="space-y-8">
-      <section className="border border-term-border bg-term-panel p-4">
-        <h2 className="text-[11px] uppercase tracking-wider text-term-amber mb-1">
-          AI Provider Keys
-        </h2>
-        <p className="text-[11px] text-term-muted mb-3">
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-app-border bg-app-card p-4">
+        <h2 className="text-sm font-semibold text-app-text mb-1">AI үйлчилгээний түлхүүр</h2>
+        <p className="text-xs text-app-muted mb-3">
           Дор хаяж нэг түлхүүр тохируулагдсан бол компанийн дэлгэрэнгүй хуудсан дээрх
           &quot;AI дүн шинжилгээ&quot; идэвхжинэ. Хэд хэдэн түлхүүр тохируулсан бол бүх
           үйлчилгээнээс дүгнэлт авч нэгтгэн харуулна.
         </p>
         <div className="space-y-3">
           {PROVIDER_FIELDS.map((f) => (
-            <div key={f.key} className="flex items-center gap-3">
-              <div className="w-40 shrink-0">
-                <div className="text-xs text-term-text">{f.label}</div>
-                <div className="text-[10px] text-term-muted">{f.help}</div>
+            <div key={f.key} className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium text-app-text">{f.label}</div>
+                <span
+                  className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${current[f.key] ? "bg-app-positive-bg text-app-positive" : "bg-app-bg text-app-muted"}`}
+                >
+                  {current[f.key] ? "Идэвхтэй" : "Тохируулаагүй"}
+                </span>
               </div>
+              <div className="text-[11px] text-app-muted">{f.help}</div>
               <input
                 type="password"
-                placeholder={current[f.key] ? `Одоогийн: ${current[f.key]}` : "Тохируулаагүй"}
+                placeholder={current[f.key] ? `Одоогийн: ${current[f.key]}` : "Түлхүүр оруулах"}
                 value={keyInputs[f.key] ?? ""}
                 onChange={(e) =>
                   setKeyInputs((prev) => ({ ...prev, [f.key]: e.target.value }))
                 }
-                className="flex-1 bg-black border border-term-border px-3 py-1.5 text-xs outline-none focus:border-term-amber placeholder:text-term-muted"
+                className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
               />
-              <span
-                className={`text-[10px] w-20 text-right uppercase tracking-wide ${current[f.key] ? "text-term-green" : "text-term-muted"}`}
-              >
-                {current[f.key] ? "● active" : "○ empty"}
-              </span>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="border border-term-border bg-term-panel p-4">
-        <h2 className="text-[11px] uppercase tracking-wider text-term-amber mb-1">
-          News Sources
-        </h2>
-        <p className="text-[11px] text-term-muted mb-3">
+      <section className="rounded-2xl border border-app-border bg-app-card p-4">
+        <h2 className="text-sm font-semibold text-app-text mb-1">Мэдээллийн сайтууд</h2>
+        <p className="text-xs text-app-muted mb-3">
           Энд нэмсэн мэдээний сайтуудаас AI дүн шинжилгээ хийхдээ тухайн үед агуулгыг
           татаж, сэтгэл хөдлөлийн (sentiment) шинжилгээнд нэмэлт эх сурвалж болгон ашиглана.
         </p>
@@ -146,32 +142,32 @@ export default function SettingsForm({
             onChange={(e) => setNewSourceInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSource())}
             placeholder="https://ikon.mn/..."
-            className="flex-1 bg-black border border-term-border px-3 py-1.5 text-xs outline-none focus:border-term-amber placeholder:text-term-muted"
+            className="flex-1 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
           />
           <button
             onClick={addSource}
-            className="border border-term-border px-3 py-1.5 text-xs uppercase tracking-wide hover:border-term-amber hover:text-term-amber"
+            className="rounded-xl border border-app-border px-4 py-2 text-sm font-medium text-brand"
           >
             Нэмэх
           </button>
         </div>
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {newsSources.map((s, i) => (
             <li
               key={i}
-              className="flex items-center justify-between bg-black border border-term-border px-3 py-1.5 text-xs"
+              className="flex items-center justify-between rounded-xl bg-app-bg px-3 py-2 text-xs"
             >
-              <span className="truncate text-term-text">{s}</span>
+              <span className="truncate text-app-text">{s}</span>
               <button
                 onClick={() => removeSource(i)}
-                className="text-term-muted hover:text-term-red text-[11px] ml-3 uppercase"
+                className="text-app-negative text-[11px] ml-3 font-medium"
               >
                 Устгах
               </button>
             </li>
           ))}
           {newsSources.length === 0 && (
-            <li className="text-xs text-term-muted">Одоогоор линк нэмээгүй байна.</li>
+            <li className="text-xs text-app-muted">Одоогоор линк нэмээгүй байна.</li>
           )}
         </ul>
       </section>
@@ -180,12 +176,12 @@ export default function SettingsForm({
         <button
           onClick={save}
           disabled={status === "saving"}
-          className="border border-term-amber text-term-amber text-xs uppercase tracking-wide px-4 py-2 font-bold hover:bg-term-amber hover:text-black transition-colors disabled:opacity-50"
+          className="rounded-xl bg-brand text-white text-sm font-semibold px-5 py-2.5 disabled:opacity-50"
         >
           {status === "saving" ? "Хадгалж байна..." : "Хадгалах"}
         </button>
-        {status === "saved" && <span className="text-xs text-term-green">Хадгалагдлаа</span>}
-        {status === "error" && <span className="text-xs text-term-red">Алдаа гарлаа</span>}
+        {status === "saved" && <span className="text-xs text-app-positive">Хадгалагдлаа</span>}
+        {status === "error" && <span className="text-xs text-app-negative">Алдаа гарлаа</span>}
       </div>
     </div>
   );

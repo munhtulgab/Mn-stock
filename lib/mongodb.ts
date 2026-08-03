@@ -47,5 +47,16 @@ export async function ensureIndexes(): Promise<void> {
     db
       .collection("signalHistory")
       .createIndex({ companyCode: 1 }, { unique: true }),
+    db.collection("users").createIndex({ username: 1 }, { unique: true }),
+    db.collection("sessions").createIndex({ token: 1 }, { unique: true }),
+    db.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    db.collection("portfolios").createIndex({ userId: 1 }, { unique: true }),
+    db
+      .collection("holdings")
+      .createIndex({ userId: 1, companyCode: 1 }, { unique: true }),
+    db.collection("transactions").createIndex({ userId: 1, createdAt: -1 }),
+    db
+      .collection("watchlist")
+      .createIndex({ userId: 1, companyCode: 1 }, { unique: true }),
   ]);
 }

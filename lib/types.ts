@@ -107,3 +107,62 @@ export interface AiSignal {
   providersUsed: number;
   providers: AiSignalProviderSummary[];
 }
+
+export interface User {
+  _id?: string;
+  username: string;
+  passwordHash: string;
+  passwordSalt: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  createdAt: Date;
+}
+
+export type SafeUser = Pick<User, "username" | "fullName" | "email" | "phone"> & {
+  id: string;
+};
+
+export interface Session {
+  token: string;
+  userId: string;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+export const STARTING_CASH_BALANCE = 10_000_000;
+
+export interface Portfolio {
+  userId: string;
+  cashBalance: number;
+  updatedAt: Date;
+}
+
+export interface Holding {
+  userId: string;
+  companyCode: number;
+  symbol: string;
+  quantity: number;
+  avgCost: number;
+  updatedAt: Date;
+}
+
+export type OrderSide = "BUY" | "SELL";
+
+export interface Transaction {
+  userId: string;
+  companyCode: number;
+  symbol: string;
+  side: OrderSide;
+  quantity: number;
+  price: number;
+  total: number;
+  createdAt: Date;
+}
+
+export interface WatchlistItem {
+  userId: string;
+  companyCode: number;
+  symbol: string;
+  addedAt: Date;
+}

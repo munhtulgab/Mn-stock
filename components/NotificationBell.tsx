@@ -93,33 +93,29 @@ export default function NotificationBell() {
 
   if (state === "unsupported" || state === "checking") return null;
 
-  if (state === "denied") {
-    return (
-      <span
-        className="text-[11px] text-term-muted uppercase"
-        title="Мэдэгдлийг браузерын тохиргооноос идэвхжүүлнэ үү"
-      >
-        🔕
-      </span>
-    );
-  }
+  const label =
+    state === "denied"
+      ? "Хориглогдсон (браузерын тохиргооноос идэвхжүүлнэ үү)"
+      : state === "on"
+        ? "Идэвхтэй"
+        : "Идэвхгүй";
 
   return (
     <button
-      onClick={state === "on" ? unsubscribe : subscribe}
-      disabled={state === "busy"}
-      title={
-        state === "on"
-          ? "Дохионы мэдэгдэл идэвхтэй — унтраахын тулд дарна уу"
-          : "Дохио өөрчлөгдөх үед мэдэгдэл авах"
-      }
-      className={`text-[11px] uppercase tracking-wider border px-2 py-1 transition-colors disabled:opacity-50 ${
-        state === "on"
-          ? "border-term-amber text-term-amber bg-term-amber/10"
-          : "border-term-border text-term-muted hover:border-term-amber hover:text-term-amber"
-      }`}
+      onClick={state === "on" ? unsubscribe : state === "denied" ? undefined : subscribe}
+      disabled={state === "busy" || state === "denied"}
+      className="w-full flex items-center justify-between px-4 py-3.5 disabled:opacity-70"
     >
-      {state === "on" ? "🔔 ON" : "🔔 OFF"}
+      <span className="flex items-center gap-3 text-sm text-app-text">
+        <span className="text-lg">🔔</span> Push мэдэгдэл
+      </span>
+      <span
+        className={`text-xs font-medium rounded-full px-2.5 py-1 ${
+          state === "on" ? "bg-app-positive-bg text-app-positive" : "bg-app-bg text-app-muted"
+        }`}
+      >
+        {label}
+      </span>
     </button>
   );
 }

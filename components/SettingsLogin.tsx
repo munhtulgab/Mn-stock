@@ -31,24 +31,23 @@ export default function SettingsLogin() {
   }
 
   return (
-    <div className="mx-auto max-w-sm px-4 py-16">
-      <h1 className="text-sm uppercase tracking-wider text-term-amber mb-4 border-b border-term-border pb-2">
-        Restricted // Authentication Required
-      </h1>
+    <div className="px-4 pt-16 pb-4">
+      <h1 className="text-lg font-bold text-app-text mb-1">Тохиргоо хязгаарлагдмал</h1>
+      <p className="text-sm text-app-muted mb-4">Нэвтрэх нууц үгээ оруулна уу.</p>
       <form onSubmit={submit} className="space-y-3">
         <input
           type="password"
           autoFocus
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="PASSWORD"
-          className="w-full bg-black border border-term-border px-3 py-2 text-sm outline-none focus:border-term-amber placeholder:text-term-muted"
+          placeholder="Нууц үг"
+          className="w-full rounded-xl border border-app-border bg-app-card px-4 py-3 text-sm text-app-text outline-none focus:border-brand"
         />
-        {error && <p className="text-xs text-term-red">{error}</p>}
+        {error && <p className="text-xs text-app-negative">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="w-full border border-term-amber text-term-amber text-xs uppercase tracking-wide px-3 py-2 font-bold hover:bg-term-amber hover:text-black transition-colors disabled:opacity-50"
+          className="w-full rounded-xl bg-brand text-white text-sm font-semibold px-3 py-3 disabled:opacity-50"
         >
           Нэвтрэх
         </button>

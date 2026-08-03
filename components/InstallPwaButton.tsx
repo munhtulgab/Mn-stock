@@ -44,9 +44,14 @@ export default function InstallPwaButton() {
         await deferred.userChoice;
         setDeferred(null);
       }}
-      className="text-[11px] uppercase tracking-wider border border-term-amber text-term-amber px-2 py-1 hover:bg-term-amber hover:text-black transition-colors"
+      className="w-full flex items-center justify-between px-4 py-3.5"
     >
-      Install App
+      <span className="flex items-center gap-3 text-sm text-app-text">
+        <span className="text-lg">📲</span> Апп суулгах
+      </span>
+      <span className="text-xs font-medium rounded-full px-2.5 py-1 bg-brand/10 text-brand">
+        Суулгах
+      </span>
     </button>
   );
 }

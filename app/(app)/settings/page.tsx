@@ -17,10 +17,8 @@ export default async function SettingsPage() {
   const masked = maskSettings(settings);
 
   return (
-    <div className="mx-auto max-w-2xl px-3 py-4">
-      <h1 className="text-base font-bold uppercase tracking-wider text-term-amber mb-4 border-b border-term-border pb-2">
-        System Configuration
-      </h1>
+    <div className="px-4 pt-6 pb-4">
+      <h1 className="text-xl font-bold text-app-text mb-4">Тохиргоо</h1>
       <SettingsForm initial={masked} />
     </div>
   );

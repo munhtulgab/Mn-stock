@@ -53,17 +53,15 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
   }
 
   return (
-    <div className="border border-term-border bg-term-panel p-4">
+    <div className="rounded-2xl border border-app-border bg-app-card p-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[11px] uppercase tracking-wider text-term-amber">
-          AI Consensus // Multi-LLM
-        </h2>
+        <h2 className="font-semibold text-app-text text-sm">AI дүгнэлт (олон загвар)</h2>
         {state.status === "ready" && (
           <button
             onClick={() => load(true)}
-            className="text-[11px] uppercase text-term-muted hover:text-term-amber"
+            className="text-xs text-brand font-medium"
           >
-            Recompute
+            Дахин тооцоолох
           </button>
         )}
       </div>
@@ -71,20 +69,20 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
       {state.status === "idle" && (
         <button
           onClick={() => load(false)}
-          className="border border-term-amber text-term-amber text-xs uppercase tracking-wide px-3 py-1.5 font-bold hover:bg-term-amber hover:text-black transition-colors"
+          className="rounded-full bg-brand text-white text-xs font-semibold px-4 py-2"
         >
-          Run AI Analysis
+          AI дүн шинжилгээ хийх
         </button>
       )}
 
       {state.status === "loading" && (
-        <p className="text-xs text-term-muted term-cursor">Тооцоолж байна</p>
+        <p className="text-xs text-app-muted">Тооцоолж байна...</p>
       )}
 
       {state.status === "not_configured" && (
-        <p className="text-xs text-term-muted">
+        <p className="text-xs text-app-muted">
           AI дүн шинжилгээ ажиллуулахын тулд{" "}
-          <a href="/settings" className="underline text-term-amber">
+          <a href="/settings" className="underline text-brand font-medium">
             Тохиргоо
           </a>{" "}
           хуудсан дээр дор хаяж нэг API түлхүүр (Claude, Gemini, Groq эсвэл
@@ -93,15 +91,15 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
       )}
 
       {state.status === "error" && (
-        <div className="space-y-1">
-          <p className="text-xs text-term-red font-semibold uppercase tracking-wide">
+        <div className="space-y-1.5">
+          <p className="text-xs text-app-negative font-semibold">
             Бүх AI үйлчилгээ амжилтгүй боллоо
           </p>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {state.message.split(/;\s*(?=\w+:)/).map((line, i) => (
               <div
                 key={i}
-                className="text-[11px] text-term-red/90 bg-term-red/5 border border-term-red/30 px-2 py-1 break-words whitespace-pre-wrap"
+                className="text-[11px] text-app-negative bg-app-negative-bg rounded-xl px-2.5 py-1.5 break-words whitespace-pre-wrap"
               >
                 {line.trim()}
               </div>
@@ -114,13 +112,13 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
         <div className="space-y-3 text-xs">
           <div className="flex flex-wrap items-center gap-3">
             <SignalBadge signal={state.data.consensus.signal} />
-            <span className="text-term-muted uppercase tracking-wide">
-              Confidence: <span className="text-term-text">{state.data.consensus.signal_confidence}%</span>
+            <span className="text-app-muted">
+              Итгэлцэл: <span className="text-app-text font-medium">{state.data.consensus.signal_confidence}%</span>
             </span>
-            <span className="text-term-muted uppercase tracking-wide">
-              Agreement: <span className="text-term-text">{Math.round(state.data.agreement * 100)}%</span> ({state.data.providersUsed} providers)
+            <span className="text-app-muted">
+              Санал нэгдэл: <span className="text-app-text font-medium">{Math.round(state.data.agreement * 100)}%</span> ({state.data.providersUsed} эх сурвалж)
             </span>
-            <span className="text-term-muted">
+            <span className="text-app-muted">
               {new Date(state.data.createdAt).toLocaleString("mn-MN")}
             </span>
           </div>
@@ -129,26 +127,26 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
             {state.data.providers.map((p) => (
               <div
                 key={p.provider}
-                className={`border px-2 py-1.5 ${
+                className={`rounded-xl border px-2.5 py-1.5 ${
                   p.ok
-                    ? "border-term-border"
-                    : "border-term-red/40 bg-term-red/5"
+                    ? "border-app-border"
+                    : "border-app-negative/30 bg-app-negative-bg"
                 }`}
               >
-                <div className="flex items-center justify-between uppercase tracking-wide">
-                  <span className="font-bold text-term-text">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-app-text">
                     {PROVIDER_LABEL[p.provider] ?? p.provider}
                   </span>
                   {p.ok ? (
-                    <span className="text-term-text">
+                    <span className="text-app-text">
                       {p.signal} ({p.confidence}%)
                     </span>
                   ) : (
-                    <span className="text-term-red font-bold">ERROR</span>
+                    <span className="text-app-negative font-semibold">Алдаа</span>
                   )}
                 </div>
                 {!p.ok && p.error && (
-                  <div className="mt-1 text-[10.5px] text-term-red/90 normal-case tracking-normal break-words whitespace-pre-wrap">
+                  <div className="mt-1 text-[10.5px] text-app-negative break-words whitespace-pre-wrap">
                     {p.error}
                   </div>
                 )}
@@ -156,37 +154,37 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
             ))}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-term-border border border-term-border">
-            <Stat label="Current" value={state.data.consensus.price_data.current_price} />
-            <Stat label="Target 1" value={state.data.consensus.price_data.target_price_1} accent="text-term-green" />
-            <Stat label="Target 2" value={state.data.consensus.price_data.target_price_2} accent="text-term-green" />
-            <Stat label="Stop-loss" value={state.data.consensus.price_data.stop_loss} accent="text-term-red" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat label="Одоогийн" value={state.data.consensus.price_data.current_price} />
+            <Stat label="Зорилт 1" value={state.data.consensus.price_data.target_price_1} accent="text-app-positive" />
+            <Stat label="Зорилт 2" value={state.data.consensus.price_data.target_price_2} accent="text-app-positive" />
+            <Stat label="Алдагдал хязгаарлах" value={state.data.consensus.price_data.stop_loss} accent="text-app-negative" />
           </div>
 
-          <div className="flex flex-wrap gap-4 text-term-muted uppercase tracking-wide">
+          <div className="flex flex-wrap gap-4 text-app-muted pt-1">
             <span>
-              Risk: <span className="text-term-text">{RISK_LABEL[state.data.consensus.risk_assessment.risk_level]}</span>
+              Эрсдэл: <span className="text-app-text font-medium">{RISK_LABEL[state.data.consensus.risk_assessment.risk_level]}</span>
             </span>
             <span>
-              R:R <span className="text-term-text">{state.data.consensus.risk_assessment.risk_reward_ratio}</span>
+              Эрсдэл:өгөөж <span className="text-app-text font-medium">{state.data.consensus.risk_assessment.risk_reward_ratio}</span>
             </span>
             <span>
-              Liquidity risk: <span className="text-term-text">{RISK_LABEL[state.data.consensus.risk_assessment.liquidity_risk]}</span>
+              Ликвидийн эрсдэл: <span className="text-app-text font-medium">{RISK_LABEL[state.data.consensus.risk_assessment.liquidity_risk]}</span>
             </span>
           </div>
 
-          <div className="space-y-2 pt-2 border-t border-term-border normal-case tracking-normal">
+          <div className="space-y-2 pt-3 border-t border-app-border">
             <p>
-              <span className="text-term-amber uppercase text-[11px] tracking-wide">Техник: </span>
-              {state.data.consensus.analysis_summary.technical_reason}
+              <span className="text-brand font-semibold">Техник: </span>
+              <span className="text-app-text">{state.data.consensus.analysis_summary.technical_reason}</span>
             </p>
             <p>
-              <span className="text-term-amber uppercase text-[11px] tracking-wide">Фундаментал: </span>
-              {state.data.consensus.analysis_summary.fundamental_reason}
+              <span className="text-brand font-semibold">Фундаментал: </span>
+              <span className="text-app-text">{state.data.consensus.analysis_summary.fundamental_reason}</span>
             </p>
             <p>
-              <span className="text-term-amber uppercase text-[11px] tracking-wide">Дүгнэлт: </span>
-              {state.data.consensus.analysis_summary.overall_logic}
+              <span className="text-brand font-semibold">Дүгнэлт: </span>
+              <span className="text-app-text">{state.data.consensus.analysis_summary.overall_logic}</span>
             </p>
           </div>
         </div>
@@ -205,9 +203,9 @@ function Stat({
   accent?: string;
 }) {
   return (
-    <div className="bg-term-bg px-3 py-2">
-      <div className="text-[10px] text-term-muted uppercase tracking-wide">{label}</div>
-      <div className={`tabular-nums font-semibold ${accent ?? "text-term-text"}`}>
+    <div className="rounded-xl bg-app-bg px-3 py-2">
+      <div className="text-[10px] text-app-muted">{label}</div>
+      <div className={`tabular-nums font-semibold ${accent ?? "text-app-text"}`}>
         {value.toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
       </div>
     </div>
