@@ -1,4 +1,12 @@
 import type { Db } from "mongodb";
+import type { Signal } from "@/lib/types";
+
+export interface NotificationSettings {
+  /** Master switch for web-push alerts. */
+  pushEnabled: boolean;
+  /** Only these signal transitions raise an alert. */
+  signals: Signal[];
+}
 
 export interface SmsSettings {
   /** Master on/off switch for outbound SMS. */
@@ -20,14 +28,20 @@ export interface AppSettings {
     openrouter?: string;
   };
   sms: SmsSettings;
+  notifications: NotificationSettings;
 }
 
 const SETTINGS_ID = "app";
 const DEFAULT_SMS: SmsSettings = { enabled: false, recipients: [] };
+const DEFAULT_NOTIFICATIONS: NotificationSettings = {
+  pushEnabled: true,
+  signals: ["BUY", "SELL"],
+};
 const DEFAULT_SETTINGS: AppSettings = {
   newsSources: [],
   apiKeys: {},
   sms: DEFAULT_SMS,
+  notifications: DEFAULT_NOTIFICATIONS,
 };
 
 interface SettingsDoc extends AppSettings {
@@ -48,6 +62,12 @@ export async function getSettings(db: Db): Promise<AppSettings> {
       from: doc.sms?.from,
       brand: doc.sms?.brand,
       recipients: Array.isArray(doc.sms?.recipients) ? doc.sms.recipients : [],
+    },
+    notifications: {
+      pushEnabled: doc.notifications?.pushEnabled ?? true,
+      signals: Array.isArray(doc.notifications?.signals)
+        ? doc.notifications.signals
+        : DEFAULT_NOTIFICATIONS.signals,
     },
   };
 }
@@ -71,6 +91,7 @@ export function maskSettings(settings: AppSettings) {
       brand: settings.sms.brand ?? null,
       recipients: settings.sms.recipients,
     },
+    notifications: settings.notifications,
   };
 }
 
@@ -80,6 +101,7 @@ export async function updateSettings(
     newsSources?: string[];
     apiKeys?: Partial<AppSettings["apiKeys"]>;
     sms?: Partial<SmsSettings>;
+    notifications?: Partial<NotificationSettings>;
   },
 ): Promise<AppSettings> {
   const current = await getSettings(db);
@@ -87,6 +109,7 @@ export async function updateSettings(
     newsSources: patch.newsSources ?? current.newsSources,
     apiKeys: { ...current.apiKeys, ...patch.apiKeys },
     sms: { ...current.sms, ...patch.sms },
+    notifications: { ...current.notifications, ...patch.notifications },
   };
   await db
     .collection<SettingsDoc>("settings")

@@ -117,6 +117,17 @@ export interface User {
   email?: string;
   phone?: string;
   createdAt: Date;
+  /** Everything created after this is unread for the user. */
+  notificationsReadAt?: Date;
+}
+
+export interface AppNotification {
+  _id?: string;
+  title: string;
+  body: string;
+  url?: string;
+  kind: "signal" | "system";
+  createdAt: Date;
 }
 
 export type SafeUser = Pick<User, "username" | "fullName" | "email" | "phone"> & {

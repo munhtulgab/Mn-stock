@@ -3,6 +3,7 @@ import { getDashboardRows } from "@/lib/data";
 import { sendPushToAll } from "@/lib/push";
 import { getSettings } from "@/lib/settings";
 import { sendSms } from "@/lib/callpro";
+import { recordNotification } from "@/lib/notifications";
 import type { Signal } from "@/lib/types";
 
 interface SignalHistoryDoc {
@@ -94,17 +95,28 @@ export async function checkSignalChangesAndNotify(
     return { changes, notified: false, smsSent: 0 };
   }
 
-  const preview = changes
+  // Operators pick which transitions are worth interrupting people for.
+  const { notifications } = await getSettings(db);
+  const alerting = changes.filter((c) => notifications.signals.includes(c.to));
+  if (alerting.length === 0) {
+    return { changes, notified: false, smsSent: 0 };
+  }
+
+  const preview = alerting
     .slice(0, 5)
     .map((c) => `${c.symbol} ${c.from}→${c.to}`)
     .join(", ");
   const body =
-    changes.length > 5 ? `${preview} +${changes.length - 5} бусад` : preview;
+    alerting.length > 5 ? `${preview} +${alerting.length - 5} бусад` : preview;
 
-  const title = `MSE: ${changes.length} дохио шинэчлэгдлээ`;
+  const title = `MSE: ${alerting.length} дохио шинэчлэгдлээ`;
+
+  await recordNotification(db, { title, body, url: "/discover", kind: "signal" });
 
   const [result, smsSent] = await Promise.all([
-    sendPushToAll(db, { title, body, url: "/", tag: "mse-signal-change" }),
+    notifications.pushEnabled
+      ? sendPushToAll(db, { title, body, url: "/", tag: "mse-signal-change" })
+      : Promise.resolve({ sent: 0 }),
     sendSignalSms(db, `${title}. ${body}`).catch((err) => {
       console.error("signal sms failed", err);
       return 0;

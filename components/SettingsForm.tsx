@@ -17,7 +17,17 @@ interface MaskedSettings {
     brand: string | null;
     recipients: string[];
   };
+  notifications: {
+    pushEnabled: boolean;
+    signals: string[];
+  };
 }
+
+const SIGNAL_LABELS: { value: string; label: string }[] = [
+  { value: "BUY", label: "АВАХ" },
+  { value: "SELL", label: "ЗАРАХ" },
+  { value: "HOLD", label: "ХҮЛЭЭХ" },
+];
 
 const PROVIDER_FIELDS: {
   key: keyof MaskedSettings["apiKeys"];
@@ -71,6 +81,18 @@ export default function SettingsForm({
   const [smsRecipients, setSmsRecipients] = useState<string[]>(initial.sms.recipients);
   const [smsRecipientInput, setSmsRecipientInput] = useState("");
   const [smsCurrent, setSmsCurrent] = useState(initial.sms);
+
+  const [pushEnabled, setPushEnabled] = useState(initial.notifications.pushEnabled);
+  const [notifySignals, setNotifySignals] = useState<string[]>(
+    initial.notifications.signals,
+  );
+  const [notifCurrent, setNotifCurrent] = useState(initial.notifications);
+
+  function toggleSignal(value: string) {
+    setNotifySignals((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
+    );
+  }
   const [testTo, setTestTo] = useState("");
   const [testState, setTestState] = useState<
     { kind: "idle" } | { kind: "sending" } | { kind: "ok"; id?: string } | { kind: "err"; message: string }
@@ -87,6 +109,8 @@ export default function SettingsForm({
     setSmsRecipients(smsCurrent.recipients);
     setSmsKeyInput("");
     setSmsRecipientInput("");
+    setPushEnabled(notifCurrent.pushEnabled);
+    setNotifySignals(notifCurrent.signals);
     setTestState({ kind: "idle" });
     setStatus("idle");
   }
@@ -168,6 +192,8 @@ export default function SettingsForm({
         smsFrom,
         smsBrand,
         smsRecipients,
+        pushEnabled,
+        notifySignals,
       };
       for (const f of PROVIDER_FIELDS) {
         if (keyInputs[f.key]?.trim()) body[f.bodyKey] = keyInputs[f.key].trim();
@@ -183,6 +209,7 @@ export default function SettingsForm({
       const data = await res.json();
       setCurrent(data.apiKeys);
       setSmsCurrent(data.sms);
+      setNotifCurrent(data.notifications);
       setKeyInputs({});
       setSmsKeyInput("");
       setStatus("saved");
@@ -267,6 +294,65 @@ export default function SettingsForm({
             <li className="text-xs text-app-muted">Одоогоор линк нэмээгүй байна.</li>
           )}
         </ul>
+      </section>
+
+      <section className="rounded-2xl border border-app-border bg-app-card p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-app-text">Push мэдэгдэл</h2>
+            <p className="text-xs text-app-muted mt-0.5">
+              Дохио өөрчлөгдөхөд суулгасан төхөөрөмж рүү мэдэгдэл илгээнэ.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={pushEnabled}
+            aria-label="Push мэдэгдэл"
+            onClick={() => setPushEnabled((v) => !v)}
+            className={`shrink-0 w-12 h-7 rounded-full p-0.5 transition-colors ${
+              pushEnabled ? "bg-brand" : "bg-app-elevated"
+            }`}
+          >
+            <span
+              className={`block w-6 h-6 rounded-full bg-white transition-transform ${
+                pushEnabled ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-app-border">
+          <div className="text-sm font-medium text-app-text">Ямар дохионд мэдэгдэх</div>
+          <p className="text-xs text-app-muted mt-0.5 mb-2.5">
+            Push болон SMS хоёуланд нь үйлчилнэ.
+          </p>
+          <div className="flex gap-2">
+            {SIGNAL_LABELS.map((s) => {
+              const on = notifySignals.includes(s.value);
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleSignal(s.value)}
+                  className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors ${
+                    on
+                      ? "bg-brand text-black"
+                      : "bg-app-bg text-app-muted border border-app-border"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+          {notifySignals.length === 0 && (
+            <p className="text-[11px] text-app-negative mt-2">
+              Нэг ч сонгоогүй тул ямар ч мэдэгдэл илгээгдэхгүй.
+            </p>
+          )}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-app-border bg-app-card p-4">

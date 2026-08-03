@@ -51,10 +51,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const VALID_SIGNALS = ["BUY", "SELL", "HOLD"];
+  const notifications: Record<string, unknown> = {};
+  if (typeof body.pushEnabled === "boolean") notifications.pushEnabled = body.pushEnabled;
+  if (Array.isArray(body.notifySignals)) {
+    notifications.signals = body.notifySignals.filter(
+      (s: unknown): s is string => typeof s === "string" && VALID_SIGNALS.includes(s),
+    );
+  }
+
   const updated = await updateSettings(db, {
     newsSources,
     apiKeys,
     sms: Object.keys(sms).length > 0 ? sms : undefined,
+    notifications:
+      Object.keys(notifications).length > 0 ? notifications : undefined,
   });
   return NextResponse.json(maskSettings(updated));
 }
