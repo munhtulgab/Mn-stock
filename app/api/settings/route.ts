@@ -37,6 +37,24 @@ export async function POST(req: NextRequest) {
     ? body.newsSources.filter((s: unknown): s is string => typeof s === "string" && s.trim().length > 0)
     : undefined;
 
-  const updated = await updateSettings(db, { newsSources, apiKeys });
+  // Blank string means "leave the stored secret alone", same as the AI keys.
+  const sms: Record<string, unknown> = {};
+  if (typeof body.smsEnabled === "boolean") sms.enabled = body.smsEnabled;
+  if (typeof body.smsApiKey === "string" && body.smsApiKey.trim()) {
+    sms.apiKey = body.smsApiKey.trim();
+  }
+  if (typeof body.smsFrom === "string") sms.from = body.smsFrom.trim();
+  if (typeof body.smsBrand === "string") sms.brand = body.smsBrand.trim();
+  if (Array.isArray(body.smsRecipients)) {
+    sms.recipients = body.smsRecipients.filter(
+      (s: unknown): s is string => typeof s === "string" && s.trim().length > 0,
+    );
+  }
+
+  const updated = await updateSettings(db, {
+    newsSources,
+    apiKeys,
+    sms: Object.keys(sms).length > 0 ? sms : undefined,
+  });
   return NextResponse.json(maskSettings(updated));
 }

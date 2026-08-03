@@ -85,7 +85,7 @@ export function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-2xl bg-brand text-white py-3.5 text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-60 mt-2"
+          className="w-full rounded-2xl bg-brand text-black py-3.5 text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-60 mt-2"
         >
           {loading ? "Түр хүлээнэ үү..." : "Нэвтрэх"}
         </button>
@@ -203,7 +203,7 @@ export function SignupForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-2xl bg-brand text-white py-3.5 text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-60 mt-2"
+          className="w-full rounded-2xl bg-brand text-black py-3.5 text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-60 mt-2"
         >
           {loading ? "Түр хүлээнэ үү..." : "Бүртгэл үүсгэх"}
         </button>

@@ -1,6 +1,8 @@
 import type { Db } from "mongodb";
 import { getDashboardRows } from "@/lib/data";
 import { sendPushToAll } from "@/lib/push";
+import { getSettings } from "@/lib/settings";
+import { sendSms } from "@/lib/callpro";
 import type { Signal } from "@/lib/types";
 
 interface SignalHistoryDoc {
@@ -24,9 +26,31 @@ export interface SignalChange {
  * Any real BUY/SELL/HOLD transitions found after that are pushed to all
  * subscribed devices as a single summary notification.
  */
+/**
+ * Sends the same summary over SMS, but only when the operator has switched it
+ * on and configured CallPro. Failures are swallowed per recipient so one bad
+ * number cannot stop the rest of the alert run.
+ */
+async function sendSignalSms(db: Db, body: string): Promise<number> {
+  const { sms } = await getSettings(db);
+  if (!sms.enabled || !sms.apiKey || !sms.from || sms.recipients.length === 0) {
+    return 0;
+  }
+
+  const creds = { apiKey: sms.apiKey, from: sms.from, brand: sms.brand };
+  const results = await Promise.all(
+    sms.recipients.map(async (to) => {
+      const result = await sendSms(creds, to, body);
+      if (!result.ok) console.error(`sms to ${to} failed: ${result.error}`);
+      return result.ok;
+    }),
+  );
+  return results.filter(Boolean).length;
+}
+
 export async function checkSignalChangesAndNotify(
   db: Db,
-): Promise<{ changes: SignalChange[]; notified: boolean }> {
+): Promise<{ changes: SignalChange[]; notified: boolean; smsSent: number }> {
   const rows = await getDashboardRows(db);
   const priced = rows.filter((r) => r.lastPrice !== null);
 
@@ -67,7 +91,7 @@ export async function checkSignalChangesAndNotify(
   }
 
   if (isFirstRun || changes.length === 0) {
-    return { changes, notified: false };
+    return { changes, notified: false, smsSent: 0 };
   }
 
   const preview = changes
@@ -77,12 +101,15 @@ export async function checkSignalChangesAndNotify(
   const body =
     changes.length > 5 ? `${preview} +${changes.length - 5} бусад` : preview;
 
-  const result = await sendPushToAll(db, {
-    title: `MSE: ${changes.length} дохио шинэчлэгдлээ`,
-    body,
-    url: "/",
-    tag: "mse-signal-change",
-  });
+  const title = `MSE: ${changes.length} дохио шинэчлэгдлээ`;
 
-  return { changes, notified: result.sent > 0 };
+  const [result, smsSent] = await Promise.all([
+    sendPushToAll(db, { title, body, url: "/", tag: "mse-signal-change" }),
+    sendSignalSms(db, `${title}. ${body}`).catch((err) => {
+      console.error("signal sms failed", err);
+      return 0;
+    }),
+  ]);
+
+  return { changes, notified: result.sent > 0, smsSent };
 }

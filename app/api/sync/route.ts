@@ -29,6 +29,7 @@ async function handle(req: NextRequest) {
     let signalChanges: Awaited<ReturnType<typeof checkSignalChangesAndNotify>> = {
       changes: [],
       notified: false,
+      smsSent: 0,
     };
     try {
       signalChanges = await checkSignalChangesAndNotify(db);

@@ -72,7 +72,7 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
               onClick={() => setSignalFilter(f)}
               className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${
                 signalFilter === f
-                  ? "bg-brand text-white"
+                  ? "bg-brand text-black"
                   : "bg-app-card border border-app-border text-app-muted"
               }`}
             >

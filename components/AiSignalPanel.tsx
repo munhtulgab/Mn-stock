@@ -69,14 +69,16 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
       {state.status === "idle" && (
         <button
           onClick={() => load(false)}
-          className="rounded-full bg-brand text-white text-xs font-semibold px-4 py-2"
+          className="w-full rounded-2xl bg-brand text-black text-base font-bold py-4 active:scale-[0.98] transition-transform"
         >
           AI дүн шинжилгээ хийх
         </button>
       )}
 
       {state.status === "loading" && (
-        <p className="text-xs text-app-muted">Тооцоолж байна...</p>
+        <div className="w-full rounded-2xl bg-app-elevated py-4 text-center text-base font-semibold text-app-muted">
+          Тооцоолж байна...
+        </div>
       )}
 
       {state.status === "not_configured" && (

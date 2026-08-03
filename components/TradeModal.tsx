@@ -75,7 +75,7 @@ export default function TradeModal({
         <button
           onClick={() => setOpen("BUY")}
           disabled={!currentPrice}
-          className="rounded-2xl bg-brand text-white font-semibold py-3.5 text-sm disabled:opacity-50"
+          className="rounded-2xl bg-brand text-black font-semibold py-3.5 text-sm disabled:opacity-50"
         >
           Авах
         </button>
@@ -138,8 +138,8 @@ export default function TradeModal({
               <button
                 onClick={submit}
                 disabled={busy || qty <= 0}
-                className={`w-full rounded-2xl py-3.5 font-semibold text-sm text-white disabled:opacity-50 ${
-                  open === "BUY" ? "bg-brand" : "bg-app-negative"
+                className={`w-full rounded-2xl py-3.5 font-semibold text-sm disabled:opacity-50 ${
+                  open === "BUY" ? "bg-brand text-black" : "bg-app-negative text-white"
                 }`}
               >
                 {busy ? "Илгээж байна..." : open === "BUY" ? "Худалдаж авах" : "Зарах"}

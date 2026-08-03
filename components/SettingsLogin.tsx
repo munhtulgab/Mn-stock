@@ -47,7 +47,7 @@ export default function SettingsLogin() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-xl bg-brand text-white text-sm font-semibold px-3 py-3 disabled:opacity-50"
+          className="w-full rounded-xl bg-brand text-black text-sm font-semibold px-3 py-3 disabled:opacity-50"
         >
           Нэвтрэх
         </button>
