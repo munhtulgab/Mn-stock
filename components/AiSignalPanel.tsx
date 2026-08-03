@@ -93,7 +93,21 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
       )}
 
       {state.status === "error" && (
-        <p className="text-xs text-term-red">{state.message}</p>
+        <div className="space-y-1">
+          <p className="text-xs text-term-red font-semibold uppercase tracking-wide">
+            Бүх AI үйлчилгээ амжилтгүй боллоо
+          </p>
+          <div className="space-y-1">
+            {state.message.split(/;\s*(?=\w+:)/).map((line, i) => (
+              <div
+                key={i}
+                className="text-[11px] text-term-red/90 bg-term-red/5 border border-term-red/30 px-2 py-1 break-words whitespace-pre-wrap"
+              >
+                {line.trim()}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {state.status === "ready" && (
@@ -111,20 +125,34 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
             </span>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-1.5 sm:grid-cols-2">
             {state.data.providers.map((p) => (
-              <span
+              <div
                 key={p.provider}
-                className={`inline-flex items-center gap-1.5 border px-2 py-1 uppercase tracking-wide ${
+                className={`border px-2 py-1.5 ${
                   p.ok
-                    ? "border-term-border text-term-text"
-                    : "border-term-red/40 text-term-red"
+                    ? "border-term-border"
+                    : "border-term-red/40 bg-term-red/5"
                 }`}
-                title={p.error}
               >
-                {PROVIDER_LABEL[p.provider] ?? p.provider}
-                {p.ok ? `: ${p.signal} (${p.confidence}%)` : ": ERROR"}
-              </span>
+                <div className="flex items-center justify-between uppercase tracking-wide">
+                  <span className="font-bold text-term-text">
+                    {PROVIDER_LABEL[p.provider] ?? p.provider}
+                  </span>
+                  {p.ok ? (
+                    <span className="text-term-text">
+                      {p.signal} ({p.confidence}%)
+                    </span>
+                  ) : (
+                    <span className="text-term-red font-bold">ERROR</span>
+                  )}
+                </div>
+                {!p.ok && p.error && (
+                  <div className="mt-1 text-[10.5px] text-term-red/90 normal-case tracking-normal break-words whitespace-pre-wrap">
+                    {p.error}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
