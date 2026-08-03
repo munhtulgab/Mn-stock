@@ -18,11 +18,15 @@ export async function callGemini(
           contents: [{ role: "user", parts: [{ text: userMessage }] }],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 2000,
+            // Generous headroom: this model spends an unpredictable chunk of
+            // this same budget on hidden "thinking" tokens before writing
+            // any output (observed 800-1500+ tokens), so a tight limit here
+            // silently truncates the JSON output mid-string on longer runs.
+            maxOutputTokens: 8192,
             responseMimeType: "application/json",
           },
         }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(45_000),
       },
     );
 
@@ -32,8 +36,14 @@ export async function callGemini(
     }
 
     const data = await res.json();
+    const finishReason = data?.candidates?.[0]?.finishReason;
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    if (!raw) throw new Error("Gemini returned no content");
+    if (finishReason === "MAX_TOKENS") {
+      throw new Error(
+        `Gemini хариу токений хязгаараас давж таслагдсан (thinking token их зарцуулсан байж магадгүй). ${raw ? `Хэсэгчилсэн хариу: ${raw.slice(0, 200)}` : ""}`,
+      );
+    }
+    if (!raw) throw new Error(`Gemini returned no content (finishReason: ${finishReason})`);
     const parsed = parseAiSignal(raw);
     return { provider: "gemini", ok: true, raw, parsed };
   } catch (err) {

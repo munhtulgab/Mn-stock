@@ -29,10 +29,25 @@ export type ParsedAiSignal = z.infer<typeof AiSignalSchema>;
 export function extractJson(text: string): unknown {
   const fenced =
     text.match(/```json\s*([\s\S]*?)```/i) ?? text.match(/```\s*([\s\S]*?)```/);
-  const jsonText = fenced ? fenced[1] : text;
-  return JSON.parse(jsonText.trim());
+  const jsonText = (fenced ? fenced[1] : text).trim();
+  try {
+    return JSON.parse(jsonText);
+  } catch (err) {
+    throw new Error(
+      `Хариуг JSON болгож задлахад алдаа гарлаа (${(err as Error).message}). ` +
+        `Урт: ${jsonText.length} тэмдэгт. Төгсгөл: "...${jsonText.slice(-120)}"`,
+    );
+  }
 }
 
 export function parseAiSignal(text: string): ParsedAiSignal {
-  return AiSignalSchema.parse(extractJson(text));
+  const json = extractJson(text);
+  const result = AiSignalSchema.safeParse(json);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("; ");
+    throw new Error(`Хариу тохирох бүтэцтэй биш байна — ${issues}`);
+  }
+  return result.data;
 }
