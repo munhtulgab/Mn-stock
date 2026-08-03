@@ -98,6 +98,32 @@ export default function SettingsForm({
     setSmsRecipientInput("");
   }
 
+  const [keyCheck, setKeyCheck] = useState<
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "ok"; total: number; current: number }
+    | { kind: "err"; message: string }
+  >({ kind: "idle" });
+
+  async function checkKey() {
+    setKeyCheck({ kind: "checking" });
+    try {
+      const res = await fetch("/api/sms/balance");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setKeyCheck({ kind: "err", message: data.error || `Алдаа ${res.status}` });
+        return;
+      }
+      setKeyCheck({
+        kind: "ok",
+        total: data.balance?.totalMessage ?? 0,
+        current: data.balance?.current ?? 0,
+      });
+    } catch (err) {
+      setKeyCheck({ kind: "err", message: (err as Error).message });
+    }
+  }
+
   async function sendTest() {
     setTestState({ kind: "sending" });
     try {
@@ -293,6 +319,22 @@ export default function SettingsForm({
               onChange={(e) => setSmsKeyInput(e.target.value)}
               className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
             />
+            <button
+              type="button"
+              onClick={checkKey}
+              disabled={!smsEnabled || !smsCurrent.apiKey || keyCheck.kind === "checking"}
+              className="w-full rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
+            >
+              {keyCheck.kind === "checking" ? "Шалгаж байна..." : "Түлхүүр шалгах"}
+            </button>
+            {keyCheck.kind === "ok" && (
+              <p className="text-xs text-app-positive">
+                Түлхүүр зөв. Үлдэгдэл: {keyCheck.current} / нийт {keyCheck.total} мессеж
+              </p>
+            )}
+            {keyCheck.kind === "err" && (
+              <p className="text-xs text-app-negative break-words">{keyCheck.message}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

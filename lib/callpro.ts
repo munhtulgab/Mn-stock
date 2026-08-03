@@ -31,10 +31,23 @@ export function normalizePhone(raw: string): string | null {
   return /^\d{8}$/.test(local) ? local : null;
 }
 
-/** Turns a CallPro error payload into a Mongolian message. */
+interface CallProIssue {
+  path?: unknown[];
+  message?: string;
+}
+
+/**
+ * Turns a CallPro error payload into a Mongolian message.
+ *
+ * The gateway's own wording is always kept in the output — its 404 in
+ * particular means "tenant or sender number not registered", not "endpoint
+ * missing", and hiding that sends people looking in the wrong place.
+ */
 function humanizeError(status: number, body: unknown): string {
-  const payload = body as { error?: string; reason?: string; issues?: unknown[] } | null;
-  const raw = payload?.error ?? payload?.reason ?? "";
+  const payload = body as
+    | { error?: string; reason?: string; issues?: CallProIssue[] }
+    | null;
+  const raw = (payload?.error ?? payload?.reason ?? "").trim();
 
   switch (status) {
     case 401:
@@ -46,11 +59,24 @@ function humanizeError(status: number, body: unknown): string {
         ? "CallPro: Хүлээн авагчийн дугаар хориглогдсон байна."
         : `CallPro: Хандах эрхгүй байна.${raw ? ` (${raw})` : ""}`;
     case 404:
-      return "CallPro: Хүсэлт олдсонгүй.";
-    case 422:
-      return "CallPro: Илгээх мэдээлэл буруу байна (дугаар эсвэл текст).";
+      if (/tenant|special number/i.test(raw)) {
+        return (
+          "CallPro: API түлхүүр эсвэл илгээгч дугаар бүртгэлгүй байна. " +
+          "Түлхүүрээ болон 'Илгээгч дугаар' талбарт CallPro-оос олгосон " +
+          `дугаараа зөв оруулсан эсэхээ шалгана уу. (${raw})`
+        );
+      }
+      return `CallPro: Олдсонгүй.${raw ? ` (${raw})` : ""}`;
+    case 422: {
+      const fields = (payload?.issues ?? [])
+        .map((i) => (Array.isArray(i.path) ? i.path.join(".") : ""))
+        .filter(Boolean);
+      return fields.length > 0
+        ? `CallPro: Илгээх мэдээлэл буруу байна — ${fields.join(", ")}`
+        : "CallPro: Илгээх мэдээлэл буруу байна (дугаар эсвэл текст).";
+    }
     case 500:
-      return "CallPro: Серверийн алдаа гарлаа. Дараа дахин оролдоно уу.";
+      return `CallPro: Серверийн алдаа гарлаа.${raw ? ` (${raw})` : ""}`;
     default:
       return `CallPro алдаа ${status}${raw ? `: ${raw}` : ""}`;
   }
@@ -108,7 +134,9 @@ export async function getSmsBalance(
   operator: "skytel" | "mobicom" | "unitel" = "skytel",
 ): Promise<{ ok: true; balance: SmsBalance } | { ok: false; error: string }> {
   try {
-    const res = await fetch(`${BASE_URL}/tenant/daily?operator=${operator}`, {
+    // `/tenant-daily` is the path that actually authenticates; the hyphen-less
+    // variant in the PDF answers 400 "Parameter missing" without checking the key.
+    const res = await fetch(`${BASE_URL}/tenant-daily?operator=${operator}`, {
       headers: { "x-api-key": apiKey },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
