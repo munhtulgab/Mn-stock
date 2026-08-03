@@ -97,9 +97,11 @@ export default function SettingsForm({
 
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className="font-semibold text-sm mb-1">AI дүн шинжилгээний API түлхүүрүүд</h2>
-        <p className="text-xs text-neutral-500 mb-3">
+      <section className="border border-term-border bg-term-panel p-4">
+        <h2 className="text-[11px] uppercase tracking-wider text-term-amber mb-1">
+          AI Provider Keys
+        </h2>
+        <p className="text-[11px] text-term-muted mb-3">
           Дор хаяж нэг түлхүүр тохируулагдсан бол компанийн дэлгэрэнгүй хуудсан дээрх
           &quot;AI дүн шинжилгээ&quot; идэвхжинэ. Хэд хэдэн түлхүүр тохируулсан бол бүх
           үйлчилгээнээс дүгнэлт авч нэгтгэн харуулна.
@@ -108,8 +110,8 @@ export default function SettingsForm({
           {PROVIDER_FIELDS.map((f) => (
             <div key={f.key} className="flex items-center gap-3">
               <div className="w-40 shrink-0">
-                <div className="text-sm">{f.label}</div>
-                <div className="text-[11px] text-neutral-500">{f.help}</div>
+                <div className="text-xs text-term-text">{f.label}</div>
+                <div className="text-[10px] text-term-muted">{f.help}</div>
               </div>
               <input
                 type="password"
@@ -118,21 +120,23 @@ export default function SettingsForm({
                 onChange={(e) =>
                   setKeyInputs((prev) => ({ ...prev, [f.key]: e.target.value }))
                 }
-                className="flex-1 rounded-md bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm outline-none focus:border-neutral-500"
+                className="flex-1 bg-black border border-term-border px-3 py-1.5 text-xs outline-none focus:border-term-amber placeholder:text-term-muted"
               />
               <span
-                className={`text-xs w-16 text-right ${current[f.key] ? "text-emerald-400" : "text-neutral-600"}`}
+                className={`text-[10px] w-20 text-right uppercase tracking-wide ${current[f.key] ? "text-term-green" : "text-term-muted"}`}
               >
-                {current[f.key] ? "тохирсон" : "хоосон"}
+                {current[f.key] ? "● active" : "○ empty"}
               </span>
             </div>
           ))}
         </div>
       </section>
 
-      <section>
-        <h2 className="font-semibold text-sm mb-1">Мэдээллийн эх сурвалжийн линк</h2>
-        <p className="text-xs text-neutral-500 mb-3">
+      <section className="border border-term-border bg-term-panel p-4">
+        <h2 className="text-[11px] uppercase tracking-wider text-term-amber mb-1">
+          News Sources
+        </h2>
+        <p className="text-[11px] text-term-muted mb-3">
           Энд нэмсэн мэдээний сайтуудаас AI дүн шинжилгээ хийхдээ тухайн үед агуулгыг
           татаж, сэтгэл хөдлөлийн (sentiment) шинжилгээнд нэмэлт эх сурвалж болгон ашиглана.
         </p>
@@ -142,11 +146,11 @@ export default function SettingsForm({
             onChange={(e) => setNewSourceInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSource())}
             placeholder="https://ikon.mn/..."
-            className="flex-1 rounded-md bg-neutral-900 border border-neutral-700 px-3 py-1.5 text-sm outline-none focus:border-neutral-500"
+            className="flex-1 bg-black border border-term-border px-3 py-1.5 text-xs outline-none focus:border-term-amber placeholder:text-term-muted"
           />
           <button
             onClick={addSource}
-            className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm hover:border-neutral-500"
+            className="border border-term-border px-3 py-1.5 text-xs uppercase tracking-wide hover:border-term-amber hover:text-term-amber"
           >
             Нэмэх
           </button>
@@ -155,19 +159,19 @@ export default function SettingsForm({
           {newsSources.map((s, i) => (
             <li
               key={i}
-              className="flex items-center justify-between rounded-md bg-neutral-900 border border-neutral-800 px-3 py-1.5 text-sm"
+              className="flex items-center justify-between bg-black border border-term-border px-3 py-1.5 text-xs"
             >
-              <span className="truncate">{s}</span>
+              <span className="truncate text-term-text">{s}</span>
               <button
                 onClick={() => removeSource(i)}
-                className="text-neutral-500 hover:text-rose-400 text-xs ml-3"
+                className="text-term-muted hover:text-term-red text-[11px] ml-3 uppercase"
               >
                 Устгах
               </button>
             </li>
           ))}
           {newsSources.length === 0 && (
-            <li className="text-sm text-neutral-600">Одоогоор линк нэмээгүй байна.</li>
+            <li className="text-xs text-term-muted">Одоогоор линк нэмээгүй байна.</li>
           )}
         </ul>
       </section>
@@ -176,12 +180,12 @@ export default function SettingsForm({
         <button
           onClick={save}
           disabled={status === "saving"}
-          className="rounded-md bg-neutral-100 text-neutral-900 text-sm px-4 py-2 font-medium hover:bg-white disabled:opacity-50"
+          className="border border-term-amber text-term-amber text-xs uppercase tracking-wide px-4 py-2 font-bold hover:bg-term-amber hover:text-black transition-colors disabled:opacity-50"
         >
           {status === "saving" ? "Хадгалж байна..." : "Хадгалах"}
         </button>
-        {status === "saved" && <span className="text-sm text-emerald-400">Хадгалагдлаа</span>}
-        {status === "error" && <span className="text-sm text-rose-400">Алдаа гарлаа</span>}
+        {status === "saved" && <span className="text-xs text-term-green">Хадгалагдлаа</span>}
+        {status === "error" && <span className="text-xs text-term-red">Алдаа гарлаа</span>}
       </div>
     </div>
   );

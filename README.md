@@ -66,6 +66,43 @@ parser-үүдийг шинэчлэх шаардлагатай болно.
 Тохиргоо хуудсан дээрх утга MongoDB-д хадгалагдах бөгөөд env var-аас
 илүү жин авна (env var зөвхөн нөөц/fallback).
 
+## PWA — "Апп" болгон суулгах
+
+Систем Progressive Web App болгон бүтээгдсэн тул утас эсвэл компьютер дээр
+жинхэнэ апп мэт нүүр дэлгэц (home screen) дээр суулгах боломжтой:
+
+- **Android / Chrome**: header-ийн баруун талд гарч ирэх **Install App**
+  товч дээр дарна, эсвэл browser цэснээс "Install app" сонгоно.
+- **iOS / Safari**: Share → "Add to Home Screen" сонгоно.
+
+Суулгасны дараа апп бие даасан цонхонд (address bar-гүй) нээгдэнэ. Лого,
+нэр (`app/manifest.ts`), icon бүгд `public/icons/` доторх зургуудаас
+үүсдэг.
+
+## Push мэдэгдэл ("Апп шиг" notification)
+
+Header-т байрлах 🔔 товчийг дарж мэдэгдэл идэвхжүүлбэл, компанийн ханшны
+дохио (BUY/SELL/HOLD) өөрчлөгдөх бүрт (жишээ нь `APU HOLD→BUY`) push
+мэдэгдэл ирнэ. Энэ нь `/api/sync` (Vercel Cron) ажиллах бүрд өмнөх
+дохиотой харьцуулж, ялгаа гарвал бүх идэвхтэй subscriber-т нэг нэгтгэсэн
+мэдэгдэл илгээнэ (`lib/signalHistory.ts`, `lib/push.ts`).
+
+Ажиллуулахын тулд VAPID түлхүүр үүсгэх шаардлагатай:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Гарсан `publicKey`/`privateKey`-г `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY` (públic key-тэй ижил утга) орчны
+хувьсагчдад тохируулна (`.env.example`-г үзнэ үү). Эдгээргүй бол 🔔 товч
+харагдахгүй/идэвхгүй байх бөгөөд систем бусад бүх хэсгээрээ хэвийн
+ажиллана.
+
+> Санамж: push мэдэгдэл зөвхөн жинхэнэ (incognito биш) browser дээр
+> ажиллана — Chrome incognito горимд Push API-г санаатайгаар идэвхгүй
+> болгосон байдаг.
+
 ## Локал ажиллуулах
 
 ```bash
@@ -100,6 +137,9 @@ curl http://localhost:3000/api/sync?maxMs=250000
    - AI провайдеруудын түлхүүрийг env var-аар биш, deploy хийсний дараа
      шууд `/settings` хуудаснаас нэмэхийг зөвлөж байна (дээрх хүснэгтийг
      үзнэ үү) — редеплой хийх шаардлагагүй.
+   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`,
+     `VAPID_SUBJECT` — push мэдэгдэл идэвхжүүлэхэд (сонголт, дээрх Push
+     мэдэгдэл хэсгийг үзнэ үү)
 3. Deploy хийсний дараа эхний удаад `/api/sync`-г MONGODB_URI-тэй адил
    `CRON_SECRET`-ийг `Authorization: Bearer <CRON_SECRET>` header-т дамжуулан
    гараар хэд хэдэн удаа дуудаж, бүх компанийн түүхийг эхлүүлнэ (доорх

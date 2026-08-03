@@ -53,15 +53,17 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
   }
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+    <div className="border border-term-border bg-term-panel p-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-sm">AI дүн шинжилгээ (олон LLM)</h2>
+        <h2 className="text-[11px] uppercase tracking-wider text-term-amber">
+          AI Consensus // Multi-LLM
+        </h2>
         {state.status === "ready" && (
           <button
             onClick={() => load(true)}
-            className="text-xs text-neutral-400 hover:text-neutral-200 underline"
+            className="text-[11px] uppercase text-term-muted hover:text-term-amber"
           >
-            Дахин тооцоолох
+            Recompute
           </button>
         )}
       </div>
@@ -69,20 +71,20 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
       {state.status === "idle" && (
         <button
           onClick={() => load(false)}
-          className="rounded-md bg-neutral-100 text-neutral-900 text-sm px-3 py-1.5 font-medium hover:bg-white"
+          className="border border-term-amber text-term-amber text-xs uppercase tracking-wide px-3 py-1.5 font-bold hover:bg-term-amber hover:text-black transition-colors"
         >
-          AI дүн шинжилгээ авах
+          Run AI Analysis
         </button>
       )}
 
       {state.status === "loading" && (
-        <p className="text-sm text-neutral-400">Тооцоолж байна...</p>
+        <p className="text-xs text-term-muted term-cursor">Тооцоолж байна</p>
       )}
 
       {state.status === "not_configured" && (
-        <p className="text-sm text-neutral-400">
+        <p className="text-xs text-term-muted">
           AI дүн шинжилгээ ажиллуулахын тулд{" "}
-          <a href="/settings" className="underline text-neutral-200">
+          <a href="/settings" className="underline text-term-amber">
             Тохиргоо
           </a>{" "}
           хуудсан дээр дор хаяж нэг API түлхүүр (Claude, Gemini, Groq эсвэл
@@ -91,21 +93,20 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
       )}
 
       {state.status === "error" && (
-        <p className="text-sm text-rose-400">{state.message}</p>
+        <p className="text-xs text-term-red">{state.message}</p>
       )}
 
       {state.status === "ready" && (
-        <div className="space-y-3 text-sm">
+        <div className="space-y-3 text-xs">
           <div className="flex flex-wrap items-center gap-3">
             <SignalBadge signal={state.data.consensus.signal} />
-            <span className="text-neutral-400">
-              Итгэлцлийн түвшин: {state.data.consensus.signal_confidence}%
+            <span className="text-term-muted uppercase tracking-wide">
+              Confidence: <span className="text-term-text">{state.data.consensus.signal_confidence}%</span>
             </span>
-            <span className="text-neutral-400">
-              Тохиролцоо: {Math.round(state.data.agreement * 100)}% (
-              {state.data.providersUsed} үйлчилгээнээс)
+            <span className="text-term-muted uppercase tracking-wide">
+              Agreement: <span className="text-term-text">{Math.round(state.data.agreement * 100)}%</span> ({state.data.providersUsed} providers)
             </span>
-            <span className="text-neutral-500 text-xs">
+            <span className="text-term-muted">
               {new Date(state.data.createdAt).toLocaleString("mn-MN")}
             </span>
           </div>
@@ -114,49 +115,49 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
             {state.data.providers.map((p) => (
               <span
                 key={p.provider}
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 ${
+                className={`inline-flex items-center gap-1.5 border px-2 py-1 uppercase tracking-wide ${
                   p.ok
-                    ? "bg-neutral-800/60 text-neutral-300 ring-neutral-700"
-                    : "bg-rose-500/10 text-rose-400 ring-rose-500/20"
+                    ? "border-term-border text-term-text"
+                    : "border-term-red/40 text-term-red"
                 }`}
                 title={p.error}
               >
                 {PROVIDER_LABEL[p.provider] ?? p.provider}
-                {p.ok ? `: ${p.signal} (${p.confidence}%)` : ": алдаа"}
+                {p.ok ? `: ${p.signal} (${p.confidence}%)` : ": ERROR"}
               </span>
             ))}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Stat label="Одоогийн ханш" value={state.data.consensus.price_data.current_price} />
-            <Stat label="Зорилтот 1" value={state.data.consensus.price_data.target_price_1} />
-            <Stat label="Зорилтот 2" value={state.data.consensus.price_data.target_price_2} />
-            <Stat label="Stop-loss" value={state.data.consensus.price_data.stop_loss} />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-term-border border border-term-border">
+            <Stat label="Current" value={state.data.consensus.price_data.current_price} />
+            <Stat label="Target 1" value={state.data.consensus.price_data.target_price_1} accent="text-term-green" />
+            <Stat label="Target 2" value={state.data.consensus.price_data.target_price_2} accent="text-term-green" />
+            <Stat label="Stop-loss" value={state.data.consensus.price_data.stop_loss} accent="text-term-red" />
           </div>
 
-          <div className="flex flex-wrap gap-4 text-xs text-neutral-400">
+          <div className="flex flex-wrap gap-4 text-term-muted uppercase tracking-wide">
             <span>
-              Эрсдэл: {RISK_LABEL[state.data.consensus.risk_assessment.risk_level]}
+              Risk: <span className="text-term-text">{RISK_LABEL[state.data.consensus.risk_assessment.risk_level]}</span>
             </span>
             <span>
-              Эрсдэл/Ашгийн харьцаа: {state.data.consensus.risk_assessment.risk_reward_ratio}
+              R:R <span className="text-term-text">{state.data.consensus.risk_assessment.risk_reward_ratio}</span>
             </span>
             <span>
-              Хөрвөх чадварын эрсдэл: {RISK_LABEL[state.data.consensus.risk_assessment.liquidity_risk]}
+              Liquidity risk: <span className="text-term-text">{RISK_LABEL[state.data.consensus.risk_assessment.liquidity_risk]}</span>
             </span>
           </div>
 
-          <div className="space-y-2 pt-2 border-t border-neutral-800">
+          <div className="space-y-2 pt-2 border-t border-term-border normal-case tracking-normal">
             <p>
-              <span className="text-neutral-400">Техник: </span>
+              <span className="text-term-amber uppercase text-[11px] tracking-wide">Техник: </span>
               {state.data.consensus.analysis_summary.technical_reason}
             </p>
             <p>
-              <span className="text-neutral-400">Фундаментал: </span>
+              <span className="text-term-amber uppercase text-[11px] tracking-wide">Фундаментал: </span>
               {state.data.consensus.analysis_summary.fundamental_reason}
             </p>
             <p>
-              <span className="text-neutral-400">Дүгнэлт: </span>
+              <span className="text-term-amber uppercase text-[11px] tracking-wide">Дүгнэлт: </span>
               {state.data.consensus.analysis_summary.overall_logic}
             </p>
           </div>
@@ -166,11 +167,19 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent?: string;
+}) {
   return (
-    <div className="rounded-md bg-neutral-900 border border-neutral-800 px-3 py-2">
-      <div className="text-[11px] text-neutral-500">{label}</div>
-      <div className="tabular-nums font-medium">
+    <div className="bg-term-bg px-3 py-2">
+      <div className="text-[10px] text-term-muted uppercase tracking-wide">{label}</div>
+      <div className={`tabular-nums font-semibold ${accent ?? "text-term-text"}`}>
         {value.toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
       </div>
     </div>

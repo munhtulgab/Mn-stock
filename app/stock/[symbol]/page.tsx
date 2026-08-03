@@ -54,104 +54,114 @@ export default async function StockDetailPage({
       : null;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
-      <Link href="/" className="text-sm text-neutral-400 hover:text-neutral-200">
-        ← Жагсаалт руу буцах
+    <div className="mx-auto max-w-6xl px-3 py-4 space-y-4">
+      <Link
+        href="/"
+        className="text-[11px] uppercase tracking-wider text-term-muted hover:text-term-amber"
+      >
+        ← Back to Monitor
       </Link>
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4 border border-term-border bg-term-panel px-4 py-3">
         <div>
-          <h1 className="text-2xl font-semibold">
-            {security.symbol}{" "}
-            <span className="text-neutral-400 text-lg font-normal">
+          <h1 className="text-xl font-bold tracking-tight">
+            <span className="text-term-amber">{security.symbol}</span>{" "}
+            <span className="text-term-text text-base font-normal">
               {security.name}
             </span>
           </h1>
-          <p className="text-sm text-neutral-500 mt-1">
-            Ангилал: {security.classification} · Огноо: {last?.date ?? "—"}
+          <p className="text-[11px] text-term-muted mt-1 uppercase tracking-wide">
+            Class {security.classification} · {last?.date ?? "—"}
           </p>
         </div>
         <div className="text-right">
-          <div className="text-3xl font-semibold tabular-nums">
-            {fmt(last?.close ?? null)}₮
+          <div className="text-3xl font-bold tabular-nums text-term-text">
+            {fmt(last?.close ?? null)}
           </div>
           <div
-            className={`text-sm tabular-nums ${
+            className={`text-sm tabular-nums font-semibold ${
               changePct === null
-                ? "text-neutral-500"
+                ? "text-term-muted"
                 : changePct > 0
-                  ? "text-emerald-400"
+                  ? "text-term-green"
                   : changePct < 0
-                    ? "text-rose-400"
-                    : "text-neutral-400"
+                    ? "text-term-red"
+                    : "text-term-muted"
             }`}
           >
-            {changePct === null ? "—" : `${changePct > 0 ? "+" : ""}${fmt(changePct)}%`}
+            {changePct === null
+              ? "—"
+              : `${changePct > 0 ? "▲+" : changePct < 0 ? "▼" : ""}${fmt(changePct)}%`}
           </div>
         </div>
       </div>
 
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+      <div className="border border-term-border bg-term-panel p-4">
         <div className="flex items-center gap-3 mb-3">
           <SignalBadge signal={recommendation.signal} />
-          <span className="text-sm text-neutral-400">
-            Дундаж оноо: {recommendation.score} (Техник {recommendation.technicalScore}, Фундаментал {recommendation.fundamentalScore})
+          <span className="text-xs text-term-muted uppercase tracking-wide">
+            Score {recommendation.score} (Tech {recommendation.technicalScore} / Fund{" "}
+            {recommendation.fundamentalScore})
           </span>
         </div>
-        <ul className="list-disc list-inside space-y-1 text-sm text-neutral-300">
+        <ul className="space-y-1 text-xs text-term-text">
           {recommendation.reasons.map((reason, i) => (
-            <li key={i}>{reason}</li>
+            <li key={i} className="before:content-['›'] before:text-term-amber before:mr-2">
+              {reason}
+            </li>
           ))}
         </ul>
       </div>
 
       {priceHistory.length > 0 && (
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
-          <h2 className="font-semibold text-sm mb-2">
-            Ханшийн график (сүүлийн {chartData.length} арилжааны өдөр)
+        <div className="border border-term-border bg-term-panel p-4">
+          <h2 className="text-[11px] uppercase tracking-wider text-term-amber mb-2">
+            Price // last {chartData.length} sessions
           </h2>
           <PriceChart data={chartData} />
         </div>
       )}
 
-      <div className="grid sm:grid-cols-2 gap-6">
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
-          <h2 className="font-semibold text-sm mb-3">Техник үзүүлэлт</h2>
-          <dl className="grid grid-cols-2 gap-y-2 text-sm">
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="border border-term-border bg-term-panel p-4">
+          <h2 className="text-[11px] uppercase tracking-wider text-term-amber mb-3">
+            Technical
+          </h2>
+          <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
             <Metric label="SMA20" value={fmt(recommendation.indicators.sma20)} />
             <Metric label="SMA50" value={fmt(recommendation.indicators.sma50)} />
             <Metric label="RSI(14)" value={fmt(recommendation.indicators.rsi14, 1)} />
             <Metric
-              label="20 хоногийн момент"
+              label="Momentum 20d"
               value={
                 recommendation.indicators.momentum20 === null
                   ? "—"
                   : `${fmt(recommendation.indicators.momentum20)}%`
               }
             />
-            <Metric label="52 долоо хоногийн дээд" value={fmt(recommendation.indicators.weekHigh52)} />
-            <Metric label="52 долоо хоногийн доод" value={fmt(recommendation.indicators.weekLow52)} />
+            <Metric label="52W High" value={fmt(recommendation.indicators.weekHigh52)} />
+            <Metric label="52W Low" value={fmt(recommendation.indicators.weekLow52)} />
           </dl>
         </div>
 
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
-          <h2 className="font-semibold text-sm mb-3">
-            Санхүүгийн үзүүлэлт {financials ? `(${financials.period})` : ""}
+        <div className="border border-term-border bg-term-panel p-4">
+          <h2 className="text-[11px] uppercase tracking-wider text-term-amber mb-3">
+            Fundamentals {financials ? `// ${financials.period}` : ""}
           </h2>
           {financials ? (
-            <dl className="grid grid-cols-2 gap-y-2 text-sm">
+            <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
               <Metric label="P/E" value={fmt(financials.pe, 2)} />
               <Metric
-                label="Зах зээлийн дундаж P/E"
+                label="Market Median P/E"
                 value={marketMedianPe === null ? "—" : fmt(marketMedianPe, 2)}
               />
               <Metric label="EPS" value={fmt(financials.eps)} />
-              <Metric label="ROE (%)" value={fmt(financials.roe)} />
-              <Metric label="ROA (%)" value={fmt(financials.roa)} />
-              <Metric label="Цэвэр ашиг" value={fmt(financials.netProfit, 0)} />
+              <Metric label="ROE %" value={fmt(financials.roe)} />
+              <Metric label="ROA %" value={fmt(financials.roa)} />
+              <Metric label="Net Profit" value={fmt(financials.netProfit, 0)} />
             </dl>
           ) : (
-            <p className="text-sm text-neutral-500">Мэдээлэл олдсонгүй.</p>
+            <p className="text-xs text-term-muted">Мэдээлэл олдсонгүй.</p>
           )}
         </div>
       </div>
@@ -164,8 +174,8 @@ export default async function StockDetailPage({
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <>
-      <dt className="text-neutral-500">{label}</dt>
-      <dd className="text-right tabular-nums">{value}</dd>
+      <dt className="text-term-muted uppercase tracking-wide">{label}</dt>
+      <dd className="text-right tabular-nums text-term-text">{value}</dd>
     </>
   );
 }

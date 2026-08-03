@@ -64,107 +64,116 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
     [rows],
   );
 
+  function sortIndicator(key: SortKey) {
+    if (key !== sortKey) return null;
+    return <span className="text-term-amber ml-0.5">{sortDir === 1 ? "▲" : "▼"}</span>;
+  }
+
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Симбол эсвэл компанийн нэрээр хайх..."
-          className="flex-1 min-w-[220px] rounded-md bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-neutral-500"
+          placeholder="SEARCH SYMBOL / NAME..."
+          className="flex-1 min-w-[220px] bg-black border border-term-border px-3 py-1.5 text-xs uppercase tracking-wide outline-none focus:border-term-amber placeholder:text-term-muted"
         />
-        <div className="flex gap-1 text-xs">
+        <div className="flex gap-1 text-[11px] uppercase tracking-wider">
           {(["ALL", "BUY", "SELL", "HOLD"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setSignalFilter(f)}
-              className={`rounded-full px-3 py-1.5 border ${
+              className={`px-2.5 py-1.5 border ${
                 signalFilter === f
-                  ? "border-neutral-300 bg-neutral-100 text-neutral-900"
-                  : "border-neutral-700 text-neutral-300 hover:border-neutral-500"
+                  ? "border-term-amber bg-term-amber text-black font-bold"
+                  : "border-term-border text-term-muted hover:border-term-amber hover:text-term-amber"
               }`}
             >
               {f === "ALL"
-                ? `Бүгд (${rows.length})`
+                ? `ALL (${rows.length})`
                 : f === "BUY"
-                  ? `Авах (${counts.BUY})`
+                  ? `BUY (${counts.BUY})`
                   : f === "SELL"
-                    ? `Зарах (${counts.SELL})`
-                    : `Хүлээх (${counts.HOLD})`}
+                    ? `SELL (${counts.SELL})`
+                    : `HOLD (${counts.HOLD})`}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-neutral-800">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-900 text-neutral-400 text-left">
+      <div className="overflow-x-auto border border-term-border">
+        <table className="w-full text-xs">
+          <thead className="bg-term-panel text-term-amber text-left uppercase tracking-wider">
             <tr>
               <th
-                className="px-3 py-2 cursor-pointer select-none"
+                className="px-3 py-2 cursor-pointer select-none border-b border-term-border"
                 onClick={() => toggleSort("symbol")}
               >
-                Симбол
+                Symbol{sortIndicator("symbol")}
               </th>
-              <th className="px-3 py-2">Компани</th>
+              <th className="px-3 py-2 border-b border-term-border">Компани</th>
               <th
-                className="px-3 py-2 cursor-pointer select-none text-right"
+                className="px-3 py-2 cursor-pointer select-none text-right border-b border-term-border"
                 onClick={() => toggleSort("lastPrice")}
               >
-                Хаалтын ханш
+                Last{sortIndicator("lastPrice")}
               </th>
               <th
-                className="px-3 py-2 cursor-pointer select-none text-right"
+                className="px-3 py-2 cursor-pointer select-none text-right border-b border-term-border"
                 onClick={() => toggleSort("changePct")}
               >
-                Өөрчлөлт
+                Chg%{sortIndicator("changePct")}
               </th>
               <th
-                className="px-3 py-2 cursor-pointer select-none text-right"
+                className="px-3 py-2 cursor-pointer select-none text-right border-b border-term-border"
                 onClick={() => toggleSort("score")}
               >
-                Оноо
+                Score{sortIndicator("score")}
               </th>
-              <th className="px-3 py-2">Санал</th>
+              <th className="px-3 py-2 border-b border-term-border">Signal</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((row) => (
+            {filtered.map((row, i) => (
               <tr
                 key={row.symbol}
-                className="border-t border-neutral-800 hover:bg-neutral-900/60"
+                className={`border-b border-term-border hover:bg-term-amber/5 ${i % 2 === 0 ? "bg-black" : "bg-term-panel"}`}
               >
-                <td className="px-3 py-2 font-mono">
+                <td className="px-3 py-1.5 font-bold text-term-amber">
                   <Link href={`/stock/${row.symbol}`} className="hover:underline">
                     {row.symbol}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-neutral-300">{row.name}</td>
-                <td className="px-3 py-2 text-right tabular-nums">
+                <td className="px-3 py-1.5 text-term-text truncate max-w-[220px]">
+                  {row.name}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums text-term-text">
                   {formatNumber(row.lastPrice)}
                 </td>
                 <td
-                  className={`px-3 py-2 text-right tabular-nums ${
+                  className={`px-3 py-1.5 text-right tabular-nums font-semibold ${
                     row.changePct === null
-                      ? "text-neutral-500"
+                      ? "text-term-muted"
                       : row.changePct > 0
-                        ? "text-emerald-400"
+                        ? "text-term-green"
                         : row.changePct < 0
-                          ? "text-rose-400"
-                          : "text-neutral-400"
+                          ? "text-term-red"
+                          : "text-term-muted"
                   }`}
                 >
                   {row.changePct === null ? "—" : `${row.changePct > 0 ? "+" : ""}${formatNumber(row.changePct)}%`}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">{row.score}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-1.5 text-right tabular-nums text-term-text">
+                  {row.score}
+                </td>
+                <td className="px-3 py-1.5">
                   <SignalBadge signal={row.signal} />
                 </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-neutral-500">
+                <td colSpan={6} className="px-3 py-8 text-center text-term-muted">
                   Илэрц олдсонгүй.
                 </td>
               </tr>

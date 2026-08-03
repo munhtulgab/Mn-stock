@@ -41,5 +41,11 @@ export async function ensureIndexes(): Promise<void> {
       .createIndex({ companyCode: 1, period: 1 }, { unique: true }),
     db.collection("aiSignals").createIndex({ companyCode: 1, createdAt: -1 }),
     db.collection("syncState").createIndex({ key: 1 }, { unique: true }),
+    db
+      .collection("pushSubscriptions")
+      .createIndex({ endpoint: 1 }, { unique: true }),
+    db
+      .collection("signalHistory")
+      .createIndex({ companyCode: 1 }, { unique: true }),
   ]);
 }

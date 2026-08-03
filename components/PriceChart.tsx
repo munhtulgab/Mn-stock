@@ -22,30 +22,36 @@ export default function PriceChart({ data }: { data: ChartPoint[] }) {
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
+          <CartesianGrid strokeDasharray="2 4" stroke="#1a1a1a" />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 11, fill: "#a3a3a3" }}
+            tick={{ fontSize: 10, fill: "#6b6b6b", fontFamily: "monospace" }}
             minTickGap={40}
+            axisLine={{ stroke: "#2a2a2a" }}
+            tickLine={{ stroke: "#2a2a2a" }}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: "#a3a3a3" }}
+            tick={{ fontSize: 10, fill: "#6b6b6b", fontFamily: "monospace" }}
             domain={["auto", "auto"]}
             width={60}
+            axisLine={{ stroke: "#2a2a2a" }}
+            tickLine={{ stroke: "#2a2a2a" }}
           />
           <Tooltip
             contentStyle={{
-              background: "#171717",
-              border: "1px solid #404040",
-              fontSize: 12,
+              background: "#000000",
+              border: "1px solid #ff9f1c",
+              fontSize: 11,
+              fontFamily: "monospace",
             }}
-            labelStyle={{ color: "#e5e5e5" }}
+            labelStyle={{ color: "#ff9f1c" }}
+            itemStyle={{ color: "#d4d4d4" }}
           />
           <Line
             type="monotone"
             dataKey="close"
-            stroke="#38bdf8"
-            strokeWidth={1.75}
+            stroke="#e5e5e5"
+            strokeWidth={1.5}
             dot={false}
             isAnimationActive={false}
             name="Хаалтын ханш"
@@ -53,7 +59,7 @@ export default function PriceChart({ data }: { data: ChartPoint[] }) {
           <Line
             type="monotone"
             dataKey="sma20"
-            stroke="#facc15"
+            stroke="#ff9f1c"
             strokeWidth={1}
             dot={false}
             isAnimationActive={false}
@@ -62,7 +68,7 @@ export default function PriceChart({ data }: { data: ChartPoint[] }) {
           <Line
             type="monotone"
             dataKey="sma50"
-            stroke="#a78bfa"
+            stroke="#4dd8e6"
             strokeWidth={1}
             dot={false}
             isAnimationActive={false}

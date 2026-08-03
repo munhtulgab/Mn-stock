@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Static browser script, not part of the app's TS/module graph.
+    "public/**",
   ]),
 ]);
 
