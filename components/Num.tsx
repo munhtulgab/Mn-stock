@@ -38,7 +38,8 @@ export default function Num({
       </span>
       {/* Only the decimals step down; the unit keeps the whole number's size. */}
       <span className="text-[0.82em] font-medium">{frac}</span>
-      {suffix && <span className="font-medium">{suffix}</span>}
+      {/* Non-breaking space so the unit never wraps away from its figure. */}
+      {suffix && <span className="font-medium">{` ${suffix}`}</span>}
     </span>
   );
 }
