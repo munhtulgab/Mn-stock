@@ -182,6 +182,11 @@ interface MarketSnapshot {
   computedAt: Date;
 }
 
+/** True once every row carries the fields the current DashboardRow shape expects. */
+function isCurrentRowShape(rows: DashboardRow[]): boolean {
+  return rows.length === 0 || Array.isArray(rows[0].sparkline);
+}
+
 /**
  * Dashboard rows served from a stored snapshot. MSE publishes prices once a
  * day, so recomputing indicators for every listed company on each page view is
@@ -190,8 +195,10 @@ interface MarketSnapshot {
 export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
   const snapshots = db.collection<MarketSnapshot>("marketSnapshots");
   const cached = await snapshots.findOne({ key: SNAPSHOT_KEY });
+  const cacheIsFresh =
+    !!cached && Date.now() - cached.computedAt.getTime() < SNAPSHOT_TTL_MS;
 
-  if (cached && Date.now() - cached.computedAt.getTime() < SNAPSHOT_TTL_MS) {
+  if (cached && cacheIsFresh && isCurrentRowShape(cached.rows)) {
     return cached.rows;
   }
 
@@ -204,7 +211,8 @@ export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
     );
     return rows;
   } catch (err) {
-    // A stale snapshot beats an error page if the recompute fails.
+    // A stale snapshot beats an error page if the recompute fails, even one
+    // from an older row shape — components tolerate missing new fields.
     if (cached) {
       console.error("dashboard recompute failed, serving stale snapshot", err);
       return cached.rows;
