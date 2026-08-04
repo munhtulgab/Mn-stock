@@ -260,7 +260,14 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
         >
           <div className="flex items-center gap-1.5">
             <StockAvatar symbol={r.symbol} size={18} />
-            <span className="text-sm font-semibold text-app-text truncate">{r.symbol}</span>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-app-text truncate leading-tight">
+                {r.symbol}
+              </div>
+              <div className="text-[10px] text-app-muted truncate leading-tight">
+                {r.name}
+              </div>
+            </div>
           </div>
           <div className="flex justify-center my-1.5">
             <Sparkline

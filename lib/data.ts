@@ -134,10 +134,17 @@ function recentSparkline(prices: PricePoint[]): number[] {
   const cutoff = new Date(prices[prices.length - 1].date);
   cutoff.setUTCDate(cutoff.getUTCDate() - SPARKLINE_WINDOW_DAYS);
   const cutoffKey = cutoff.toISOString().slice(0, 10);
-  return prices
+  const windowed = prices
     .filter((p) => p.date >= cutoffKey)
-    .slice(-SPARKLINE_POINTS)
-    .map((p) => p.close);
+    .slice(-SPARKLINE_POINTS);
+  // A row always has at least two raw price points once it has a change% at
+  // all (that's what produces it), but for a thinly-traded security those
+  // two trades can be further apart than the calendar window — which left
+  // exactly the gainers/losers rows (the ones that just traded) with no line
+  // to draw. Fall back to the plain last-N points rather than showing
+  // nothing when the windowed slice is too sparse to plot.
+  const source = windowed.length >= 2 ? windowed : prices.slice(-SPARKLINE_POINTS);
+  return source.map((p) => p.close);
 }
 
 function buildRow(
@@ -194,16 +201,19 @@ export async function computeDashboardRows(db: Db): Promise<DashboardRow[]> {
 
 const SNAPSHOT_KEY = "dashboardRows";
 const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
+/**
+ * Bump this whenever buildRow's logic changes in a way that should reach
+ * users immediately rather than waiting out SNAPSHOT_TTL_MS or a background
+ * sync — e.g. the sparkline calendar-window fallback below. A stored
+ * snapshot from an older version is treated as stale regardless of age.
+ */
+const DASHBOARD_SCHEMA_VERSION = 2;
 
 interface MarketSnapshot {
   key: string;
   rows: DashboardRow[];
   computedAt: Date;
-}
-
-/** True once every row carries the fields the current DashboardRow shape expects. */
-function isCurrentRowShape(rows: DashboardRow[]): boolean {
-  return rows.length === 0 || Array.isArray(rows[0].sparkline);
+  schemaVersion?: number;
 }
 
 /**
@@ -216,8 +226,9 @@ export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
   const cached = await snapshots.findOne({ key: SNAPSHOT_KEY });
   const cacheIsFresh =
     !!cached && Date.now() - cached.computedAt.getTime() < SNAPSHOT_TTL_MS;
+  const cacheIsCurrentVersion = cached?.schemaVersion === DASHBOARD_SCHEMA_VERSION;
 
-  if (cached && cacheIsFresh && isCurrentRowShape(cached.rows)) {
+  if (cached && cacheIsFresh && cacheIsCurrentVersion) {
     return cached.rows;
   }
 
@@ -225,7 +236,14 @@ export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
     const rows = await computeDashboardRows(db);
     await snapshots.updateOne(
       { key: SNAPSHOT_KEY },
-      { $set: { key: SNAPSHOT_KEY, rows, computedAt: new Date() } },
+      {
+        $set: {
+          key: SNAPSHOT_KEY,
+          rows,
+          computedAt: new Date(),
+          schemaVersion: DASHBOARD_SCHEMA_VERSION,
+        },
+      },
       { upsert: true },
     );
     return rows;
@@ -245,7 +263,14 @@ export async function refreshDashboardSnapshot(db: Db): Promise<number> {
   const rows = await computeDashboardRows(db);
   await db.collection<MarketSnapshot>("marketSnapshots").updateOne(
     { key: SNAPSHOT_KEY },
-    { $set: { key: SNAPSHOT_KEY, rows, computedAt: new Date() } },
+    {
+      $set: {
+        key: SNAPSHOT_KEY,
+        rows,
+        computedAt: new Date(),
+        schemaVersion: DASHBOARD_SCHEMA_VERSION,
+      },
+    },
     { upsert: true },
   );
   return rows.length;
