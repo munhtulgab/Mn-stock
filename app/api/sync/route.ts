@@ -3,6 +3,7 @@ import { getDb, ensureIndexes } from "@/lib/mongodb";
 import { runSyncBatch } from "@/lib/sync";
 import { checkSignalChangesAndNotify } from "@/lib/signalHistory";
 import { refreshDashboardSnapshot } from "@/lib/data";
+import { refreshMarketIndices } from "@/lib/indices";
 
 export const maxDuration = 300;
 
@@ -46,7 +47,20 @@ async function handle(req: NextRequest) {
       console.error("dashboard snapshot refresh failed", err);
     }
 
-    return NextResponse.json({ ok: true, ...result, signalChanges, snapshotRows });
+    let indexCount = 0;
+    try {
+      indexCount = await refreshMarketIndices(db);
+    } catch (err) {
+      console.error("index snapshot refresh failed", err);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      ...result,
+      signalChanges,
+      snapshotRows,
+      indexCount,
+    });
   } catch (err) {
     console.error("sync failed", err);
     return NextResponse.json(

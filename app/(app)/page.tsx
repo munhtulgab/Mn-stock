@@ -4,6 +4,7 @@ import { getDashboardRows, type DashboardRow } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getUnreadCount } from "@/lib/notifications";
+import { getMarketIndices } from "@/lib/indices";
 import StockAvatar from "@/components/StockAvatar";
 import SignalBadge from "@/components/SignalBadge";
 import Sparkline from "@/components/Sparkline";
@@ -14,11 +15,12 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
-  const [rows, portfolio, watchlist, unread] = await Promise.all([
+  const [rows, portfolio, watchlist, unread, indices] = await Promise.all([
     getDashboardRows(db),
     getPortfolioSummary(db, user!._id!),
     getWatchlist(db, user!._id!),
     getUnreadCount(db, user!),
+    getMarketIndices(db),
   ]);
 
   const displayName = user?.fullName || user?.username || "";
@@ -98,22 +100,32 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {gainers.length > 0 && (
+      {indices.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
-          {gainers.slice(0, 3).map((r) => (
-            <Link
-              key={r.symbol}
-              href={`/stock/${r.symbol}`}
+          {indices.map((idx) => (
+            <div
+              key={idx.key}
               className="rounded-2xl bg-app-card border border-app-border p-3"
             >
-              <div className="text-xs font-semibold text-app-text truncate">{r.symbol}</div>
+              <div className="text-xs font-semibold text-app-text truncate">
+                {idx.label}
+              </div>
               <div className="text-[11px] text-app-muted truncate">
-                <Num value={r.lastPrice ?? 0} digits={2} suffix="₮" />
+                <Num value={idx.value} digits={2} />
               </div>
-              <div className="text-[11px] mt-0.5">
-                <Pct value={r.changePct} />
+              {/* Full-width inside the card's padding, so all three lines up. */}
+              <div className="my-1 -mx-0.5">
+                <Sparkline
+                  data={idx.sparkline}
+                  positive={(idx.changePct ?? 0) >= 0}
+                  width={92}
+                  height={26}
+                />
               </div>
-            </Link>
+              <div className="text-[11px]">
+                <Pct value={idx.changePct} />
+              </div>
+            </div>
           ))}
         </div>
       )}

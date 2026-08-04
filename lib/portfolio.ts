@@ -36,16 +36,6 @@ export interface PortfolioSummary {
   todayGainPct: number | null;
 }
 
-export interface PortfolioSegment {
-  label: string;
-  classification?: string;
-  value: number;
-  costBasis: number;
-  gainLoss: number;
-  gainLossPct: number | null;
-  holdingsCount: number;
-}
-
 async function getOrCreatePortfolio(db: Db, userId: string): Promise<Portfolio> {
   const existing = await db.collection<Portfolio>("portfolios").findOne({ userId });
   if (existing) return existing;
@@ -188,91 +178,6 @@ export async function getPortfolioSummary(
     todayGain,
     todayGainPct: totalValue > todayGain ? (todayGain / (totalValue - todayGain)) * 100 : null,
   };
-}
-
-export async function getPortfolioSegments(
-  db: Db,
-  userId: string,
-): Promise<PortfolioSegment[]> {
-  const summary = await getPortfolioSummary(db, userId);
-
-  if (summary.holdings.length === 0) {
-    return [];
-  }
-
-  // Fetch security data to get classifications
-  const companyCodes = summary.holdings.map((h) => h.companyCode);
-  const securities = await db
-    .collection<Security>("securities")
-    .find({ companyCode: { $in: companyCodes } })
-    .toArray();
-  const securityByCode = new Map(securities.map((s) => [s.companyCode, s]));
-
-  // Group by classification
-  const byClass = new Map<string, HoldingView[]>();
-  for (const holding of summary.holdings) {
-    const security = securityByCode.get(holding.companyCode);
-    const classification = security?.classification || 'unknown';
-    if (!byClass.has(classification)) {
-      byClass.set(classification, []);
-    }
-    byClass.get(classification)!.push(holding);
-  }
-
-  // Create segments
-  const segments: PortfolioSegment[] = [];
-
-  // TOP-20: top 20 holdings by value
-  const top20Holdings = summary.holdings.slice(0, 20);
-  if (top20Holdings.length > 0) {
-    const top20Value = top20Holdings.reduce((sum, h) => sum + h.marketValue, 0);
-    const top20CostBasis = top20Holdings.reduce((sum, h) => sum + h.costBasis, 0);
-    const top20GainLoss = top20Value - top20CostBasis;
-    segments.push({
-      label: 'TOP-20',
-      value: top20Value,
-      costBasis: top20CostBasis,
-      gainLoss: top20GainLoss,
-      gainLossPct: top20CostBasis > 0 ? (top20GainLoss / top20CostBasis) * 100 : null,
-      holdingsCount: top20Holdings.length,
-    });
-  }
-
-  // MSE-A: classification I
-  const msea = byClass.get('I') || [];
-  if (msea.length > 0) {
-    const mseaValue = msea.reduce((sum, h) => sum + h.marketValue, 0);
-    const mseaCostBasis = msea.reduce((sum, h) => sum + h.costBasis, 0);
-    const mseaGainLoss = mseaValue - mseaCostBasis;
-    segments.push({
-      label: 'MSE-A',
-      classification: 'I',
-      value: mseaValue,
-      costBasis: mseaCostBasis,
-      gainLoss: mseaGainLoss,
-      gainLossPct: mseaCostBasis > 0 ? (mseaGainLoss / mseaCostBasis) * 100 : null,
-      holdingsCount: msea.length,
-    });
-  }
-
-  // MSE-B: classification II or III
-  const msebHoldings = [...(byClass.get('II') || []), ...(byClass.get('III') || [])];
-  if (msebHoldings.length > 0) {
-    const msebValue = msebHoldings.reduce((sum, h) => sum + h.marketValue, 0);
-    const msebCostBasis = msebHoldings.reduce((sum, h) => sum + h.costBasis, 0);
-    const msebGainLoss = msebValue - msebCostBasis;
-    segments.push({
-      label: 'MSE-B',
-      classification: 'II/III',
-      value: msebValue,
-      costBasis: msebCostBasis,
-      gainLoss: msebGainLoss,
-      gainLossPct: msebCostBasis > 0 ? (msebGainLoss / msebCostBasis) * 100 : null,
-      holdingsCount: msebHoldings.length,
-    });
-  }
-
-  return segments;
 }
 
 async function resolveSecurity(db: Db, symbol: string): Promise<Security> {

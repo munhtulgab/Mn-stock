@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
-import { getPortfolioSummary, getPortfolioSegments } from "@/lib/portfolio";
+import { getPortfolioSummary } from "@/lib/portfolio";
 import StockAvatar from "@/components/StockAvatar";
 import Num, { Pct } from "@/components/Num";
 
@@ -10,10 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function PortfolioPage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
-  const [portfolio, segments] = await Promise.all([
-    getPortfolioSummary(db, user!._id!),
-    getPortfolioSegments(db, user!._id!),
-  ]);
+  const portfolio = await getPortfolioSummary(db, user!._id!);
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-6">
@@ -69,33 +66,6 @@ export default async function PortfolioPage() {
           </div>
         </div>
       </div>
-
-      {segments.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
-          {segments.map((segment) => (
-            <div
-              key={segment.label}
-              className="rounded-2xl border border-app-border bg-app-card p-3"
-            >
-              <div className="text-xs font-medium text-app-muted mb-1">{segment.label}</div>
-              <div className="text-sm font-semibold text-app-text">
-                <Num
-                  value={segment.value}
-                  digits={0}
-                  suffix="₮"
-                  className="text-[13px]"
-                />
-              </div>
-              <div className="text-xs mt-1">
-                <Pct value={segment.gainLossPct} digits={1} />
-              </div>
-              <div className="text-[10px] text-app-muted mt-0.5">
-                {segment.holdingsCount} хувьцаа
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       <section>
         <h2 className="font-semibold text-app-text text-sm mb-3">Хувьцаанууд</h2>
