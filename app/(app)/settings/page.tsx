@@ -1,17 +1,12 @@
 import { getDb } from "@/lib/mongodb";
 import { getSettings, maskSettings } from "@/lib/settings";
-import { isSettingsPageAuthorized } from "@/lib/settingsAuth";
-import SettingsLogin from "@/components/SettingsLogin";
 import SettingsForm from "@/components/SettingsForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const authorized = await isSettingsPageAuthorized();
-  if (!authorized) {
-    return <SettingsLogin />;
-  }
-
+  // No separate password gate: the `(app)` layout already redirects anyone
+  // without a session to /login before this page can render.
   const db = await getDb();
   const settings = await getSettings(db);
   const masked = maskSettings(settings);

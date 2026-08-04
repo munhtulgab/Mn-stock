@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BellIcon } from "./icons";
 
 type State = "unsupported" | "checking" | "denied" | "off" | "on" | "busy";
 
@@ -107,7 +108,7 @@ export default function NotificationBell() {
       className="w-full flex items-center justify-between px-4 py-3.5 disabled:opacity-70"
     >
       <span className="flex items-center gap-3 text-sm text-app-text">
-        <span className="text-lg">🔔</span> Push мэдэгдэл
+        <BellIcon /> Push мэдэгдэл
       </span>
       <span
         className={`text-xs font-medium rounded-full px-2.5 py-1 ${

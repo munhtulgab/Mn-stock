@@ -5,7 +5,8 @@ import { isSettingsRequestAuthorized } from "@/lib/settingsAuth";
 import { sendSms } from "@/lib/callpro";
 
 export async function POST(req: NextRequest) {
-  if (!(await isSettingsRequestAuthorized(req.headers.get("cookie")))) {
+  const db = await getDb();
+  if (!(await isSettingsRequestAuthorized(db, req.headers.get("cookie")))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -15,7 +16,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Утасны дугаар оруулна уу" }, { status: 400 });
   }
 
-  const db = await getDb();
   const { sms } = await getSettings(db);
 
   if (!sms.enabled) {

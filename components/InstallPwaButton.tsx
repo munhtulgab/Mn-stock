@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DownloadIcon } from "./icons";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -47,7 +48,7 @@ export default function InstallPwaButton() {
       className="w-full flex items-center justify-between px-4 py-3.5"
     >
       <span className="flex items-center gap-3 text-sm text-app-text">
-        <span className="text-lg">📲</span> Апп суулгах
+        <DownloadIcon /> Апп суулгах
       </span>
       <span className="text-xs font-medium rounded-full px-2.5 py-1 bg-brand/10 text-brand">
         Суулгах

@@ -10,11 +10,11 @@ import { getSmsBalance } from "@/lib/callpro";
  * points at the sender number rather than the key.
  */
 export async function GET(req: NextRequest) {
-  if (!(await isSettingsRequestAuthorized(req.headers.get("cookie")))) {
+  const db = await getDb();
+  if (!(await isSettingsRequestAuthorized(db, req.headers.get("cookie")))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = await getDb();
   const { sms } = await getSettings(db);
   if (!sms.apiKey) {
     return NextResponse.json(

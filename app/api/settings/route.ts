@@ -4,20 +4,20 @@ import { getSettings, maskSettings, updateSettings } from "@/lib/settings";
 import { isSettingsRequestAuthorized } from "@/lib/settingsAuth";
 
 export async function GET(req: NextRequest) {
-  if (!(await isSettingsRequestAuthorized(req.headers.get("cookie")))) {
+  const db = await getDb();
+  if (!(await isSettingsRequestAuthorized(db, req.headers.get("cookie")))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const db = await getDb();
   const settings = await getSettings(db);
   return NextResponse.json(maskSettings(settings));
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await isSettingsRequestAuthorized(req.headers.get("cookie")))) {
+  const db = await getDb();
+  if (!(await isSettingsRequestAuthorized(db, req.headers.get("cookie")))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const body = await req.json().catch(() => ({}));
-  const db = await getDb();
 
   const apiKeys: Record<string, string> = {};
   if (typeof body.anthropicApiKey === "string" && body.anthropicApiKey.trim()) {
