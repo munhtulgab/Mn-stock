@@ -105,12 +105,14 @@ export default async function HomePage() {
           {indices.map((idx) => (
             <div
               key={idx.key}
-              className="rounded-2xl bg-app-card border border-app-border p-3 flex flex-col items-center"
+              className="rounded-2xl bg-app-card border border-app-border p-3 flex flex-col items-center gap-2"
             >
-              <div className="text-xs font-semibold text-app-text truncate">
+              <div className="text-xs font-semibold text-app-text truncate leading-none">
                 {idx.label}
               </div>
-              <div className="my-2 -mx-0.5">
+              {/* flex, not block: an inline <svg> would sit on a text baseline
+                  and leave more room under the chart than above it. */}
+              <div className="flex justify-center -mx-0.5">
                 <Sparkline
                   data={idx.sparkline}
                   positive={(idx.changePct ?? 0) >= 0}
@@ -118,13 +120,13 @@ export default async function HomePage() {
                   height={26}
                 />
               </div>
-              <div className="flex items-baseline justify-between gap-2 w-full text-[11px]">
-                <div className="text-app-muted">
+              <div className="flex items-baseline justify-between gap-1 w-full text-[11px] leading-none">
+                <span className="text-app-muted">
                   <Num value={idx.value} digits={2} />
-                </div>
-                <div>
+                </span>
+                <span>
                   <Pct value={idx.changePct} />
-                </div>
+                </span>
               </div>
             </div>
           ))}
