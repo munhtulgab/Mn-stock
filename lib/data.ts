@@ -4,6 +4,7 @@ import type { Financials, PricePoint, Recommendation, Security } from "@/lib/typ
 
 const INDICATOR_WINDOW_DAYS = 400;
 const SPARKLINE_POINTS = 20;
+const SPARKLINE_WINDOW_DAYS = 30;
 
 export interface DashboardRow {
   symbol: string;
@@ -121,6 +122,23 @@ async function getRecentPricesForAll(
   return new Map(groups.map((g) => [g._id, g.prices.reverse()]));
 }
 
+/**
+ * Closing prices for the mini trend line, bounded to the last
+ * SPARKLINE_WINDOW_DAYS calendar days (not just the last N trades). Without
+ * the calendar bound, a thinly-traded security's "last 20 prices" can be
+ * its entire multi-year trading history rather than a recent trend.
+ */
+function recentSparkline(prices: PricePoint[]): number[] {
+  if (prices.length === 0) return [];
+  const cutoff = new Date(prices[prices.length - 1].date);
+  cutoff.setUTCDate(cutoff.getUTCDate() - SPARKLINE_WINDOW_DAYS);
+  const cutoffKey = cutoff.toISOString().slice(0, 10);
+  return prices
+    .filter((p) => p.date >= cutoffKey)
+    .slice(-SPARKLINE_POINTS)
+    .map((p) => p.close);
+}
+
 function buildRow(
   security: Security,
   prices: PricePoint[],
@@ -146,7 +164,7 @@ function buildRow(
     volume: last?.volume ?? null,
     signal: recommendation.signal,
     score: recommendation.score,
-    sparkline: prices.slice(-SPARKLINE_POINTS).map((p) => p.close),
+    sparkline: recentSparkline(prices),
   };
 }
 

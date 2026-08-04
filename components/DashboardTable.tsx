@@ -91,11 +91,11 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
           >
             <StockAvatar symbol={row.symbol} />
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-app-text text-sm">{row.symbol}</span>
-                <Sparkline data={row.sparkline} positive={(row.changePct ?? 0) >= 0} />
-              </div>
+              <div className="font-semibold text-app-text text-sm">{row.symbol}</div>
               <div className="text-xs text-app-muted truncate">{row.name}</div>
+            </div>
+            <div className="flex items-center justify-center shrink-0 w-16">
+              <Sparkline data={row.sparkline} positive={(row.changePct ?? 0) >= 0} />
             </div>
             <div className="text-right shrink-0">
               <div className="text-sm text-app-text">

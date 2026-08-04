@@ -261,14 +261,16 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
           <div className="flex items-center gap-1.5">
             <StockAvatar symbol={r.symbol} size={18} />
             <span className="text-sm font-semibold text-app-text truncate">{r.symbol}</span>
+          </div>
+          <div className="flex justify-center my-1.5">
             <Sparkline
               data={r.sparkline}
               positive={(r.changePct ?? 0) >= 0}
-              width={40}
-              height={18}
+              width={104}
+              height={28}
             />
           </div>
-          <div className="flex items-baseline justify-between gap-2 mt-2">
+          <div className="flex items-baseline justify-between gap-2">
             <span className="text-xs text-app-text">
               <Num value={r.lastPrice ?? 0} digits={2} suffix="₮" />
             </span>
