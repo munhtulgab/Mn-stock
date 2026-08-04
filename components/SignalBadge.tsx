@@ -12,10 +12,22 @@ const LABELS: Record<Signal, string> = {
   HOLD: "ХҮЛЭЭХ",
 };
 
-export default function SignalBadge({ signal }: { signal: Signal }) {
+/** Sizes: `md` stands on its own, `sm` rides alongside a symbol in a list row. */
+const SIZES = {
+  md: "px-2.5 py-1 text-[11px]",
+  sm: "px-1.5 py-0.5 text-[9px]",
+} as const;
+
+export default function SignalBadge({
+  signal,
+  size = "md",
+}: {
+  signal: Signal;
+  size?: keyof typeof SIZES;
+}) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${STYLES[signal]}`}
+      className={`inline-flex shrink-0 items-center rounded-full font-semibold ${SIZES[size]} ${STYLES[signal]}`}
     >
       {LABELS[signal]}
     </span>

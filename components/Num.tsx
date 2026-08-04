@@ -48,10 +48,13 @@ export default function Num({
 export function Pct({
   value,
   digits = 2,
+  /** Pass "" where the column header or context already says "percent". */
+  suffix = "%",
   className = "",
 }: {
   value: number | null;
   digits?: number;
+  suffix?: string;
   className?: string;
 }) {
   if (value === null || Number.isNaN(value)) {
@@ -60,7 +63,7 @@ export function Pct({
   const tone = value >= 0 ? "text-app-positive" : "text-app-negative";
   return (
     <span className={tone}>
-      <Num value={value} digits={digits} suffix="%" showSign className={className} />
+      <Num value={value} digits={digits} suffix={suffix} showSign className={className} />
     </span>
   );
 }

@@ -91,25 +91,31 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
           >
             <StockAvatar symbol={row.symbol} />
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-app-text text-sm">{row.symbol}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-app-text text-sm">
+                  {row.symbol}
+                </span>
+                <SignalBadge signal={row.signal} size="sm" />
+              </div>
               <div className="text-xs text-app-muted truncate">{row.name}</div>
             </div>
             <div className="flex items-center justify-center shrink-0 w-16">
               <Sparkline data={row.sparkline} positive={(row.changePct ?? 0) >= 0} />
             </div>
+            {/* Units are dropped here: every row is ₮ and every change is a
+                percent, so the suffixes only cost width the figures can use. */}
             <div className="text-right shrink-0">
               <div className="text-sm text-app-text">
                 {row.lastPrice === null ? (
                   <span className="text-app-muted">—</span>
                 ) : (
-                  <Num value={row.lastPrice} digits={2} suffix="₮" />
+                  <Num value={row.lastPrice} digits={2} />
                 )}
               </div>
               <div className="text-xs">
-                <Pct value={row.changePct} />
+                <Pct value={row.changePct} suffix="" />
               </div>
             </div>
-            <SignalBadge signal={row.signal} />
           </Link>
         ))}
         {filtered.length === 0 && (
