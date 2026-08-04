@@ -196,17 +196,11 @@ export async function getPortfolioSegments(
 ): Promise<PortfolioSegment[]> {
   const summary = await getPortfolioSummary(db, userId);
 
-  // Group holdings by classification
-  const byClassification = new Map<string | undefined, HoldingView[]>();
-  for (const holding of summary.holdings) {
-    const key = holding.name ? 'classified' : undefined;
-    if (!byClassification.has(key)) {
-      byClassification.set(key, []);
-    }
-    byClassification.get(key)!.push(holding);
+  if (summary.holdings.length === 0) {
+    return [];
   }
 
-  // We need to fetch security data to get classifications
+  // Fetch security data to get classifications
   const companyCodes = summary.holdings.map((h) => h.companyCode);
   const securities = await db
     .collection<Security>("securities")
