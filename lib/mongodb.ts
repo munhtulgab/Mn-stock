@@ -62,6 +62,12 @@ export async function ensureIndexes(): Promise<void> {
       .collection("financials")
       .createIndex({ companyCode: 1, period: 1 }, { unique: true }),
     db.collection("aiSignals").createIndex({ companyCode: 1, createdAt: -1 }),
+    // Both caches are read with findOne({key}) and written with an upsert on
+    // the same filter. Without a unique index two concurrent misses can each
+    // insert their own document, after which findOne returns an arbitrary one
+    // and half the writes are invisible.
+    db.collection("marketSnapshots").createIndex({ key: 1 }, { unique: true }),
+    db.collection("newsSnapshots").createIndex({ key: 1 }, { unique: true }),
     db.collection("syncState").createIndex({ key: 1 }, { unique: true }),
     db
       .collection("pushSubscriptions")

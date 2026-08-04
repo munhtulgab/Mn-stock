@@ -1,7 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { createSession, hashPassword, toSafeUser, SESSION_COOKIE } from "@/lib/auth";
+import {
+  createSession,
+  hashPassword,
+  toSafeUser,
+  usernameFilter,
+  SESSION_COOKIE,
+} from "@/lib/auth";
 import type { Portfolio, User } from "@/lib/types";
 import { STARTING_CASH_BALANCE } from "@/lib/types";
 
@@ -29,7 +35,7 @@ export async function POST(req: NextRequest) {
   const db = await getDb();
   const existing = await db
     .collection<User>("users")
-    .findOne({ username: { $regex: `^${username}$`, $options: "i" } });
+    .findOne(usernameFilter(username));
   if (existing) {
     return NextResponse.json(
       { error: "Энэ хэрэглэгчийн нэр аль хэдийн бүртгэгдсэн байна" },

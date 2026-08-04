@@ -19,6 +19,20 @@ export function verifyPassword(password: string, hash: string, salt: string): bo
   return candidate.length === stored.length && timingSafeEqual(candidate, stored);
 }
 
+/**
+ * Case-insensitive exact-match filter for a username.
+ *
+ * The raw input must never reach a regex unescaped: a username of `.*`
+ * matches every stored user (which would let signup's duplicate check be
+ * dodged and hand login someone else's account row), and a nested quantifier
+ * like `(a+)+` hangs the matcher on a long input. Escaping the metacharacters
+ * keeps the pattern meaning the literal name and nothing else.
+ */
+export function usernameFilter(username: string) {
+  const escaped = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return { username: { $regex: `^${escaped}$`, $options: "i" } };
+}
+
 export function toSafeUser(user: User): SafeUser {
   return {
     id: user._id!,

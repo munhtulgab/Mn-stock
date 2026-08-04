@@ -200,8 +200,11 @@ export async function buyStock(
   symbol: string,
   quantity: number,
 ): Promise<PortfolioSummary> {
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    throw new PortfolioError("Тоо ширхэг буруу байна");
+  // Whole shares only. The form's min={1} is advisory — a hand-rolled request
+  // could otherwise buy 0.5 of a share and leave a fractional holding that no
+  // amount of selling clears evenly.
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    throw new PortfolioError("Тоо ширхэг бүхэл, эерэг тоо байх ёстой");
   }
   const security = await resolveSecurity(db, symbol);
   const price = await getCurrentPrice(db, security.companyCode);
@@ -263,8 +266,8 @@ export async function sellStock(
   symbol: string,
   quantity: number,
 ): Promise<PortfolioSummary> {
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    throw new PortfolioError("Тоо ширхэг буруу байна");
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    throw new PortfolioError("Тоо ширхэг бүхэл, эерэг тоо байх ёстой");
   }
   const security = await resolveSecurity(db, symbol);
   const existing = await db

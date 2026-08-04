@@ -26,10 +26,18 @@ type State =
  */
 export default function CompanyNews({ symbol }: { symbol: string }) {
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [loadedFor, setLoadedFor] = useState(symbol);
+
+  // Navigating between two /stock/[symbol] pages reuses this instance, so the
+  // previous company's news has to be cleared as the prop changes rather than
+  // on mount — otherwise it shows under the new symbol until the fetch lands.
+  if (loadedFor !== symbol) {
+    setLoadedFor(symbol);
+    setState({ kind: "loading" });
+  }
 
   useEffect(() => {
     let cancelled = false;
-    setState({ kind: "loading" });
 
     fetch(`/api/securities/${symbol}/news`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
