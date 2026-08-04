@@ -9,13 +9,19 @@ export default function Sparkline({
   width = 56,
   height = 24,
 }: {
-  data: (number | null)[];
+  /**
+   * Optional/possibly-missing: rows served from a snapshot cached before this
+   * field existed won't have it until the cache refreshes.
+   */
+  data: (number | null)[] | undefined | null;
   /** Stroke colour: green when true, red when false. */
   positive: boolean;
   width?: number;
   height?: number;
 }) {
-  const values = data.filter((v): v is number => v !== null && Number.isFinite(v));
+  const values = (data ?? []).filter(
+    (v): v is number => v !== null && Number.isFinite(v),
+  );
 
   if (values.length < 2) {
     return <div style={{ width, height }} className="shrink-0" aria-hidden />;
