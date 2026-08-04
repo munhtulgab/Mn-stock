@@ -6,6 +6,7 @@ import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getUnreadCount } from "@/lib/notifications";
 import StockAvatar from "@/components/StockAvatar";
 import SignalBadge from "@/components/SignalBadge";
+import Sparkline from "@/components/Sparkline";
 import Num, { Pct } from "@/components/Num";
 
 export const dynamic = "force-dynamic";
@@ -260,6 +261,12 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
           <div className="flex items-center gap-1.5">
             <StockAvatar symbol={r.symbol} size={18} />
             <span className="text-sm font-semibold text-app-text truncate">{r.symbol}</span>
+            <Sparkline
+              data={r.sparkline}
+              positive={(r.changePct ?? 0) >= 0}
+              width={40}
+              height={18}
+            />
           </div>
           <div className="flex items-baseline justify-between gap-2 mt-2">
             <span className="text-xs text-app-text">
