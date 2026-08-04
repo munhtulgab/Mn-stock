@@ -84,8 +84,17 @@ export default async function StockDetailPage({
         <div>
           <h1 className="text-xl font-bold text-app-text">{security.symbol}</h1>
           <p className="text-sm text-app-muted">{security.name}</p>
-          <p className="text-xs text-app-muted mt-1">
-            Ангилал {security.classification} · {last?.date ?? "—"}
+          <p className="text-xs text-app-muted mt-1 flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 text-app-positive font-medium">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-app-positive opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-app-positive" />
+              </span>
+              Идэвхтэй
+            </span>
+            <span>
+              · Ангилал {security.classification} · {last?.date ?? "—"}
+            </span>
           </p>
         </div>
         <div className="flex items-start gap-2">
