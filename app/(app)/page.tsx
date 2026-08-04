@@ -105,16 +105,12 @@ export default async function HomePage() {
           {indices.map((idx) => (
             <div
               key={idx.key}
-              className="rounded-2xl bg-app-card border border-app-border p-3"
+              className="rounded-2xl bg-app-card border border-app-border p-3 flex flex-col items-center"
             >
               <div className="text-xs font-semibold text-app-text truncate">
                 {idx.label}
               </div>
-              <div className="text-[11px] text-app-muted truncate">
-                <Num value={idx.value} digits={2} />
-              </div>
-              {/* Full-width inside the card's padding, so all three lines up. */}
-              <div className="my-1 -mx-0.5">
+              <div className="my-2 -mx-0.5">
                 <Sparkline
                   data={idx.sparkline}
                   positive={(idx.changePct ?? 0) >= 0}
@@ -122,8 +118,13 @@ export default async function HomePage() {
                   height={26}
                 />
               </div>
-              <div className="text-[11px]">
-                <Pct value={idx.changePct} />
+              <div className="flex items-baseline justify-between gap-2 w-full text-[11px]">
+                <div className="text-app-muted">
+                  <Num value={idx.value} digits={2} />
+                </div>
+                <div>
+                  <Pct value={idx.changePct} />
+                </div>
               </div>
             </div>
           ))}
