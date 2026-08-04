@@ -28,8 +28,8 @@
   --color-app-negative-bg: #2c1518;
 
   /* Floating tab bar */
-  --color-nav-surface: #333844;
-  --color-nav-active: #17181c;
+  --color-nav-surface: #17181c;
+  --color-nav-active: #333844;
 }
 
 html {
