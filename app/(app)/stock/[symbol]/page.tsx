@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
-import { getStockDetail } from "@/lib/data";
+import { getStockDetailFresh } from "@/lib/data";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import SignalBadge from "@/components/SignalBadge";
 import Num, { Pct } from "@/components/Num";
@@ -41,7 +41,7 @@ export default async function StockDetailPage({
   const { symbol } = await params;
   const db = await getDb();
   const [detail, user] = await Promise.all([
-    getStockDetail(db, symbol),
+    getStockDetailFresh(db, symbol),
     getCurrentUser(db),
   ]);
   if (!detail) notFound();

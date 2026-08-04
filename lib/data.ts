@@ -1,5 +1,6 @@
 import type { Db } from "mongodb";
 import { computeRecommendation } from "@/lib/recommendation";
+import { syncPricesForCompany } from "@/lib/sync";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 
 const INDICATOR_WINDOW_DAYS = 400;
@@ -275,4 +276,30 @@ export async function getStockDetail(
     recommendation,
     marketMedianPe,
   };
+}
+
+/**
+ * Same as getStockDetail, but first pulls this one company's price live from
+ * MSE. The background sync rotates through ~200 companies on a time-boxed
+ * cursor, so a given symbol's cached price can be many cycles stale; a
+ * single company's page is one cheap fetch, so pages that show "today's"
+ * price or chart use this instead. Falls back to whatever was already
+ * cached if the live fetch fails (network hiccup, MSE briefly down, etc).
+ */
+export async function getStockDetailFresh(
+  db: Db,
+  symbol: string,
+): Promise<StockDetail | null> {
+  const security = await db
+    .collection<Security>("securities")
+    .findOne({ symbol: symbol.toUpperCase() });
+  if (!security) return null;
+
+  try {
+    await syncPricesForCompany(db, security.companyCode);
+  } catch (err) {
+    console.error(`live price refresh failed for ${symbol}`, err);
+  }
+
+  return getStockDetail(db, symbol);
 }

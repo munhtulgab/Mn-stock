@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { getStockDetail } from "@/lib/data";
-import { syncPricesForCompany } from "@/lib/sync";
+import { getStockDetailFresh } from "@/lib/data";
 import { fetchCompanyNews } from "@/lib/mse/news";
 import { fetchNewsSources } from "@/lib/mse/newsSources";
 import { getSettings } from "@/lib/settings";
@@ -40,7 +39,7 @@ export async function GET(
   const force = req.nextUrl.searchParams.get("force") === "1";
   const db = await getDb();
 
-  let detail = await getStockDetail(db, symbol);
+  const detail = await getStockDetailFresh(db, symbol);
   if (!detail) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -58,19 +57,6 @@ export async function GET(
   }
 
   const settings = await getSettings(db);
-
-  // The background sync walks all ~200 companies on a rotating cursor, so a
-  // given symbol's cached price can be many cycles stale. Fetching just this
-  // one company live is fast (a single MSE page) and gives both the
-  // recommendation and the AI signal today's actual latest price.
-  try {
-    await syncPricesForCompany(db, detail.security.companyCode);
-    const refreshed = await getStockDetail(db, symbol);
-    if (refreshed) detail = refreshed;
-  } catch (err) {
-    console.error(`live price refresh failed for ${symbol}`, err);
-    // Non-fatal: continue with whatever price data was already cached.
-  }
 
   let news: Awaited<ReturnType<typeof fetchCompanyNews>> = [];
   try {

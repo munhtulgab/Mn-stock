@@ -10,18 +10,40 @@ declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined;
 }
 
+function connect(): Promise<MongoClient> {
+  const client = new MongoClient(uri!, {
+    // Fail in single-digit seconds instead of the driver's much longer
+    // defaults (we saw individual attempts hang for 30-270s in production),
+    // so a bad connection surfaces as a quick error rather than a request
+    // that appears to hang.
+    serverSelectionTimeoutMS: 8_000,
+    connectTimeoutMS: 8_000,
+  });
+  const promise = client.connect();
+  // A rejected connection promise must not stay cached: every later request
+  // on this same warm serverless instance would immediately re-await (and
+  // re-fail on) that same rejection, rather than getting a fresh attempt.
+  promise.catch(() => {
+    if (global._mongoClientPromise === promise) {
+      global._mongoClientPromise = undefined;
+    }
+  });
+  return promise;
+}
+
 // Cached across warm serverless invocations (and HMR reloads in dev) so we
 // don't open a fresh connection to Atlas on every request.
 if (!global._mongoClientPromise) {
-  const client = new MongoClient(uri);
-  global._mongoClientPromise = client.connect();
+  global._mongoClientPromise = connect();
 }
-const clientPromise = global._mongoClientPromise;
 
-export default clientPromise;
+export default global._mongoClientPromise;
 
 export async function getDb(): Promise<Db> {
-  const client = await clientPromise;
+  if (!global._mongoClientPromise) {
+    global._mongoClientPromise = connect();
+  }
+  const client = await global._mongoClientPromise;
   return client.db("mse");
 }
 
