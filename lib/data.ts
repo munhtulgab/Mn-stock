@@ -3,6 +3,7 @@ import { computeRecommendation } from "@/lib/recommendation";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 
 const INDICATOR_WINDOW_DAYS = 400;
+const SPARKLINE_POINTS = 20;
 
 export interface DashboardRow {
   symbol: string;
@@ -15,6 +16,8 @@ export interface DashboardRow {
   volume: number | null;
   signal: Recommendation["signal"];
   score: number;
+  /** Recent closing prices, oldest first, for the dashboard-row mini chart. */
+  sparkline: number[];
 }
 
 export interface StockDetail {
@@ -143,6 +146,7 @@ function buildRow(
     volume: last?.volume ?? null,
     signal: recommendation.signal,
     score: recommendation.score,
+    sparkline: prices.slice(-SPARKLINE_POINTS).map((p) => p.close),
   };
 }
 
