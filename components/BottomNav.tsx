@@ -29,7 +29,7 @@ export default function BottomNav() {
 
   return (
     <nav className="sticky bottom-0 z-20 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+26px)] bg-linear-to-t from-app-bg via-app-bg to-transparent">
-      <div className="mx-auto max-w-md flex items-center justify-between gap-1 rounded-full bg-nav-surface p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
+      <div className="mx-auto max-w-md flex items-center justify-between gap-1 rounded-full bg-linear-to-b from-nav-surface-hi to-nav-surface p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_1px_rgba(0,0,0,0.35)]">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           let active = false;
           if (href === "/") {
@@ -50,7 +50,7 @@ export default function BottomNav() {
               onTouchStart={() => {}}
               className={`relative flex items-center justify-center gap-2 rounded-full transition-all active:scale-95 ${
                 active
-                  ? "bg-nav-active text-white px-4 py-2.5 font-semibold text-sm"
+                  ? "bg-linear-to-b from-nav-active-hi to-nav-active text-white px-4 py-2.5 font-semibold text-sm shadow-[0_3px_10px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)]"
                   : "text-white/85 w-11 h-11"
               }`}
             >

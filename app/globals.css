@@ -27,9 +27,12 @@
   --color-app-negative: #ff5a5f;
   --color-app-negative-bg: #2c1518;
 
-  /* Floating tab bar */
-  --color-nav-surface: #17181c;
-  --color-nav-active: #333844;
+  /* Floating tab bar (swapped: surface takes the old active tone, active
+     takes the old surface tone) plus lighter twins for a convex gradient. */
+  --color-nav-surface: #333844;
+  --color-nav-surface-hi: #454b5a;
+  --color-nav-active: #17181c;
+  --color-nav-active-hi: #24262d;
 }
 
 html {
