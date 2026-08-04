@@ -8,6 +8,7 @@ import SignalBadge from "@/components/SignalBadge";
 import Num, { Pct } from "@/components/Num";
 import PriceChart, { type ChartPoint } from "@/components/PriceChart";
 import AiSignalPanel from "@/components/AiSignalPanel";
+import CompanyNews from "@/components/CompanyNews";
 import TradeModal from "@/components/TradeModal";
 import WatchlistButton from "@/components/WatchlistButton";
 
@@ -177,6 +178,8 @@ export default async function StockDetailPage({
           )}
         </div>
       </div>
+
+      <CompanyNews symbol={security.symbol} />
 
       <AiSignalPanel symbol={security.symbol} />
 

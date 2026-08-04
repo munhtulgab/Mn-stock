@@ -21,6 +21,12 @@ export interface SmsSettings {
 
 export interface AppSettings {
   newsSources: string[];
+  /**
+   * Page access token for reading Facebook sources. Facebook serves a login
+   * wall to anonymous readers and the Graph API refuses unauthenticated
+   * reads, so any facebook.com source needs this to return anything.
+   */
+  facebookToken?: string;
   apiKeys: {
     anthropic?: string;
     gemini?: string;
@@ -55,6 +61,7 @@ export async function getSettings(db: Db): Promise<AppSettings> {
   if (!doc) return DEFAULT_SETTINGS;
   return {
     newsSources: Array.isArray(doc.newsSources) ? doc.newsSources : [],
+    facebookToken: doc.facebookToken,
     apiKeys: doc.apiKeys ?? {},
     sms: {
       enabled: doc.sms?.enabled ?? false,
@@ -78,6 +85,7 @@ export function maskSettings(settings: AppSettings) {
     !key ? null : key.length <= 8 ? "****" : `${key.slice(0, 4)}****${key.slice(-4)}`;
   return {
     newsSources: settings.newsSources,
+    facebookToken: mask(settings.facebookToken),
     apiKeys: {
       anthropic: mask(settings.apiKeys.anthropic),
       gemini: mask(settings.apiKeys.gemini),
@@ -99,6 +107,7 @@ export async function updateSettings(
   db: Db,
   patch: {
     newsSources?: string[];
+    facebookToken?: string;
     apiKeys?: Partial<AppSettings["apiKeys"]>;
     sms?: Partial<SmsSettings>;
     notifications?: Partial<NotificationSettings>;
@@ -107,6 +116,7 @@ export async function updateSettings(
   const current = await getSettings(db);
   const next: AppSettings = {
     newsSources: patch.newsSources ?? current.newsSources,
+    facebookToken: patch.facebookToken ?? current.facebookToken,
     apiKeys: { ...current.apiKeys, ...patch.apiKeys },
     sms: { ...current.sms, ...patch.sms },
     notifications: { ...current.notifications, ...patch.notifications },

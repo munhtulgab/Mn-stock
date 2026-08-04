@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getStockDetailFresh } from "@/lib/data";
 import { fetchCompanyNews } from "@/lib/mse/news";
-import { fetchNewsSources } from "@/lib/mse/newsSources";
+import { fetchNewsSources, usableExtracts } from "@/lib/mse/newsSources";
 import { getSettings } from "@/lib/settings";
 import {
   AllProvidersFailedError,
@@ -65,10 +65,18 @@ export async function GET(
     console.error("news fetch failed", err);
   }
 
-  let externalNews: Awaited<ReturnType<typeof fetchNewsSources>> = [];
+  // Only sources that produced real text reach the prompt — a login wall or
+  // a bot-challenge page would otherwise be fed to the LLM as if it were news.
+  let externalNews: ReturnType<typeof usableExtracts> = [];
   if (settings.newsSources.length > 0) {
     try {
-      externalNews = await fetchNewsSources(settings.newsSources);
+      const results = await fetchNewsSources(settings.newsSources, {
+        facebookToken: settings.facebookToken,
+      });
+      for (const r of results.filter((r) => r.status !== "ok")) {
+        console.warn(`news source unusable (${r.status}): ${r.url} — ${r.reason}`);
+      }
+      externalNews = usableExtracts(results);
     } catch (err) {
       console.error("external news source fetch failed", err);
     }

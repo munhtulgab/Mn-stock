@@ -4,6 +4,7 @@ import { useState } from "react";
 
 interface MaskedSettings {
   newsSources: string[];
+  facebookToken: string | null;
   apiKeys: {
     anthropic: string | null;
     gemini: string | null;
@@ -22,6 +23,23 @@ interface MaskedSettings {
     signals: string[];
   };
 }
+
+interface SourceCheckResult {
+  url: string;
+  status: "ok" | "login_required" | "empty" | "http_error" | "timeout" | "error";
+  chars: number;
+  reason: string | null;
+  headlines: number;
+}
+
+const SOURCE_STATUS_LABELS: Record<SourceCheckResult["status"], string> = {
+  ok: "Ажиллаж байна",
+  login_required: "Нэвтрэлт шаардана",
+  empty: "Текст олдсонгүй",
+  http_error: "Сайт татгалзлаа",
+  timeout: "Хугацаа хэтэрлээ",
+  error: "Алдаа",
+};
 
 const SIGNAL_LABELS: { value: string; label: string }[] = [
   { value: "BUY", label: "АВАХ" },
@@ -68,6 +86,14 @@ export default function SettingsForm({
 }) {
   const [newsSources, setNewsSources] = useState<string[]>(initial.newsSources);
   const [newSourceInput, setNewSourceInput] = useState("");
+  const [fbTokenInput, setFbTokenInput] = useState("");
+  const [fbCurrent, setFbCurrent] = useState(initial.facebookToken);
+  const [sourceCheck, setSourceCheck] = useState<
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "done"; results: SourceCheckResult[] }
+    | { kind: "err"; message: string }
+  >({ kind: "idle" });
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
@@ -102,6 +128,8 @@ export default function SettingsForm({
   function reset() {
     setNewsSources(initial.newsSources);
     setNewSourceInput("");
+    setFbTokenInput("");
+    setSourceCheck({ kind: "idle" });
     setKeyInputs({});
     setSmsEnabled(smsCurrent.enabled);
     setSmsFrom(smsCurrent.from ?? "");
@@ -181,6 +209,26 @@ export default function SettingsForm({
 
   function removeSource(idx: number) {
     setNewsSources((prev) => prev.filter((_, i) => i !== idx));
+    setSourceCheck({ kind: "idle" });
+  }
+
+  async function checkSources() {
+    setSourceCheck({ kind: "checking" });
+    try {
+      const res = await fetch("/api/settings/news-sources/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newsSources }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSourceCheck({ kind: "err", message: data.error || `Алдаа ${res.status}` });
+        return;
+      }
+      setSourceCheck({ kind: "done", results: data.results ?? [] });
+    } catch (err) {
+      setSourceCheck({ kind: "err", message: (err as Error).message });
+    }
   }
 
   async function save() {
@@ -199,6 +247,7 @@ export default function SettingsForm({
         if (keyInputs[f.key]?.trim()) body[f.bodyKey] = keyInputs[f.key].trim();
       }
       if (smsKeyInput.trim()) body.smsApiKey = smsKeyInput.trim();
+      if (fbTokenInput.trim()) body.facebookToken = fbTokenInput.trim();
 
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -210,8 +259,10 @@ export default function SettingsForm({
       setCurrent(data.apiKeys);
       setSmsCurrent(data.sms);
       setNotifCurrent(data.notifications);
+      setFbCurrent(data.facebookToken);
       setKeyInputs({});
       setSmsKeyInput("");
+      setFbTokenInput("");
       setStatus("saved");
       setTimeout(() => setStatus("idle"), 2000);
     } catch {
@@ -276,24 +327,92 @@ export default function SettingsForm({
           </button>
         </div>
         <ul className="space-y-1.5">
-          {newsSources.map((s, i) => (
-            <li
-              key={i}
-              className="flex items-center justify-between rounded-xl bg-app-bg px-3 py-2 text-xs"
-            >
-              <span className="truncate text-app-text">{s}</span>
-              <button
-                onClick={() => removeSource(i)}
-                className="text-app-negative text-[11px] ml-3 font-medium"
-              >
-                Устгах
-              </button>
-            </li>
-          ))}
+          {newsSources.map((s, i) => {
+            const result =
+              sourceCheck.kind === "done"
+                ? sourceCheck.results.find((r) => r.url === s)
+                : undefined;
+            return (
+              <li key={i} className="rounded-xl bg-app-bg px-3 py-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="truncate text-app-text">{s}</span>
+                  <button
+                    onClick={() => removeSource(i)}
+                    className="text-app-negative text-[11px] ml-3 font-medium shrink-0"
+                  >
+                    Устгах
+                  </button>
+                </div>
+                {result && (
+                  <div className="mt-1.5 flex items-start gap-2">
+                    <span
+                      className={`shrink-0 text-[10px] rounded-full px-2 py-0.5 font-medium ${
+                        result.status === "ok"
+                          ? "bg-app-positive-bg text-app-positive"
+                          : "bg-app-negative-bg text-app-negative"
+                      }`}
+                    >
+                      {SOURCE_STATUS_LABELS[result.status]}
+                    </span>
+                    <span className="text-[11px] text-app-muted">
+                      {result.status === "ok"
+                        ? `${result.chars.toLocaleString("mn-MN")} тэмдэгт · ${result.headlines} гарчиг`
+                        : result.reason}
+                    </span>
+                  </div>
+                )}
+              </li>
+            );
+          })}
           {newsSources.length === 0 && (
             <li className="text-xs text-app-muted">Одоогоор линк нэмээгүй байна.</li>
           )}
         </ul>
+
+        {newsSources.length > 0 && (
+          <button
+            type="button"
+            onClick={checkSources}
+            disabled={sourceCheck.kind === "checking"}
+            className="w-full mt-3 rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
+          >
+            {sourceCheck.kind === "checking"
+              ? "Шалгаж байна..."
+              : "Эх сурвалжуудыг шалгах"}
+          </button>
+        )}
+        {sourceCheck.kind === "err" && (
+          <p className="text-xs text-app-negative mt-2 break-words">
+            {sourceCheck.message}
+          </p>
+        )}
+
+        <div className="mt-4 pt-4 border-t border-app-border space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-app-text">
+              Facebook хандалтын токен
+            </label>
+            <span
+              className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${
+                fbCurrent ? "bg-app-positive-bg text-app-positive" : "bg-app-bg text-app-muted"
+              }`}
+            >
+              {fbCurrent ? "Идэвхтэй" : "Тохируулаагүй"}
+            </span>
+          </div>
+          <p className="text-[11px] text-app-muted">
+            Facebook нэвтрээгүй хүнд агуулгаа харуулдаггүй тул facebook.com линк
+            зөвхөн Page access token-той үед ажиллана. Токенгүй бол тухайн эх
+            сурвалж алгасагдана.
+          </p>
+          <input
+            type="password"
+            placeholder={fbCurrent ? `Одоогийн: ${fbCurrent}` : "Page access token"}
+            value={fbTokenInput}
+            onChange={(e) => setFbTokenInput(e.target.value)}
+            className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
+          />
+        </div>
       </section>
 
       <section className="rounded-2xl border border-app-border bg-app-card p-4">

@@ -33,6 +33,12 @@ export async function POST(req: NextRequest) {
     apiKeys.openrouter = body.openrouterApiKey.trim();
   }
 
+  // Blank means "leave the stored token alone", same as the AI keys.
+  const facebookToken =
+    typeof body.facebookToken === "string" && body.facebookToken.trim()
+      ? body.facebookToken.trim()
+      : undefined;
+
   const newsSources = Array.isArray(body.newsSources)
     ? body.newsSources.filter((s: unknown): s is string => typeof s === "string" && s.trim().length > 0)
     : undefined;
@@ -62,6 +68,7 @@ export async function POST(req: NextRequest) {
 
   const updated = await updateSettings(db, {
     newsSources,
+    facebookToken,
     apiKeys,
     sms: Object.keys(sms).length > 0 ? sms : undefined,
     notifications:

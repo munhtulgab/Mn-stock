@@ -10,6 +10,10 @@ export interface CompanyNewsItem {
 /**
  * Scrapes the "Холбоотой мэдээ, мэдээлэл" (related news) table shown on a
  * security's main open.mse.mn profile page.
+ *
+ * MSE serves the rows in no particular order — a 2018 notice can sit above
+ * last month's dividend announcement — so they are sorted newest first here
+ * rather than at each call site.
  */
 export async function fetchCompanyNews(
   companyCode: number,
@@ -34,5 +38,6 @@ export async function fetchCompanyNews(
       items.push({ title, date, url });
     });
 
+  items.sort((a, b) => b.date.localeCompare(a.date));
   return items.slice(0, limit);
 }
