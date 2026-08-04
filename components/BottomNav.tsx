@@ -38,6 +38,7 @@ export default function BottomNav() {
               href={href}
               prefetch
               aria-label={label}
+              onTouchStart={() => {}}
               className={`relative flex items-center justify-center gap-2 rounded-full transition-all active:scale-95 ${
                 active
                   ? "bg-nav-active text-white px-4 py-2.5 font-semibold text-sm"
