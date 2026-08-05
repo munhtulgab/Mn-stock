@@ -159,7 +159,7 @@ const SHELL_TEXT_CHARS = 1_500;
  * through widgets and leaves nothing to read, while the news section is
  * ordinary server-rendered HTML — Google has those article pages indexed.
  */
-const CONTENT_PATHS = ["/news", "/mn/news"];
+const CONTENT_PATHS = ["/news", "/mn/news", "/news/list", "/en/news"];
 
 function fail(
   url: string,
@@ -422,8 +422,16 @@ async function tryContentPaths(
     if (!res || res.status < 200 || res.status >= 300) continue;
 
     const $ = cheerio.load(res.body);
+    const headlines = extractHeadlines($, res.finalUrl || target);
     $("script, style, noscript, svg").remove();
-    const text = $("body").text().replace(/\s+/g, " ").trim();
+    const rendered = $("body").text().replace(/\s+/g, " ").trim();
+
+    // The section may itself be client-rendered; recover its payload too.
+    const payload =
+      rendered.length < SHELL_TEXT_CHARS ? extractNextPayloadText(res.body) : "";
+    const usePayload =
+      payload.length >= MIN_TEXT_CHARS && payload.length > rendered.length * 2;
+    const text = usePayload ? payload : rendered;
     if (text.length < MIN_TEXT_CHARS) continue;
 
     return {
@@ -431,8 +439,8 @@ async function tryContentPaths(
       status: "ok",
       text,
       chars: text.length,
-      headlines: extractHeadlines($, res.finalUrl || target),
-      via: "html",
+      headlines,
+      via: usePayload ? "payload" : "html",
       reason: `Үндсэн хуудас хоосон тул ${candidate} хэсгээс уншлаа.`,
     };
   }
