@@ -843,9 +843,21 @@ export function matchHeadlines(
   results: NewsSourceResult[],
   terms: MatchTerm[],
 ): (NewsHeadline & { source: string })[] {
+  // A name has to be a word, not a run of letters inside one. Three-letter
+  // tickers are the problem: "АПУ" sits inside "Стартапуудад" and "Сүү"
+  // inside "сүүлийн", and both filed unrelated stories under a company.
+  // Mongolian separates the suffix from a company name with a space or a
+  // hyphen — "Сүү ХК-ийн", "АПУ-гийн", "“Бодь даатгал” ХК" — so requiring
+  // a non-letter on each side keeps the real mentions and drops the rest.
   const needles = terms
     .filter((t): t is string => typeof t === "string")
-    .map((t) => t.toLowerCase());
+    .map(
+      (t) =>
+        new RegExp(
+          `(?<![\\p{L}\\p{N}])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`,
+          "iu",
+        ),
+    );
   const patterns = terms.filter((t): t is RegExp => t instanceof RegExp);
   const seen = new Set<string>();
   const matches: (NewsHeadline & { source: string })[] = [];
@@ -854,10 +866,9 @@ export function matchHeadlines(
     if (result.status !== "ok") continue;
     const source = hostOf(result.url) ?? result.url;
     for (const headline of result.headlines) {
-      const haystack = `${headline.title} ${headline.summary ?? ""}`.toLowerCase();
+      const haystack = `${headline.title} ${headline.summary ?? ""}`;
       const named =
-        needles.some((n) => haystack.includes(n)) ||
-        patterns.some((p) => p.test(haystack));
+        needles.some((n) => n.test(haystack)) || patterns.some((p) => p.test(haystack));
       if (!named) continue;
       // Keyed by title as well as address: a Facebook page's posts share the
       // page's URL when no permalink is present, and keying on the URL alone

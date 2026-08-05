@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getStockDetailFresh } from "@/lib/data";
 import { fetchCompanyNews } from "@/lib/mse/news";
-import { fetchNewsSources, usableExtracts } from "@/lib/mse/newsSources";
+import {
+  companyMatchTerms,
+  fetchNewsSources,
+  usableExtracts,
+} from "@/lib/mse/newsSources";
 import { getSettings } from "@/lib/settings";
 import {
   AllProvidersFailedError,
@@ -71,6 +75,12 @@ export async function GET(
   if (settings.newsSources.length > 0) {
     try {
       const results = await fetchNewsSources(settings.newsSources, {
+        // Sources that can be queried are asked about this company, so the
+        // prompt gets its coverage rather than only the day's front page.
+        searchTerms: companyMatchTerms(
+          detail.security.symbol,
+          detail.security.name,
+        ).filter((t): t is string => typeof t === "string"),
         apifyToken: settings.apifyToken,
         facebookToken: settings.facebookToken,
         facebookCookie: settings.facebookCookie,

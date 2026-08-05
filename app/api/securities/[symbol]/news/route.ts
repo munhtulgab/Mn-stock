@@ -22,10 +22,12 @@ const CACHE_MS = 60 * 60 * 1000;
  * a date field (v2), then began matching on an item's body rather than its
  * title alone (v3), and then gained tavanbogdcapital.com as an API-read
  * source (v4), then bloombergtv.mn, which is asked about the company by
- * name rather than filtered afterwards (v5). A row cached under an older
- * version is missing whatever the newer one would have found.
+ * name rather than filtered afterwards (v5), and then required a company
+ * name to be a word rather than a run of letters inside one (v6). A row
+ * cached under an older version is missing whatever the newer one would
+ * have found — or carries what it should not have matched.
  */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 interface NewsSnapshot {
   key: string;
@@ -105,6 +107,11 @@ async function build(
   return {
     mse: mseResult.status === "fulfilled" ? mseResult.value : [],
     external: matchHeadlines(external, terms)
+      // Newest first before the cap, not after. Sources are read in the
+      // order they were configured, and the last of them returned 64
+      // matches going back to 2022 — enough to fill the list with old
+      // stories while this week's sat below the cut.
+      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
       .slice(0, 12)
       // The body was there to match on, not to keep: storing whole articles
       // would bloat the snapshot and send them to the phone for nothing.

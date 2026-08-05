@@ -93,7 +93,7 @@ const MAX_SEARCHES = 2;
  * one — which would file this week's company report under a notice from
  * 2023. The article page states it, so a bounded number are filled in.
  */
-const MAX_DATE_LOOKUPS = 6;
+const MAX_DATE_LOOKUPS = 12;
 
 async function articleDate(url: string): Promise<string> {
   try {
