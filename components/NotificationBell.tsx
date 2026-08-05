@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BellIcon } from "./icons";
+import { useToast } from "./Toast";
+import { BellIcon, SendIcon } from "./icons";
 
 type State = "unsupported" | "checking" | "denied" | "off" | "on" | "busy";
 
@@ -15,6 +16,7 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
 }
 
 export default function NotificationBell() {
+  const toast = useToast();
   const [state, setState] = useState<State>("checking");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -47,7 +49,11 @@ export default function NotificationBell() {
   async function subscribe() {
     const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     if (!publicKey) {
-      alert("Push notification тохируулагдаагүй байна (VAPID key алга).");
+      toast({
+        variant: "error",
+        title: "Push тохируулаагүй байна",
+        body: "NEXT_PUBLIC_VAPID_PUBLIC_KEY тохируулаагүй тул бүртгүүлэх боломжгүй.",
+      });
       return;
     }
     setState("busy");
@@ -68,9 +74,11 @@ export default function NotificationBell() {
         body: JSON.stringify(sub.toJSON()),
       });
       setState("on");
+      toast({ variant: "success", title: "Мэдэгдэл идэвхжлээ" });
     } catch (err) {
       console.error("subscribe failed", err);
       setState("off");
+      toast({ variant: "error", title: "Бүртгүүлж чадсангүй" });
     }
   }
 
@@ -88,9 +96,11 @@ export default function NotificationBell() {
         await sub.unsubscribe();
       }
       setState("off");
+      toast({ title: "Мэдэгдэл унтраалаа" });
     } catch (err) {
       console.error("unsubscribe failed", err);
       setState("on");
+      toast({ variant: "error", title: "Унтраахад алдаа гарлаа" });
     }
   }
 
@@ -103,10 +113,17 @@ export default function NotificationBell() {
     setTestResult(null);
     try {
       const res = await fetch("/api/push/test", { method: "POST" });
-      const data: { message?: string } = await res.json().catch(() => ({}));
-      setTestResult(data.message ?? `Алдаа (${res.status}).`);
+      const data: { ok?: boolean; message?: string } = await res.json().catch(() => ({}));
+      const message = data.message ?? `Алдаа (${res.status}).`;
+      setTestResult(message);
+      toast({
+        variant: data.ok ? "success" : "error",
+        title: data.ok ? "Туршилтын мэдэгдэл илгээгдлээ" : "Илгээж чадсангүй",
+        body: message,
+      });
     } catch {
       setTestResult("Илгээх үед сүлжээний алдаа гарлаа.");
+      toast({ variant: "error", title: "Сүлжээний алдаа гарлаа" });
     } finally {
       setTesting(false);
     }
@@ -163,7 +180,7 @@ export default function NotificationBell() {
           className="w-full flex items-center justify-between px-4 py-3.5 disabled:opacity-70"
         >
           <span className="flex items-center gap-3 text-sm text-app-text">
-            <BellIcon /> Туршилтын мэдэгдэл илгээх
+            <SendIcon /> Туршилтын мэдэгдэл илгээх
           </span>
           <span className="text-xs text-app-muted text-right max-w-[55%]">
             {testing ? "Илгээж байна…" : (testResult ?? "Шалгах")}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CalendarIcon } from "./icons";
 import {
   Line,
   LineChart,
@@ -59,7 +60,12 @@ export default function PriceChart({ data }: { data: ChartPoint[] }) {
 
   return (
     <div>
-      <div className="flex gap-1.5 mb-3">
+      <div className="flex items-center gap-1.5 mb-3">
+        {/* One marker for the group: repeating it on all four chips would
+            add four glyphs and no information. */}
+        <span className="text-app-muted shrink-0 mr-0.5">
+          <CalendarIcon size={14} />
+        </span>
         {RANGES.map((r, i) => (
           <button
             key={r.label}

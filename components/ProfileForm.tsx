@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { EditIcon } from "./icons";
+import { useToast } from "./Toast";
+import { CloseIcon, EditIcon, SaveIcon } from "./icons";
 
 function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
@@ -20,6 +21,7 @@ export default function ProfileForm({
   phone: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,10 +45,13 @@ export default function ProfileForm({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error || "Хадгалахад алдаа гарлаа");
+        const message = body.error || "Хадгалахад алдаа гарлаа";
+        setError(message);
+        toast({ variant: "error", title: "Хадгалж чадсангүй", body: message });
         return;
       }
       setEditing(false);
+      toast({ variant: "success", title: "Профайл хадгалагдлаа" });
       router.refresh();
     } finally {
       setSaving(false);
@@ -91,16 +96,16 @@ export default function ProfileForm({
               setError(null);
               setEditing(false);
             }}
-            className="flex-1 rounded-xl border border-app-border text-app-text text-sm font-semibold py-2.5"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-app-border text-app-text text-sm font-semibold py-2.5"
           >
-            Болих
+            <CloseIcon size={15} /> Болих
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 rounded-xl bg-brand text-black text-sm font-semibold py-2.5 disabled:opacity-50"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand text-black text-sm font-semibold py-2.5 disabled:opacity-50"
           >
-            {saving ? "Хадгалж байна..." : "Хадгалах"}
+            <SaveIcon size={15} /> {saving ? "Хадгалж байна..." : "Хадгалах"}
           </button>
         </div>
       </form>

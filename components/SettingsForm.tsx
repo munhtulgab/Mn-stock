@@ -1,6 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "./Toast";
+import {
+  CloseIcon,
+  PlusIcon,
+  RefreshIcon,
+  SaveIcon,
+  SearchIcon,
+  SendIcon,
+  TrashIcon,
+} from "./icons";
 
 interface MaskedSettings {
   newsSources: string[];
@@ -56,10 +66,11 @@ const SOURCE_STATUS_LABELS: Record<SourceCheckResult["status"], string> = {
   error: "Алдаа",
 };
 
-const SIGNAL_LABELS: { value: string; label: string }[] = [
-  { value: "BUY", label: "АВАХ" },
-  { value: "SELL", label: "ЗАРАХ" },
-  { value: "HOLD", label: "ХҮЛЭЭХ" },
+/** Glyphs match SignalBadge, so a setting looks like the badge it governs. */
+const SIGNAL_LABELS: { value: string; label: string; icon: React.ReactNode }[] = [
+  { value: "BUY", label: "АВАХ", icon: <path d="M6 2 10.5 9.5h-9z" /> },
+  { value: "SELL", label: "ЗАРАХ", icon: <path d="M6 10 1.5 2.5h9z" /> },
+  { value: "HOLD", label: "ХҮЛЭЭХ", icon: <rect x="1.5" y="5" width="9" height="2" rx="1" /> },
 ];
 
 const PROVIDER_FIELDS: {
@@ -99,6 +110,7 @@ export default function SettingsForm({
 }: {
   initial: MaskedSettings;
 }) {
+  const toast = useToast();
   const [newsSources, setNewsSources] = useState<string[]>(initial.newsSources);
   const [newSourceInput, setNewSourceInput] = useState("");
   const [fbTokenInput, setFbTokenInput] = useState("");
@@ -217,12 +229,16 @@ export default function SettingsForm({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setTestState({ kind: "err", message: data.error || `Алдаа ${res.status}` });
+        const message = data.error || `Алдаа ${res.status}`;
+        setTestState({ kind: "err", message });
+        toast({ variant: "error", title: "SMS илгээгдсэнгүй", body: message });
         return;
       }
       setTestState({ kind: "ok", id: data.messageId });
+      toast({ variant: "success", title: "Тест SMS илгээлээ", body: testTo });
     } catch (err) {
       setTestState({ kind: "err", message: (err as Error).message });
+      toast({ variant: "error", title: "Сүлжээний алдаа гарлаа" });
     }
   }
 
@@ -230,7 +246,11 @@ export default function SettingsForm({
     const v = newSourceInput.trim();
     if (!v) return;
     if (!/^https?:\/\//i.test(v)) {
-      alert("Линк http:// эсвэл https://-ээр эхэлсэн байх ёстой");
+      toast({
+        variant: "error",
+        title: "Линк буруу байна",
+        body: "http:// эсвэл https://-ээр эхэлсэн байх ёстой.",
+      });
       return;
     }
     setNewsSources((prev) => [...prev, v]);
@@ -255,11 +275,21 @@ export default function SettingsForm({
         setSourceCheck({ kind: "err", message: data.error || `Алдаа ${res.status}` });
         return;
       }
+      const results: SourceCheckResult[] = data.results ?? [];
+      const working = results.filter((r) => r.status === "ok").length;
       setSourceCheck({
         kind: "done",
-        results: data.results ?? [],
+        results,
         company: data.company ?? null,
         symbolNotFound: !!data.symbolNotFound,
+      });
+      toast({
+        variant: working === results.length ? "success" : "info",
+        title: `${working}/${results.length} эх сурвалж ажиллаж байна`,
+        body:
+          working === results.length
+            ? undefined
+            : "Ажиллахгүй байгаагийн шалтгааныг жагсаалтаас харна уу.",
       });
     } catch (err) {
       setSourceCheck({ kind: "err", message: (err as Error).message });
@@ -308,9 +338,11 @@ export default function SettingsForm({
       setFbTokenInput("");
       setCaInput("");
       setStatus("saved");
+      toast({ variant: "success", title: "Тохиргоо хадгалагдлаа" });
       setTimeout(() => setStatus("idle"), 2000);
     } catch {
       setStatus("error");
+      toast({ variant: "error", title: "Хадгалахад алдаа гарлаа" });
     }
   }
 
@@ -365,9 +397,9 @@ export default function SettingsForm({
           />
           <button
             onClick={addSource}
-            className="rounded-xl border border-app-border px-4 py-2 text-sm font-medium text-brand"
+            className="flex items-center gap-1.5 rounded-xl border border-app-border px-4 py-2 text-sm font-medium text-brand"
           >
-            Нэмэх
+            <PlusIcon size={15} /> Нэмэх
           </button>
         </div>
         <ul className="space-y-1.5">
@@ -393,7 +425,7 @@ export default function SettingsForm({
                     onClick={() => removeSource(i)}
                     className="text-app-negative text-[11px] ml-3 font-medium shrink-0"
                   >
-                    Устгах
+                    <TrashIcon size={13} /> Устгах
                   </button>
                 </div>
                 {result && (
@@ -447,6 +479,7 @@ export default function SettingsForm({
               disabled={sourceCheck.kind === "checking"}
               className="flex-1 rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
             >
+              <RefreshIcon size={15} />
               {sourceCheck.kind === "checking"
                 ? "Шалгаж байна..."
                 : "Эх сурвалжуудыг шалгах"}
@@ -644,12 +677,15 @@ export default function SettingsForm({
                   type="button"
                   aria-pressed={on}
                   onClick={() => toggleSignal(s.value)}
-                  className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors ${
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors ${
                     on
                       ? "bg-brand text-black"
                       : "bg-app-bg text-app-muted border border-app-border"
                   }`}
                 >
+                  <svg viewBox="0 0 12 12" width="9" height="9" fill="currentColor" aria-hidden>
+                    {s.icon}
+                  </svg>
                   {s.label}
                 </button>
               );
@@ -720,6 +756,7 @@ export default function SettingsForm({
               disabled={!smsEnabled || !smsCurrent.apiKey || keyCheck.kind === "checking"}
               className="w-full rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
             >
+              <SearchIcon size={15} />
               {keyCheck.kind === "checking" ? "Шалгаж байна..." : "Түлхүүр шалгах"}
             </button>
             {keyCheck.kind === "ok" && (
@@ -779,9 +816,9 @@ export default function SettingsForm({
                 type="button"
                 onClick={addRecipient}
                 disabled={!smsEnabled}
-                className="rounded-xl border border-app-border px-4 py-2 text-sm font-medium text-brand disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-xl border border-app-border px-4 py-2 text-sm font-medium text-brand disabled:opacity-50"
               >
-                Нэмэх
+                <PlusIcon size={15} /> Нэмэх
               </button>
             </div>
             <ul className="space-y-1.5">
@@ -796,7 +833,7 @@ export default function SettingsForm({
                     onClick={() => setSmsRecipients((prev) => prev.filter((x) => x !== r))}
                     className="text-app-negative text-[11px] font-medium"
                   >
-                    Устгах
+                    <TrashIcon size={13} /> Устгах
                   </button>
                 </li>
               ))}
@@ -823,6 +860,7 @@ export default function SettingsForm({
                 disabled={!smsEnabled || !testTo.trim() || testState.kind === "sending"}
                 className="rounded-xl border border-app-border px-4 py-2 text-sm font-medium text-brand disabled:opacity-50"
               >
+                <SendIcon size={15} />
                 {testState.kind === "sending" ? "Илгээж байна..." : "Илгээх"}
               </button>
             </div>
@@ -846,15 +884,16 @@ export default function SettingsForm({
           <button
             onClick={reset}
             disabled={status === "saving"}
-            className="rounded-xl border border-app-border bg-app-card text-app-text text-sm font-semibold py-3 disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-app-border bg-app-card text-app-text text-sm font-semibold py-3 disabled:opacity-50"
           >
-            Болих
+            <CloseIcon size={15} /> Болих
           </button>
           <button
             onClick={save}
             disabled={status === "saving"}
-            className="rounded-xl bg-brand text-black text-sm font-semibold py-3 disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-brand text-black text-sm font-semibold py-3 disabled:opacity-50"
           >
+            <SaveIcon size={15} />
             {status === "saving" ? "Хадгалж байна..." : "Хадгалах"}
           </button>
         </div>

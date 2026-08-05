@@ -7,6 +7,15 @@ import SignalBadge from "./SignalBadge";
 import Sparkline from "./Sparkline";
 import StockAvatar from "./StockAvatar";
 import Num, { Pct } from "./Num";
+import { SearchIcon } from "./icons";
+
+/** The same solid glyphs SignalBadge uses, so a filter looks like its rows. */
+const FILTER_ICONS: Record<string, React.ReactNode> = {
+  ALL: <circle cx="6" cy="6" r="4" />,
+  BUY: <path d="M6 2 10.5 9.5h-9z" />,
+  SELL: <path d="M6 10 1.5 2.5h9z" />,
+  HOLD: <rect x="1.5" y="5" width="9" height="2" rx="1" />,
+};
 
 type SortKey = "symbol" | "lastPrice" | "changePct" | "score";
 
@@ -64,23 +73,31 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
   return (
     <div>
       <div className="flex flex-col gap-3 mb-3">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Симбол эсвэл нэрээр хайх..."
-          className="w-full rounded-2xl border border-app-border bg-app-card px-4 py-3 text-sm outline-none focus:border-brand placeholder:text-app-muted"
-        />
+        <div className="relative">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-app-muted">
+            <SearchIcon size={16} />
+          </span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Симбол эсвэл нэрээр хайх..."
+            className="w-full rounded-2xl border border-app-border bg-app-card pl-11 pr-4 py-3 text-sm outline-none focus:border-brand placeholder:text-app-muted"
+          />
+        </div>
         <div className="flex gap-2 text-xs overflow-x-auto">
           {(["ALL", "BUY", "SELL", "HOLD"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setSignalFilter(f)}
-              className={`shrink-0 rounded-full px-3 py-1.5 font-medium ${
+              className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 font-medium ${
                 signalFilter === f
                   ? "bg-brand text-black"
                   : "bg-app-card border border-app-border text-app-muted"
               }`}
             >
+              <svg viewBox="0 0 12 12" width="9" height="9" fill="currentColor" aria-hidden>
+                {FILTER_ICONS[f]}
+              </svg>
               {f === "ALL"
                 ? `Бүгд (${rows.length})`
                 : f === "BUY"

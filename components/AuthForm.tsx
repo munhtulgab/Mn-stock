@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { UserIcon, LockIcon, PhoneIcon, MailIcon, EyeIcon } from "./icons";
+import { UserIcon, LockIcon, PhoneIcon, MailIcon, EyeIcon, LoginIcon, UserPlusIcon } from "./icons";
 
 function Field({
   icon,
@@ -85,9 +85,9 @@ export function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-2xl bg-brand text-black py-3.5 text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-60 mt-2"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand text-black py-3.5 text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-60 mt-2"
         >
-          {loading ? "Түр хүлээнэ үү..." : "Нэвтрэх"}
+          <LoginIcon size={16} /> {loading ? "Түр хүлээнэ үү..." : "Нэвтрэх"}
         </button>
       </form>
       <p className="text-center text-sm text-app-muted mt-6">
@@ -203,9 +203,9 @@ export function SignupForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-2xl bg-brand text-black py-3.5 text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-60 mt-2"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand text-black py-3.5 text-sm font-semibold hover:bg-brand-dark transition-colors disabled:opacity-60 mt-2"
         >
-          {loading ? "Түр хүлээнэ үү..." : "Бүртгэл үүсгэх"}
+          <UserPlusIcon size={16} /> {loading ? "Түр хүлээнэ үү..." : "Бүртгэл үүсгэх"}
         </button>
       </form>
       <p className="text-center text-sm text-app-muted mt-6">

@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import Num from "./Num";
+import { useToast } from "./Toast";
+import { ArrowDownIcon, ArrowUpIcon, CloseIcon } from "./icons";
 import type { OrderSide } from "@/lib/types";
 
 export default function TradeModal({
@@ -18,6 +20,7 @@ export default function TradeModal({
   ownedQuantity: number;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [open, setOpen] = useState<OrderSide | null>(null);
   const [quantity, setQuantity] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,7 +50,14 @@ export default function TradeModal({
         setError(body.error || "Алдаа гарлаа");
         return;
       }
+      const filled = open;
       close();
+      toast({
+        variant: "success",
+        title: filled === "BUY" ? "Худалдан авалт хийгдлээ" : "Зарлаа",
+        body: `${symbol} · ${qty} ширхэг · ${(body.price ?? currentPrice ?? 0).toLocaleString("mn-MN")}₮`,
+        action: { label: "Багц", onClick: () => router.push("/portfolio") },
+      });
       router.refresh();
     } catch {
       setError("Сүлжээний алдаа гарлаа");
@@ -62,16 +72,16 @@ export default function TradeModal({
         <button
           onClick={() => setOpen("SELL")}
           disabled={!currentPrice}
-          className="rounded-2xl border border-app-negative/30 bg-app-negative-bg text-app-negative font-semibold py-3.5 text-sm disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-2xl border border-app-negative/30 bg-app-negative-bg text-app-negative font-semibold py-3.5 text-sm disabled:opacity-50"
         >
-          Зарах
+          <ArrowDownIcon size={16} /> Зарах
         </button>
         <button
           onClick={() => setOpen("BUY")}
           disabled={!currentPrice}
-          className="rounded-2xl bg-brand text-black font-semibold py-3.5 text-sm disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-2xl bg-brand text-black font-semibold py-3.5 text-sm disabled:opacity-50"
         >
-          Авах
+          <ArrowUpIcon size={16} /> Авах
         </button>
       </div>
 
@@ -84,8 +94,8 @@ export default function TradeModal({
                 <h3 className="font-bold text-app-text">
                   {symbol} {open === "BUY" ? "авах" : "зарах"}
                 </h3>
-                <button onClick={close} className="text-app-muted text-xl leading-none">
-                  ×
+                <button onClick={close} aria-label="Хаах" className="text-app-muted">
+                  <CloseIcon />
                 </button>
               </div>
 
@@ -132,10 +142,11 @@ export default function TradeModal({
               <button
                 onClick={submit}
                 disabled={busy || qty <= 0}
-                className={`w-full rounded-2xl py-3.5 font-semibold text-sm disabled:opacity-50 ${
+                className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 font-semibold text-sm disabled:opacity-50 ${
                   open === "BUY" ? "bg-brand text-black" : "bg-app-negative text-white"
                 }`}
               >
+                {open === "BUY" ? <ArrowUpIcon size={16} /> : <ArrowDownIcon size={16} />}
                 {busy ? "Илгээж байна..." : open === "BUY" ? "Худалдаж авах" : "Зарах"}
               </button>
             </div>

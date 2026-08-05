@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import SignalBadge from "./SignalBadge";
+import { RefreshIcon, SparkIcon } from "./icons";
 import type { AiSignal } from "@/lib/types";
 
 type State =
@@ -59,9 +60,9 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
         {state.status === "ready" && (
           <button
             onClick={() => load(true)}
-            className="text-xs text-brand font-medium"
+            className="flex items-center gap-1 text-xs text-brand font-medium"
           >
-            Дахин тооцоолох
+            <RefreshIcon size={13} /> Дахин тооцоолох
           </button>
         )}
       </div>
@@ -69,9 +70,9 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
       {state.status === "idle" && (
         <button
           onClick={() => load(false)}
-          className="w-full rounded-2xl bg-brand text-black text-base font-bold py-4 active:scale-[0.98] transition-transform"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand text-black text-base font-bold py-4 active:scale-[0.98] transition-transform"
         >
-          AI дүн шинжилгээ хийх
+          <SparkIcon size={18} /> AI дүн шинжилгээ хийх
         </button>
       )}
 
