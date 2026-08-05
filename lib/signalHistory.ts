@@ -49,9 +49,13 @@ async function sendSignalSms(db: Db, body: string): Promise<number> {
   return results.filter(Boolean).length;
 }
 
-export async function checkSignalChangesAndNotify(
-  db: Db,
-): Promise<{ changes: SignalChange[]; notified: boolean; smsSent: number }> {
+export async function checkSignalChangesAndNotify(db: Db): Promise<{
+  changes: SignalChange[];
+  notified: boolean;
+  smsSent: number;
+  /** Delivery failures, so a silent run says why it was silent. */
+  pushErrors?: string[];
+}> {
   const rows = await getDashboardRows(db);
   const priced = rows.filter((r) => r.lastPrice !== null);
 
@@ -116,12 +120,17 @@ export async function checkSignalChangesAndNotify(
   const [result, smsSent] = await Promise.all([
     notifications.pushEnabled
       ? sendPushToAll(db, { title, body, url: "/", tag: "mse-signal-change" })
-      : Promise.resolve({ sent: 0 }),
+      : Promise.resolve({ sent: 0, pruned: 0, errors: ["Push унтраалттай."] }),
     sendSignalSms(db, `${title}. ${body}`).catch((err) => {
       console.error("signal sms failed", err);
       return 0;
     }),
   ]);
 
-  return { changes, notified: result.sent > 0, smsSent };
+  return {
+    changes,
+    notified: result.sent > 0,
+    smsSent,
+    pushErrors: result.errors.length > 0 ? result.errors : undefined,
+  };
 }

@@ -16,6 +16,8 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
 
 export default function NotificationBell() {
   const [state, setState] = useState<State>("checking");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   useEffect(() => {
     async function check() {
@@ -92,7 +94,41 @@ export default function NotificationBell() {
     }
   }
 
-  if (state === "unsupported" || state === "checking") return null;
+  /**
+   * Proves the whole chain works now, instead of leaving the operator to
+   * wonder through a day in which no signal happened to change.
+   */
+  async function sendTest() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/push/test", { method: "POST" });
+      const data: { message?: string } = await res.json().catch(() => ({}));
+      setTestResult(data.message ?? `Алдаа (${res.status}).`);
+    } catch {
+      setTestResult("Илгээх үед сүлжээний алдаа гарлаа.");
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  if (state === "checking") return null;
+
+  // iOS only grants push to an installed PWA, so in a Safari tab the API is
+  // simply absent. Saying nothing here is what makes it look like alerts are
+  // broken, when the app has never been allowed to ask for them.
+  if (state === "unsupported") {
+    return (
+      <div className="w-full flex items-center justify-between px-4 py-3.5">
+        <span className="flex items-center gap-3 text-sm text-app-text">
+          <BellIcon /> Push мэдэгдэл
+        </span>
+        <span className="text-xs text-app-muted text-right max-w-[60%]">
+          Хөтөч дэмжихгүй байна — iPhone дээр эхлээд “Нүүр дэлгэцэд нэмэх”
+        </span>
+      </div>
+    );
+  }
 
   const label =
     state === "denied"
@@ -102,21 +138,38 @@ export default function NotificationBell() {
         : "Идэвхгүй";
 
   return (
-    <button
-      onClick={state === "on" ? unsubscribe : state === "denied" ? undefined : subscribe}
-      disabled={state === "busy" || state === "denied"}
-      className="w-full flex items-center justify-between px-4 py-3.5 disabled:opacity-70"
-    >
-      <span className="flex items-center gap-3 text-sm text-app-text">
-        <BellIcon /> Push мэдэгдэл
-      </span>
-      <span
-        className={`text-xs font-medium rounded-full px-2.5 py-1 ${
-          state === "on" ? "bg-app-positive-bg text-app-positive" : "bg-app-bg text-app-muted"
-        }`}
+    <>
+      <button
+        onClick={state === "on" ? unsubscribe : state === "denied" ? undefined : subscribe}
+        disabled={state === "busy" || state === "denied"}
+        className="w-full flex items-center justify-between px-4 py-3.5 disabled:opacity-70"
       >
-        {label}
-      </span>
-    </button>
+        <span className="flex items-center gap-3 text-sm text-app-text">
+          <BellIcon /> Push мэдэгдэл
+        </span>
+        <span
+          className={`text-xs font-medium rounded-full px-2.5 py-1 ${
+            state === "on" ? "bg-app-positive-bg text-app-positive" : "bg-app-bg text-app-muted"
+          }`}
+        >
+          {label}
+        </span>
+      </button>
+
+      {state === "on" && (
+        <button
+          onClick={sendTest}
+          disabled={testing}
+          className="w-full flex items-center justify-between px-4 py-3.5 disabled:opacity-70"
+        >
+          <span className="flex items-center gap-3 text-sm text-app-text">
+            <BellIcon /> Туршилтын мэдэгдэл илгээх
+          </span>
+          <span className="text-xs text-app-muted text-right max-w-[55%]">
+            {testing ? "Илгээж байна…" : (testResult ?? "Шалгах")}
+          </span>
+        </button>
+      )}
+    </>
   );
 }

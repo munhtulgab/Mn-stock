@@ -46,18 +46,39 @@ export interface NotificationPayload {
   tag?: string;
 }
 
+export interface PushResult {
+  sent: number;
+  pruned: number;
+  /** Why the remaining subscriptions were not delivered to, if any. */
+  errors: string[];
+}
+
+/** The push service's host, which is what identifies a device's browser. */
+function endpointHost(endpoint: string): string {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return endpoint.slice(0, 40);
+  }
+}
+
 /**
  * Sends a push notification to every stored subscription. Subscriptions
  * that the push service reports as gone (404/410 — the user uninstalled
  * the app or revoked permission) are pruned automatically.
+ *
+ * Anything else that goes wrong is returned rather than only logged: a push
+ * that never arrives looks identical from the outside whether the keys are
+ * mismatched, the payload is too large or the service rejected the request,
+ * and the operator has no other way to tell which.
  */
 export async function sendPushToAll(
   db: Db,
   payload: NotificationPayload,
-): Promise<{ sent: number; pruned: number }> {
+): Promise<PushResult> {
   if (!isConfigured()) {
     console.warn("Push not configured: VAPID keys missing");
-    return { sent: 0, pruned: 0 };
+    return { sent: 0, pruned: 0, errors: ["VAPID түлхүүр тохируулаагүй."] };
   }
   configureWebPush();
 
@@ -68,6 +89,7 @@ export async function sendPushToAll(
 
   let sent = 0;
   let pruned = 0;
+  const errors: string[] = [];
 
   await Promise.all(
     subs.map(async (sub) => {
@@ -81,16 +103,21 @@ export async function sendPushToAll(
         );
         sent++;
       } catch (err) {
-        const statusCode = (err as { statusCode?: number }).statusCode;
+        const { statusCode, body } = err as { statusCode?: number; body?: string };
         if (statusCode === 404 || statusCode === 410) {
           await removeSubscription(db, sub.endpoint);
           pruned++;
         } else {
           console.error("push send failed", sub.endpoint, err);
+          errors.push(
+            `${endpointHost(sub.endpoint)}: ${statusCode ?? "?"} ${
+              body?.trim() || (err as Error).message
+            }`.slice(0, 200),
+          );
         }
       }
     }),
   );
 
-  return { sent, pruned };
+  return { sent, pruned, errors };
 }
