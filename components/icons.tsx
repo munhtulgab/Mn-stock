@@ -342,17 +342,3 @@ export function CalendarIcon({ size = 18 }: IconProps) {
     </svg>
   );
 }
-
-export function ReceiptIcon({ size = 18 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path
-        d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      <path d="M9.5 8.5h5M9.5 12.5h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  );
-}

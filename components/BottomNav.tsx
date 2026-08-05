@@ -36,12 +36,11 @@ export default function BottomNav() {
             active = pathname === "/";
           } else if (href === "/discover") {
             active = pathname.startsWith("/discover") || pathname.startsWith("/stock");
+          } else if (href === "/portfolio") {
+            // The full order history is the portfolio's own second page.
+            active = pathname.startsWith("/portfolio") || pathname.startsWith("/orders");
           } else if (href === "/profile") {
-            // Order history and settings both hang off the profile tab.
-            active =
-              pathname.startsWith("/profile") ||
-              pathname === "/settings" ||
-              pathname.startsWith("/orders");
+            active = pathname.startsWith("/profile") || pathname === "/settings";
           } else {
             active = pathname.startsWith(href);
           }
