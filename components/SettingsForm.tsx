@@ -26,7 +26,14 @@ interface MaskedSettings {
 
 interface SourceCheckResult {
   url: string;
-  status: "ok" | "login_required" | "empty" | "http_error" | "timeout" | "error";
+  status:
+    | "ok"
+    | "login_required"
+    | "empty"
+    | "http_error"
+    | "tls_error"
+    | "timeout"
+    | "error";
   chars: number;
   reason: string | null;
   headlines: number;
@@ -37,6 +44,7 @@ const SOURCE_STATUS_LABELS: Record<SourceCheckResult["status"], string> = {
   login_required: "Нэвтрэлт шаардана",
   empty: "Текст олдсонгүй",
   http_error: "Сайт татгалзлаа",
+  tls_error: "SSL сертификат",
   timeout: "Хугацаа хэтэрлээ",
   error: "Алдаа",
 };

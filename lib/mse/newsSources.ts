@@ -16,6 +16,7 @@ export type NewsSourceStatus =
   | "login_required"
   | "empty"
   | "http_error"
+  | "tls_error"
   | "timeout"
   | "error";
 
@@ -77,6 +78,60 @@ function isLoginUrl(url: string): boolean {
   return /\/(login|signin|sign_in|checkpoint)(\.php|\/|$|\?)/i.test(url);
 }
 
+const TLS_MESSAGE =
+  "Сайтын SSL сертификатын гинж дутуу (intermediate certificate илгээдэггүй). " +
+  "Хөтөч дээр хэвийн нээгддэг ч сервер талаас татах боломжгүй. Сайтын эзэн " +
+  "сертификатаа бүрэн тохируулах хүртэл ашиглах боломжгүй.";
+
+/**
+ * A certificate chain the site itself serves incompletely fails here but not
+ * in a browser, which quietly fetches the missing intermediate. Worth its own
+ * status: it is neither a bot block nor an outage, and no retry will fix it.
+ */
+function isTlsFailure(err: unknown): boolean {
+  const code = (err as { cause?: { code?: string } })?.cause?.code ?? "";
+  return (
+    /^(UNABLE_TO_VERIFY_LEAF_SIGNATURE|UNABLE_TO_GET_ISSUER_CERT|UNABLE_TO_GET_ISSUER_CERT_LOCALLY|CERT_HAS_EXPIRED|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN|ERR_TLS_CERT_ALTNAME_INVALID)$/.test(
+      code,
+    ) || /certificate|SSL routines/i.test((err as Error)?.message ?? "")
+  );
+}
+
+/**
+ * Egress proxies surface an upstream TLS failure as their own 5xx with the
+ * OpenSSL reason in the body, so the same misconfiguration has to be
+ * recognised from a response as well as from a thrown error.
+ */
+function bodyShowsTlsFailure(body: string): boolean {
+  return /TLS_error|CERTIFICATE_VERIFY_FAILED|X509_verify_cert/i.test(body);
+}
+
+/**
+ * Anchor text often carries the article's timestamp ahead of the title,
+ * because the link wraps both. Drop a leading RFC-822 or ISO date so the
+ * headline reads as a headline, and report whether one was there: a date
+ * beside a link is strong evidence the link is an article rather than a
+ * menu entry, which lets a dated headline clear a lower length bar.
+ */
+function cleanHeadline(text: string): { title: string; dated: boolean } {
+  const title = text
+    .replace(
+      /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*\d{1,2}\s+\w{3,}\s+\d{4}[\s,]*\d{0,2}:?\d{0,2}:?\d{0,2}\s*(?:[+-]\d{4}|GMT|UTC|Z)?\s*/i,
+      "",
+    )
+    .replace(/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?)?\s*/, "")
+    .trim();
+  return { title, dated: title.length !== text.length };
+}
+
+/**
+ * Long enough to be a headline rather than "Бидэнтэй холбогдох". Measured
+ * against real Mongolian news sites: below ~25 characters an undated anchor
+ * is almost always nav or footer boilerplate.
+ */
+const MIN_HEADLINE_CHARS = 25;
+const MIN_DATED_HEADLINE_CHARS = 12;
+
 function fail(
   url: string,
   status: NewsSourceStatus,
@@ -94,8 +149,9 @@ function extractHeadlines($: cheerio.CheerioAPI, baseUrl: string): NewsHeadline[
   const headlines: NewsHeadline[] = [];
 
   $("a").each((_, el) => {
-    const title = $(el).text().replace(/\s+/g, " ").trim();
-    if (title.length < 25 || title.length > 250) return;
+    const { title, dated } = cleanHeadline($(el).text().replace(/\s+/g, " ").trim());
+    const min = dated ? MIN_DATED_HEADLINE_CHARS : MIN_HEADLINE_CHARS;
+    if (title.length < min || title.length > 250) return;
     const href = $(el).attr("href");
     if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
 
@@ -216,15 +272,17 @@ async function extractOne(
     if (isLoginUrl(res.url)) {
       return fail(url, "login_required", "Нэвтрэх хуудас руу шилжүүлсэн байна.");
     }
+    const html = await res.text();
+
     if (!res.ok) {
+      if (bodyShowsTlsFailure(html)) return fail(url, "tls_error", TLS_MESSAGE);
       return fail(
         url,
         "http_error",
-        `Сайт ${res.status} хариу буцаалаа${res.status === 403 || res.status === 503 ? " (бот хамгаалалт байж магадгүй)" : ""}.`,
+        `Сайт ${res.status} хариу буцаалаа${res.status === 403 || res.status === 429 ? " (бот хамгаалалт байж магадгүй)" : ""}.`,
       );
     }
 
-    const html = await res.text();
     const $ = cheerio.load(html);
     $("script, style, noscript, svg").remove();
     const text = $("body").text().replace(/\s+/g, " ").trim();
@@ -245,15 +303,16 @@ async function extractOne(
       headlines: extractHeadlines($, res.url || url),
     };
   } catch (err) {
-    const timeout = err instanceof Error && err.name === "TimeoutError";
     console.error(`news source fetch failed for ${url}`, err);
-    return fail(
-      url,
-      timeout ? "timeout" : "error",
-      timeout
-        ? `Хугацаа хэтэрлээ (${TIMEOUT_MS / 1000}s дотор хариу ирсэнгүй).`
-        : (err as Error).message,
-    );
+    if (err instanceof Error && err.name === "TimeoutError") {
+      return fail(
+        url,
+        "timeout",
+        `Хугацаа хэтэрлээ (${TIMEOUT_MS / 1000}s дотор хариу ирсэнгүй).`,
+      );
+    }
+    if (isTlsFailure(err)) return fail(url, "tls_error", TLS_MESSAGE);
+    return fail(url, "error", (err as Error).message);
   }
 }
 
