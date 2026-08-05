@@ -4,6 +4,11 @@ import {
   parsePemBundle,
   type PageResponse,
 } from "@/lib/tls/extraCa";
+import {
+  fetchMarketInfoNews,
+  isMarketInfoHost,
+  newsToText,
+} from "@/lib/marketinfo/news";
 import { extractNextPayloadText } from "./nextPayload";
 import {
   FEED_PATHS,
@@ -38,7 +43,7 @@ export interface NewsSourceResult extends NewsSourceExtract {
   chars: number;
   headlines: NewsHeadline[];
   /** Which route produced the content. */
-  via?: "feed" | "html" | "payload";
+  via?: "feed" | "html" | "payload" | "api";
   /** Shown in settings when the source didn't yield anything usable. */
   reason?: string;
 }
@@ -397,6 +402,28 @@ async function findFeed(
 }
 
 /**
+ * marketinfo.mn renders entirely on the client, so no amount of markup
+ * reading helps — its news comes from the JSON API the site itself calls.
+ */
+async function fetchMarketInfo(url: string): Promise<NewsSourceResult> {
+  try {
+    const items = await fetchMarketInfoNews();
+    const text = newsToText(items);
+    return {
+      url,
+      status: "ok",
+      text,
+      chars: text.length,
+      headlines: items.map((i) => ({ title: i.title, url: i.url })),
+      via: "api",
+      reason: "marketinfo.mn-ийн JSON API-аас уншлаа.",
+    };
+  } catch (err) {
+    return fail(url, "error", `marketinfo API: ${(err as Error).message}`);
+  }
+}
+
+/**
  * Reads a site's news section when the address configured was its root and
  * that root turned out to be an empty shell. Only ever a fallback, and the
  * address that actually produced the text is reported back.
@@ -460,6 +487,7 @@ async function extractOne(
   const host = hostOf(url);
   if (!host) return fail(url, "error", "Линк буруу байна.");
   if (hostMatches(host, FACEBOOK_HOSTS)) return fetchFacebook(url, facebookToken);
+  if (isMarketInfoHost(host)) return fetchMarketInfo(url);
   if (hostMatches(host, LOGIN_WALLED_HOSTS)) {
     return fail(
       url,
