@@ -5,11 +5,11 @@ import { getCurrentUser } from "@/lib/auth";
 import { getStockDetailFresh } from "@/lib/data";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import SignalBadge from "@/components/SignalBadge";
-import Num, { Pct } from "@/components/Num";
 import PriceChart, { type ChartPoint } from "@/components/PriceChart";
 import AiSignalPanel from "@/components/AiSignalPanel";
 import CompanyNews from "@/components/CompanyNews";
 import MarketInfoPanel from "@/components/MarketInfoPanel";
+import LivePrice from "@/components/LivePrice";
 import TradeModal from "@/components/TradeModal";
 import WatchlistButton from "@/components/WatchlistButton";
 
@@ -27,6 +27,11 @@ function fmt(value: number | null | undefined, digits = 2): string {
 function money(value: number | null | undefined, digits = 2): string {
   const text = fmt(value, digits);
   return text === "—" ? text : `${text}\u00A0₮`;
+}
+
+/** Mongolia is UTC+8 year round; the exchange keeps no daylight saving. */
+function ulaanbaatarToday(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function sma(values: number[], period: number, index: number): number | null {
@@ -94,20 +99,19 @@ export default async function StockDetailPage({
               </span>
               Идэвхтэй
             </span>
-            <span>
-              · Ангилал {security.classification} · {last?.date ?? "—"}
-            </span>
+            <span>· Ангилал {security.classification}</span>
           </p>
         </div>
         <div className="flex items-start gap-2">
-          <div className="text-right">
-            <div className="text-2xl text-app-text">
-              {last ? <Num value={last.close} digits={2} suffix="₮" /> : <span className="text-app-muted">—</span>}
-            </div>
-            <div className="text-sm">
-              <Pct value={changePct} />
-            </div>
-          </div>
+          <LivePrice
+            symbol={security.symbol}
+            initial={{
+              price: last?.close ?? null,
+              changePct,
+              date: last?.date ?? null,
+              isToday: last?.date === ulaanbaatarToday(),
+            }}
+          />
           <WatchlistButton symbol={security.symbol} initialActive={inWatchlist} />
         </div>
       </div>
