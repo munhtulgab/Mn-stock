@@ -22,16 +22,19 @@ const TIMEOUT_MS = 12_000;
 const CACHE_MS = 30_000;
 
 /**
- * The site reads these through one RTK Query base URL. `service` answers the
- * news endpoints; the trading data sits on the api host, and the order here
- * lets whichever responds win rather than pinning a guess.
+ * The site reads everything through one base URL, with exchange data under
+ * an `mse/` prefix — visible in a browser console as a CORS complaint about
+ * `service.marketinfo.mn/mse/indexs`. The alternatives are kept behind it in
+ * case the prefix moves.
  */
 export const QUOTE_ENDPOINTS = [
+  "https://service.marketinfo.mn/mse/trades",
+  "https://api.marketinfo.mn/mse/trades",
   "https://api.marketinfo.mn/trades",
-  "https://api.marketinfo.mn/api/trades",
-  "https://data.marketinfo.mn/trades",
-  "https://service.marketinfo.mn/trades",
 ];
+
+/** Whether the exchange is currently in session, per the same API. */
+export const STATUS_ENDPOINT = "https://service.marketinfo.mn/mse/status";
 
 /** Overrides the built-in list once the working address is known. */
 const CONFIGURED = process.env.MARKETINFO_QUOTES_URL;
@@ -140,6 +143,31 @@ export function parseQuotes(payload: unknown): Map<number, LiveQuote> {
   return quotes;
 }
 
+/**
+ * Whether the exchange is in session, as the exchange itself reports it.
+ * Guessing from the clock would be wrong on holidays and half-days.
+ */
+export async function fetchMarketOpen(): Promise<boolean | null> {
+  if (statusCache && Date.now() - statusCache.at < CACHE_MS) {
+    return statusCache.open;
+  }
+  try {
+    const res = await fetch(STATUS_ENDPOINT, {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!res.ok) return statusCache?.open ?? null;
+    const body = (await res.json()) as { status?: string };
+    // Reported in Mongolian: "Зах зээл хаалттай" when shut.
+    const open = typeof body.status === "string" && !/хаалттай/i.test(body.status);
+    statusCache = { at: Date.now(), open };
+    return open;
+  } catch {
+    return statusCache?.open ?? null;
+  }
+}
+
+let statusCache: { at: number; open: boolean } | null = null;
 let cache: { at: number; quotes: Map<number, LiveQuote> } | null = null;
 let inFlight: Promise<Map<number, LiveQuote>> | null = null;
 

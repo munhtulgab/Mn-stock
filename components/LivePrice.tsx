@@ -11,8 +11,15 @@ interface Quote {
   date: string | null;
   /** Exchange entry time, "HH:MM", when the quote is live. */
   at?: string | null;
-  /** True while marketinfo's order book is answering for the open session. */
+  /** True while the exchange reports itself in session. */
   isLive?: boolean;
+  /** Null when the exchange's status could not be read. */
+  marketOpen?: boolean | null;
+}
+
+/** Mongolia is UTC+8 year round. */
+function todayInUlaanbaatar(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 /** Fast enough to feel current, slow enough not to hammer a third party. */
@@ -91,7 +98,14 @@ export default function LivePrice({
             {quote.at && <span>· {quote.at}</span>}
           </>
         ) : (
-          quote.date && <span>{quote.date}-ний хаалт</span>
+          quote.date && (
+            <span>
+              {quote.date === todayInUlaanbaatar()
+                ? "Өнөөдрийн хаалт"
+                : `${quote.date}-ний хаалт`}
+              {quote.at && ` · ${quote.at}`}
+            </span>
+          )
         )}
       </div>
     </div>

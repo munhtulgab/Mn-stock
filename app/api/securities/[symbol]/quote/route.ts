@@ -3,7 +3,7 @@ import type { Db } from "mongodb";
 import { getDb } from "@/lib/mongodb";
 import { getSettings } from "@/lib/settings";
 import { syncPricesForCompany } from "@/lib/sync";
-import { fetchLiveQuotes } from "@/lib/marketinfo/quotes";
+import { fetchLiveQuotes, fetchMarketOpen } from "@/lib/marketinfo/quotes";
 import type { PricePoint, Security } from "@/lib/types";
 
 /**
@@ -58,10 +58,15 @@ export async function GET(
 
   // Live book first — it is the only source that moves during a session.
   let live = null;
+  let marketOpen: boolean | null = null;
   try {
     const settings = await getSettings(db);
-    const quotes = await fetchLiveQuotes({ extraCaCerts: settings.extraCaCerts });
+    const [quotes, open] = await Promise.all([
+      fetchLiveQuotes({ extraCaCerts: settings.extraCaCerts }),
+      fetchMarketOpen(),
+    ]);
     live = quotes.get(security.companyCode) ?? null;
+    marketOpen = open;
   } catch (err) {
     console.error(`live quote lookup failed for ${symbol}`, err);
   }
@@ -85,7 +90,10 @@ export async function GET(
       date: live.at?.slice(0, 10) ?? today,
       /** Exchange entry time, e.g. "12:58". */
       at: live.at?.slice(11, 16) ?? null,
-      isLive: true,
+      // Live only while the exchange says it is trading; the same figures
+      // become that day's final numbers once the session shuts.
+      isLive: marketOpen === true,
+      marketOpen,
       source: "marketinfo.mn",
       checkedAt: new Date().toISOString(),
     });
