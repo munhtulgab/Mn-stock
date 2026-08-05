@@ -4,6 +4,8 @@ import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getStockDetailFresh } from "@/lib/data";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
+import { getSettings } from "@/lib/settings";
+import { fetchLiveQuotes, fetchMarketOpen } from "@/lib/marketinfo/quotes";
 import SignalBadge from "@/components/SignalBadge";
 import PriceChart, { type ChartPoint } from "@/components/PriceChart";
 import AiSignalPanel from "@/components/AiSignalPanel";
@@ -51,10 +53,18 @@ export default async function StockDetailPage({
   const { security, financials, priceHistory, recommendation, marketMedianPe } =
     detail;
 
-  const [portfolio, watchlist] = await Promise.all([
+  // Resolved during render, not after: leaving it to the client meant the
+  // page painted the stored close and visibly corrected itself a moment later.
+  const settings = await getSettings(db);
+  const [portfolio, watchlist, liveQuotes, marketOpen] = await Promise.all([
     getPortfolioSummary(db, user!._id!),
     getWatchlist(db, user!._id!),
+    fetchLiveQuotes({ extraCaCerts: settings.extraCaCerts }).catch(
+      () => new Map(),
+    ),
+    fetchMarketOpen().catch(() => null),
   ]);
+  const live = liveQuotes.get(security.companyCode) ?? null;
   const holding = portfolio.holdings.find((h) => h.symbol === security.symbol);
   const inWatchlist = watchlist.some((w) => w.symbol === security.symbol);
 
@@ -100,12 +110,24 @@ export default async function StockDetailPage({
         <div className="flex items-start gap-2">
           <LivePrice
             symbol={security.symbol}
-            initial={{
-              price: last?.close ?? null,
-              changePct,
-              date: last?.date ?? null,
-              isLive: false,
-            }}
+            initial={
+              live?.price != null
+                ? {
+                    price: live.price,
+                    lastTrade: live.lastTrade,
+                    changePct: live.changePct,
+                    date: live.at?.slice(0, 10) ?? last?.date ?? null,
+                    at: live.at?.slice(11, 16) ?? null,
+                    isLive: marketOpen === true,
+                    marketOpen,
+                  }
+                : {
+                    price: last?.close ?? null,
+                    changePct,
+                    date: last?.date ?? null,
+                    isLive: false,
+                  }
+            }
           />
           <WatchlistButton symbol={security.symbol} initialActive={inWatchlist} />
         </div>

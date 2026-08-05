@@ -1,5 +1,6 @@
 import type { Db } from "mongodb";
 import { fetchIndexSeries, INDEX_KEYS, type IndexKey } from "@/lib/mse/indices";
+import { fetchLiveIndices } from "@/lib/marketinfo/indices";
 
 /** Trading days drawn in a card's mini trend line. */
 const SPARKLINE_POINTS = 30;
@@ -15,6 +16,8 @@ export interface MarketIndexView {
   change: number | null;
   changePct: number | null;
   sparkline: number[];
+  /** True when the level is the running one rather than a stored close. */
+  live?: boolean;
 }
 
 interface IndexSnapshot {
@@ -54,12 +57,50 @@ async function computeMarketIndices(): Promise<MarketIndexView[]> {
  * trading day, so scraping the full history on every page view would be an
  * expensive way to learn nothing new.
  */
+/**
+ * Replaces the stored level with the running one where marketinfo has it.
+ *
+ * The exchange's series ends at the previous session, so on its own the
+ * cards would show yesterday's level all through today's trading. The
+ * series is still what draws the trend line; only the headline figure and
+ * its change come from the live feed, with today's point appended so the
+ * line ends where the number says it does.
+ */
+async function withLiveLevels(
+  indices: MarketIndexView[],
+): Promise<MarketIndexView[]> {
+  let live: Awaited<ReturnType<typeof fetchLiveIndices>>;
+  try {
+    live = await fetchLiveIndices();
+  } catch {
+    return indices;
+  }
+  if (live.size === 0) return indices;
+
+  return indices.map((index) => {
+    const current = live.get(index.key);
+    if (!current) return index;
+    return {
+      ...index,
+      value: current.value,
+      change: current.change,
+      changePct: current.changePct,
+      date: current.date ?? index.date,
+      sparkline:
+        current.date && current.date > index.date
+          ? [...index.sparkline.slice(1), current.value]
+          : [...index.sparkline.slice(0, -1), current.value],
+      live: true,
+    };
+  });
+}
+
 export async function getMarketIndices(db: Db): Promise<MarketIndexView[]> {
   const snapshots = db.collection<IndexSnapshot>("marketSnapshots");
   const cached = await snapshots.findOne({ key: SNAPSHOT_KEY });
 
   if (cached && Date.now() - cached.computedAt.getTime() < SNAPSHOT_TTL_MS) {
-    return cached.indices;
+    return withLiveLevels(cached.indices);
   }
 
   try {
@@ -69,12 +110,12 @@ export async function getMarketIndices(db: Db): Promise<MarketIndexView[]> {
       { $set: { key: SNAPSHOT_KEY, indices, computedAt: new Date() } },
       { upsert: true },
     );
-    return indices;
+    return withLiveLevels(indices);
   } catch (err) {
     // Yesterday's levels beat an empty row if MSE is briefly unreachable or
     // has redeployed behind a new action id.
     console.error("index refresh failed", err);
-    return cached?.indices ?? [];
+    return cached ? withLiveLevels(cached.indices) : [];
   }
 }
 

@@ -107,8 +107,14 @@ export default async function HomePage() {
               key={idx.key}
               className="rounded-2xl bg-app-card border border-app-border p-3 flex flex-col items-center gap-2"
             >
-              <div className="text-xs font-semibold text-app-text truncate leading-none">
-                {idx.label}
+              <div className="flex items-center gap-1 text-xs font-semibold text-app-text leading-none">
+                {idx.live && (
+                  <span className="relative flex h-1 w-1 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-app-positive opacity-75" />
+                    <span className="relative inline-flex h-1 w-1 rounded-full bg-app-positive" />
+                  </span>
+                )}
+                <span className="truncate">{idx.label}</span>
               </div>
               {/* flex, not block: an inline <svg> would sit on a text baseline
                   and leave more room under the chart than above it. */}
