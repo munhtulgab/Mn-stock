@@ -15,6 +15,11 @@ import {
   isTavanBogdHost,
   newsToText as tavanBogdNewsToText,
 } from "@/lib/tavanbogd/news";
+import {
+  fetchBloombergTvNews,
+  isBloombergTvHost,
+  newsToText as bloombergTvNewsToText,
+} from "@/lib/bloombergtv/news";
 import { extractNextPayloadText } from "./nextPayload";
 import {
   fetchWithApify,
@@ -509,6 +514,42 @@ async function fetchTavanBogd(url: string): Promise<NewsSourceResult> {
 }
 
 /**
+ * Bloomberg TV Mongolia, likewise a shell over an API — and the one source
+ * that can be asked about a company directly rather than filtered after the
+ * fact, which is how a story older than the front page is reached at all.
+ */
+async function fetchBloombergTv(
+  url: string,
+  searchTerms: string[],
+): Promise<NewsSourceResult> {
+  try {
+    const items = await fetchBloombergTvNews(searchTerms);
+    if (items.length === 0) {
+      return fail(url, "empty", "bloombergtv.mn API хоосон хариу өглөө.");
+    }
+    const text = bloombergTvNewsToText(items);
+    return {
+      url,
+      status: "ok",
+      text,
+      chars: text.length,
+      headlines: items.map((i) => ({
+        title: i.title,
+        url: i.url,
+        date: i.date || undefined,
+        summary: i.description,
+      })),
+      via: "api",
+      reason: searchTerms.length
+        ? `bloombergtv.mn-ийн JSON API (хайлт: ${searchTerms.slice(0, 2).join(", ")}).`
+        : "bloombergtv.mn-ийн JSON API-аас уншлаа.",
+    };
+  } catch (err) {
+    return fail(url, "error", `bloombergtv API: ${(err as Error).message}`);
+  }
+}
+
+/**
  * Reads a site's news section when the address configured was its root and
  * that root turned out to be an empty shell. Only ever a fallback, and the
  * address that actually produced the text is reported back.
@@ -568,12 +609,14 @@ async function extractOne(
   url: string,
   facebook: FacebookCredentials = {},
   extraCerts: string[] = [],
+  searchTerms: string[] = [],
 ): Promise<NewsSourceResult> {
   const host = hostOf(url);
   if (!host) return fail(url, "error", "Линк буруу байна.");
   if (hostMatches(host, FACEBOOK_HOSTS)) return fetchFacebook(url, facebook);
   if (isMarketInfoHost(host)) return fetchMarketInfo(url);
   if (isTavanBogdHost(host)) return fetchTavanBogd(url);
+  if (isBloombergTvHost(host)) return fetchBloombergTv(url, searchTerms);
   if (hostMatches(host, LOGIN_WALLED_HOSTS)) {
     return fail(
       url,
@@ -692,6 +735,11 @@ export async function fetchNewsSources(
     extraCaCerts?: string;
     /** Lets the Facebook scrape cache its result instead of re-running. */
     db?: Db;
+    /**
+     * Company names to ask sources about directly. Only sources with their
+     * own search use them; the rest are filtered after fetching as before.
+     */
+    searchTerms?: string[];
   } = {},
 ): Promise<NewsSourceResult[]> {
   const extraCerts = options.extraCaCerts
@@ -703,7 +751,9 @@ export async function fetchNewsSources(
     token: options.facebookToken,
     db: options.db,
   };
-  return Promise.all(urls.map((url) => extractOne(url, facebook, extraCerts)));
+  return Promise.all(
+    urls.map((url) => extractOne(url, facebook, extraCerts, options.searchTerms ?? [])),
+  );
 }
 
 /** Just the sources that produced usable text, for the AI prompt. */

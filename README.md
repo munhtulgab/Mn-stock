@@ -97,6 +97,15 @@ parser-үүдийг шинэчлэх шаардлагатай болно.
     | --- | --- | --- |
     | marketinfo.mn | `service.marketinfo.mn/news` | `lib/marketinfo/news.ts` |
     | tavanbogdcapital.com | `tavanbogdcapital.com/web/api/news/getAllBasic` | `lib/tavanbogd/news.ts` |
+    | bloombergtv.mn | `bloombergtv.mn/api/public/news/*` | `lib/bloombergtv/news.ts` |
+
+    bloombergtv.mn нь **хайлтын** endpoint-той цорын ганц эх сурвалж:
+    `POST /api/public/news/search` руу `{filterdata: "<компанийн нэр>"}`
+    илгээнэ. Бусад сайтаас татсаныг дараа нь шүүдэг бол энд компанийг
+    шууд асууна — нүүр хуудасны 10 мэдээнээс хальсан хуучин нийтлэлд
+    зөвхөн ингэж хүрнэ. Хайлтын хариу огноогүй ирдэг тул өгүүллийн
+    хуудасны `__NEXT_DATA__`-аас огноог нь нөхөж (дээд тал нь 6) авна —
+    эс бөгөөс огноогүй мэдээ жагсаалтын хамгийн доор унана.
 
     Tavan Bogd-ийн хуудас нь Next.js pages-router бөгөөд `__NEXT_DATA__`
     нь хоосон `pageProps`-той — өгүүллүүд нь дараа нь ачаалагддаг. HTML-ээс

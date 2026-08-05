@@ -35,14 +35,7 @@ export async function POST(req: NextRequest) {
     ? body.newsSources.filter((s: unknown): s is string => typeof s === "string")
     : settings.newsSources;
 
-  const results = await fetchNewsSources(urls, {
-    apifyToken: settings.apifyToken,
-    facebookToken: settings.facebookToken,
-    facebookCookie: settings.facebookCookie,
-    db,
-    extraCaCerts: settings.extraCaCerts,
-  });
-
+  // Resolved before fetching so a searchable source can be asked directly.
   const symbol =
     typeof body.symbol === "string" && body.symbol.trim()
       ? body.symbol.trim().toUpperCase()
@@ -64,6 +57,15 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+
+  const results = await fetchNewsSources(urls, {
+    searchTerms: terms.filter((t): t is string => typeof t === "string"),
+    apifyToken: settings.apifyToken,
+    facebookToken: settings.facebookToken,
+    facebookCookie: settings.facebookCookie,
+    db,
+    extraCaCerts: settings.extraCaCerts,
+  });
 
   return NextResponse.json({
     company: security ? { symbol: security.symbol, name: security.name } : null,

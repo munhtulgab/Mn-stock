@@ -21,10 +21,11 @@ const CACHE_MS = 60 * 60 * 1000;
  * written by an older build are rebuilt rather than served. Headlines gained
  * a date field (v2), then began matching on an item's body rather than its
  * title alone (v3), and then gained tavanbogdcapital.com as an API-read
- * source (v4). A row cached under an older version is missing whatever the
- * newer one would have found.
+ * source (v4), then bloombergtv.mn, which is asked about the company by
+ * name rather than filtered afterwards (v5). A row cached under an older
+ * version is missing whatever the newer one would have found.
  */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 interface NewsSnapshot {
   key: string;
@@ -82,6 +83,10 @@ async function build(
             facebookCookie: settings.facebookCookie,
             db,
             extraCaCerts: settings.extraCaCerts,
+            // Sources with their own search are asked about the company
+            // rather than filtered afterwards, which reaches stories older
+            // than whatever their front page happens to list.
+            searchTerms: terms.filter((t): t is string => typeof t === "string"),
           }),
           EXTERNAL_BUDGET_MS,
         )
