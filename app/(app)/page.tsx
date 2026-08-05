@@ -200,12 +200,12 @@ export default async function HomePage() {
 
       {watchlist.length > 0 && (
         <Section title="Хяналтын жагсаалт">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex gap-3 overflow-x-auto -mx-4 px-4">
             {watchlist.map((w) => (
               <Link
                 key={w.symbol}
                 href={`/stock/${w.symbol}`}
-                className="rounded-2xl border border-app-border bg-app-card px-4 py-3 active:bg-app-elevated"
+                className="shrink-0 w-60 rounded-2xl border border-app-border bg-app-card px-4 py-3 active:bg-app-elevated"
               >
                 <div className="flex items-center gap-3">
                   <StockAvatar symbol={w.symbol} size={40} />
@@ -308,14 +308,12 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
     return <Empty>Арилжааны мэдээлэл алга.</Empty>;
   }
   return (
-    // A grid rather than a scroller: a row that ran off the edge hid half of
-    // what it listed behind a sideways swipe nobody was told about.
-    <div className="grid grid-cols-2 gap-3">
+    <div className="flex gap-3 overflow-x-auto -mx-4 px-4">
       {rows.map((r) => (
         <Link
           key={r.symbol}
           href={`/stock/${r.symbol}`}
-          className="rounded-2xl border border-app-border bg-app-card p-3"
+          className="shrink-0 w-44 rounded-2xl border border-app-border bg-app-card p-3"
         >
           <div className="flex items-center gap-1.5">
             <StockAvatar symbol={r.symbol} size={18} />

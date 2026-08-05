@@ -43,19 +43,19 @@ body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
+/*
+ * No scrollbars anywhere. This is a phone app: the page scrolls under the
+ * finger and the card rows swipe sideways, and a bar drawn down the right
+ * edge — or under a row of cards — only takes space from the content and
+ * puts a desktop chrome on a screen that has no pointer to use it.
+ */
+* {
+  scrollbar-width: none;
+}
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #2c313c;
-  border-radius: 8px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-brand);
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 /*
