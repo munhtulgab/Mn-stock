@@ -26,11 +26,16 @@ const CACHE_MS = 30_000;
  * news endpoints; the trading data sits on the api host, and the order here
  * lets whichever responds win rather than pinning a guess.
  */
-const ENDPOINTS = [
+export const QUOTE_ENDPOINTS = [
   "https://api.marketinfo.mn/trades",
+  "https://api.marketinfo.mn/api/trades",
   "https://data.marketinfo.mn/trades",
   "https://service.marketinfo.mn/trades",
 ];
+
+/** Overrides the built-in list once the working address is known. */
+const CONFIGURED = process.env.MARKETINFO_QUOTES_URL;
+const ENDPOINTS = CONFIGURED ? [CONFIGURED, ...QUOTE_ENDPOINTS] : QUOTE_ENDPOINTS;
 
 export interface LiveQuote {
   symbol: string;
