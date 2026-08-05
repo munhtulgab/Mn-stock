@@ -336,8 +336,15 @@ const APIFY_ACTOR = "apify~facebook-posts-scraper";
 const APIFY_ACTOR_URL = `https://api.apify.com/v2/acts/${APIFY_ACTOR}`;
 const APIFY_RUN_URL = `${APIFY_ACTOR_URL}/run-sync-get-dataset-items`;
 
-/** A scrape is a real browser run; it takes tens of seconds, not milliseconds. */
-const APIFY_TIMEOUT_MS = 55_000;
+/**
+ * A scrape is a real browser run and often outlasts this, which is fine:
+ * the run finishes on Apify's side and {@link lastRunPosts} collects it on
+ * the next request. What is not fine is holding the news response until it
+ * does — every source is fetched together, so a single slow scrape can push
+ * the whole request past its limit and lose every other site's headlines
+ * along with it.
+ */
+const APIFY_TIMEOUT_MS = 25_000;
 
 /** How much history is worth paying credits for. */
 const APIFY_POST_LIMIT = 20;

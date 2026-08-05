@@ -33,10 +33,25 @@ interface NewsSnapshot {
   computedAt: Date;
 }
 
+/**
+ * How long the configured sites get before the answer goes out without
+ * them. Comfortably inside maxDuration, so a slow source costs its own
+ * headlines rather than the whole response.
+ */
+const EXTERNAL_BUDGET_MS = 30_000;
+
+/** Resolves to an empty list if the work has not finished in time. */
+function withBudget<T>(work: Promise<T[]>, ms: number): Promise<T[]> {
+  return Promise.race([
+    work,
+    new Promise<T[]>((resolve) => setTimeout(() => resolve([]), ms)),
+  ]);
+}
+
 async function build(
   db: Db,
   security: Security,
-): Promise<Pick<NewsSnapshot, "mse" | "external">> {
+): Promise<Pick<NewsSnapshot, "mse" | "external"> & { complete: boolean }> {
   const settings = await getSettings(db);
 
   // Whether the company's first name-word identifies it on its own can only
@@ -52,17 +67,23 @@ async function build(
   );
 
   // The MSE notices are the authoritative company feed; the configured news
-  // sites are a bonus, so one failing must not empty the other.
+  // sites are a bonus, so one failing must not empty the other — nor one
+  // being slow. Sources are fetched together, so without a budget a single
+  // scrape that takes a minute pushes the whole request past its limit and
+  // the reader gets nothing at all, exchange notices included.
   const [mseResult, externalResult] = await Promise.allSettled([
     fetchCompanyNews(security.companyCode, 12),
     settings.newsSources.length > 0
-      ? fetchNewsSources(settings.newsSources, {
-          apifyToken: settings.apifyToken,
-          facebookToken: settings.facebookToken,
-          facebookCookie: settings.facebookCookie,
-          db,
-          extraCaCerts: settings.extraCaCerts,
-        })
+      ? withBudget(
+          fetchNewsSources(settings.newsSources, {
+            apifyToken: settings.apifyToken,
+            facebookToken: settings.facebookToken,
+            facebookCookie: settings.facebookCookie,
+            db,
+            extraCaCerts: settings.extraCaCerts,
+          }),
+          EXTERNAL_BUDGET_MS,
+        )
       : Promise.resolve([]),
   ]);
 
@@ -73,17 +94,18 @@ async function build(
     console.error("external news fetch failed", externalResult.reason);
   }
 
+  const external = externalResult.status === "fulfilled" ? externalResult.value : [];
+
   return {
     mse: mseResult.status === "fulfilled" ? mseResult.value : [],
-    external:
-      externalResult.status === "fulfilled"
-        ? matchHeadlines(externalResult.value, terms)
-            .slice(0, 12)
-            // The body was there to match on, not to keep: storing whole
-            // articles would bloat the snapshot and send them to the phone
-            // for nothing.
-            .map(({ title, url, source, date }) => ({ title, url, source, date }))
-        : [],
+    external: matchHeadlines(external, terms)
+      .slice(0, 12)
+      // The body was there to match on, not to keep: storing whole articles
+      // would bloat the snapshot and send them to the phone for nothing.
+      .map(({ title, url, source, date }) => ({ title, url, source, date })),
+    // An empty result from a source that ran out of time is not an answer,
+    // and caching it would repeat "no news" for the next hour.
+    complete: settings.newsSources.length === 0 || external.length > 0,
   };
 }
 
@@ -113,12 +135,14 @@ export async function GET(
   }
 
   try {
-    const fresh = await build(db, security);
-    await snapshots.updateOne(
-      { key },
-      { $set: { key, ...fresh, computedAt: new Date(), schemaVersion: SCHEMA_VERSION } },
-      { upsert: true },
-    );
+    const { complete, ...fresh } = await build(db, security);
+    if (complete) {
+      await snapshots.updateOne(
+        { key },
+        { $set: { key, ...fresh, computedAt: new Date(), schemaVersion: SCHEMA_VERSION } },
+        { upsert: true },
+      );
+    }
     return NextResponse.json(fresh);
   } catch (err) {
     console.error("news build failed", err);
