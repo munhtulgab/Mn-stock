@@ -332,7 +332,7 @@ export default function SettingsForm({
             value={newSourceInput}
             onChange={(e) => setNewSourceInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSource())}
-            placeholder="https://ikon.mn/..."
+            placeholder="https://lemonpress.mn"
             className="flex-1 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
           />
           <button

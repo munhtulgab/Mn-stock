@@ -20,8 +20,8 @@ export interface FeedItem {
 
 /**
  * Paths worth trying when a site advertises no feed. None of the Mongolian
- * outlets checked carry the standard <link rel="alternate"> hint, yet
- * ikon.mn serves one at /rss and lemonpress.mn at /rss.xml.
+ * outlets tested carry the standard <link rel="alternate"> hint even when
+ * they do serve a feed — lemonpress.mn, for one, answers at /rss.xml.
  */
 export const FEED_PATHS = ["/rss", "/rss.xml", "/feed"];
 
