@@ -3,39 +3,9 @@ import { getDb } from "@/lib/mongodb";
 import { getMarketNews, type MarketNewsItem } from "@/lib/marketNews";
 import NewsRefresher from "@/components/NewsRefresher";
 import NewsList from "@/components/NewsList";
+import { dayHeading } from "@/lib/day";
 
 export const dynamic = "force-dynamic";
-
-/** Weekday-and-date heading, e.g. "Лхагва, 8 сарын 5". */
-const MONTHS = [
-  "1 сарын",
-  "2 сарын",
-  "3 сарын",
-  "4 сарын",
-  "5 сарын",
-  "6 сарын",
-  "7 сарын",
-  "8 сарын",
-  "9 сарын",
-  "10 сарын",
-  "11 сарын",
-  "12 сарын",
-];
-const WEEKDAYS = ["Ням", "Даваа", "Мягмар", "Лхагва", "Пүрэв", "Баасан", "Бямба"];
-
-/**
- * Formatted from the digits rather than through the reader's locale: the
- * sources state Ulaanbaatar time, and letting a device in another zone
- * re-interpret it would shift a closing report onto the previous day.
- */
-function dayHeading(date: string, today: string, yesterday: string): string {
-  const day = date.slice(0, 10);
-  if (day === today) return "Өнөөдөр";
-  if (day === yesterday) return "Өчигдөр";
-  const [y, m, d] = day.split("-").map(Number);
-  const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
-  return `${weekday}, ${MONTHS[m - 1]} ${d}`;
-}
 
 function groupByDay(items: MarketNewsItem[]): [string, MarketNewsItem[]][] {
   const groups = new Map<string, MarketNewsItem[]>();

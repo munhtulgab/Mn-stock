@@ -33,7 +33,10 @@ export default function BottomNav() {
         {ITEMS.map(({ href, label, icon: Icon }) => {
           let active = false;
           if (href === "/") {
-            active = pathname === "/";
+            // The bell that opens the alert feed lives in the home header, so
+            // that page belongs to this tab — otherwise no tab claims it and
+            // the bar reads as if the reader had wandered off the app.
+            active = pathname === "/" || pathname.startsWith("/notifications");
           } else if (href === "/discover") {
             active = pathname.startsWith("/discover") || pathname.startsWith("/stock");
           } else if (href === "/portfolio") {

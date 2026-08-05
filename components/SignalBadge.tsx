@@ -1,15 +1,9 @@
-import type { Signal } from "@/lib/types";
+import { SIGNAL_LABELS, type Signal } from "@/lib/types";
 
 const STYLES: Record<Signal, string> = {
   BUY: "bg-app-positive-bg text-app-positive",
   SELL: "bg-app-negative-bg text-app-negative",
   HOLD: "bg-brand-light text-brand",
-};
-
-const LABELS: Record<Signal, string> = {
-  BUY: "АВАХ",
-  SELL: "ЗАРАХ",
-  HOLD: "ХҮЛЭЭХ",
 };
 
 /**
@@ -50,7 +44,7 @@ export default function SignalBadge({
       >
         {ICONS[signal]}
       </svg>
-      {LABELS[signal]}
+      {SIGNAL_LABELS[signal]}
     </span>
   );
 }

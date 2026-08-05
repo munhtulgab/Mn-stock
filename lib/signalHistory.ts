@@ -3,8 +3,8 @@ import { getDashboardRows } from "@/lib/data";
 import { sendPushToAll } from "@/lib/push";
 import { getSettings } from "@/lib/settings";
 import { sendSms } from "@/lib/callpro";
-import { recordNotification } from "@/lib/notifications";
-import type { Signal } from "@/lib/types";
+import { recordNotifications } from "@/lib/notifications";
+import { SIGNAL_LABELS, type Signal } from "@/lib/types";
 
 interface SignalHistoryDoc {
   companyCode: number;
@@ -115,11 +115,33 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
 
   const title = `MSE: ${alerting.length} дохио шинэчлэгдлээ`;
 
-  await recordNotification(db, { title, body, url: "/discover", kind: "signal" });
+  // The phone gets one banner — nobody wants twelve — but the in-app feed
+  // gets a row per company, because a row is something you tap, and what you
+  // want when you tap "APU: ЗАРАХ" is APU's page, not a list of everything.
+  await recordNotifications(
+    db,
+    alerting.map((c) => ({
+      title: `${c.symbol}: ${SIGNAL_LABELS[c.to]} дохио`,
+      body:
+        c.from === "NEW"
+          ? `${c.name} — шинэ дохио`
+          : `${c.name} — ${SIGNAL_LABELS[c.from]} байснаа ${SIGNAL_LABELS[c.to]} боллоо`,
+      url: `/stock/${c.symbol}`,
+      kind: "signal" as const,
+      symbol: c.symbol,
+      signal: c.to,
+      previousSignal: c.from,
+    })),
+  );
 
   const [result, smsSent] = await Promise.all([
     notifications.pushEnabled
-      ? sendPushToAll(db, { title, body, url: "/", tag: "mse-signal-change" })
+      ? sendPushToAll(db, {
+          title,
+          body,
+          url: "/notifications",
+          tag: "mse-signal-change",
+        })
       : Promise.resolve({ sent: 0, pruned: 0, errors: ["Push унтраалттай."] }),
     sendSignalSms(db, `${title}. ${body}`).catch((err) => {
       console.error("signal sms failed", err);

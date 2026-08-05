@@ -2,6 +2,7 @@ import type { Db } from "mongodb";
 import { getSettings } from "@/lib/settings";
 import { fetchNewsSources, type NewsHeadline } from "@/lib/mse/newsSources";
 import { fetchExchangeNews } from "@/lib/mse/exchangeNews";
+import { todayAndYesterday } from "@/lib/day";
 import type { Security } from "@/lib/types";
 
 /**
@@ -81,9 +82,6 @@ function isMarketRelated(text: string, symbols: Set<string>): boolean {
   // A ticker on its own is enough: "SBM H1 | ..." names no other keyword.
   return (text.match(/\b[A-Z]{2,5}\b/g) ?? []).some((t) => symbols.has(t));
 }
-
-/** Mongolia is UTC+8 year round. */
-const ULAANBAATAR_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 export interface MarketNews {
   items: MarketNewsItem[];
@@ -166,11 +164,7 @@ function collect(
 export async function getMarketNews(db: Db): Promise<MarketNews> {
   // Resolved here rather than in the page: the window is defined by "now",
   // and a component that reads the clock while rendering is not idempotent.
-  const local = new Date(Date.now() + ULAANBAATAR_OFFSET_MS);
-  const days = {
-    today: local.toISOString().slice(0, 10),
-    yesterday: new Date(local.getTime() - 86_400_000).toISOString().slice(0, 10),
-  };
+  const days = todayAndYesterday();
 
   const cached = await db
     .collection<MarketNewsSnapshot>("marketNewsSnapshots")

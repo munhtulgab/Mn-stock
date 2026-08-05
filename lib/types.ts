@@ -49,6 +49,13 @@ export interface Financials {
 
 export type Signal = "BUY" | "SELL" | "HOLD";
 
+/** One wording for the three signals, wherever they are named to a reader. */
+export const SIGNAL_LABELS: Record<Signal, string> = {
+  BUY: "АВАХ",
+  SELL: "ЗАРАХ",
+  HOLD: "ХҮЛЭЭХ",
+};
+
 export interface Recommendation {
   signal: Signal;
   score: number; // -100..100
@@ -128,6 +135,14 @@ export interface AppNotification {
   url?: string;
   kind: "signal" | "system";
   createdAt: Date;
+  /**
+   * Set on signal alerts, so the feed can show the company the way the rest
+   * of the app does — logo, ticker, and the badge it moved to — instead of
+   * spelling all of it out in the body text.
+   */
+  symbol?: string;
+  signal?: Signal;
+  previousSignal?: Signal | "NEW";
 }
 
 export type SafeUser = Pick<User, "username" | "fullName" | "email" | "phone"> & {
