@@ -36,6 +36,7 @@ async function build(
     settings.newsSources.length > 0
       ? fetchNewsSources(settings.newsSources, {
           facebookToken: settings.facebookToken,
+          extraCaCerts: settings.extraCaCerts,
         })
       : Promise.resolve([]),
   ]);

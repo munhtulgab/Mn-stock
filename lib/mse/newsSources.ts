@@ -1,4 +1,9 @@
 import * as cheerio from "cheerio";
+import {
+  fetchWithExtraCa,
+  parsePemBundle,
+  type PageResponse,
+} from "@/lib/tls/extraCa";
 
 export interface NewsSourceExtract {
   url: string;
@@ -238,6 +243,57 @@ async function fetchFacebook(
   }
 }
 
+const BROWSER_HEADERS = {
+  "User-Agent": USER_AGENT,
+  Accept: "text/html,application/xhtml+xml",
+  "Accept-Language": "mn,en;q=0.8",
+};
+
+/**
+ * Loads a page, retrying through the extra-CA path when the plain fetch trips
+ * over a site that omits its intermediate certificate. `viaExtraCa` says which
+ * route produced the answer, so the caller can tell "no certificate supplied
+ * yet" apart from "supplied and still failing".
+ */
+async function loadPage(
+  url: string,
+  extraCerts: string[],
+): Promise<PageResponse & { viaExtraCa: boolean }> {
+  try {
+    const res = await fetch(url, {
+      headers: BROWSER_HEADERS,
+      redirect: "follow",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    const body = await res.text();
+    // An egress proxy reports the upstream chain failure as its own 5xx, so
+    // the retry has to trigger on that shape too, not just a thrown error.
+    if (!res.ok && bodyShowsTlsFailure(body) && extraCerts.length > 0) {
+      return {
+        ...(await fetchWithExtraCa(url, {
+          extraCerts,
+          headers: BROWSER_HEADERS,
+          timeoutMs: TIMEOUT_MS,
+        })),
+        viaExtraCa: true,
+      };
+    }
+    return { status: res.status, finalUrl: res.url, body, viaExtraCa: false };
+  } catch (err) {
+    if (isTlsFailure(err) && extraCerts.length > 0) {
+      return {
+        ...(await fetchWithExtraCa(url, {
+          extraCerts,
+          headers: BROWSER_HEADERS,
+          timeoutMs: TIMEOUT_MS,
+        })),
+        viaExtraCa: true,
+      };
+    }
+    throw err;
+  }
+}
+
 /**
  * Fetch a user-configured news page and return its visible text plus the
  * headlines it links to. Arbitrary news sites share no structure, so the
@@ -246,6 +302,7 @@ async function fetchFacebook(
 async function extractOne(
   url: string,
   facebookToken?: string,
+  extraCerts: string[] = [],
 ): Promise<NewsSourceResult> {
   const host = hostOf(url);
   if (!host) return fail(url, "error", "Линк буруу байна.");
@@ -259,22 +316,14 @@ async function extractOne(
   }
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "mn,en;q=0.8",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    const res = await loadPage(url, extraCerts);
 
-    if (isLoginUrl(res.url)) {
+    if (isLoginUrl(res.finalUrl)) {
       return fail(url, "login_required", "Нэвтрэх хуудас руу шилжүүлсэн байна.");
     }
-    const html = await res.text();
+    const html = res.body;
 
-    if (!res.ok) {
+    if (res.status < 200 || res.status >= 300) {
       if (bodyShowsTlsFailure(html)) return fail(url, "tls_error", TLS_MESSAGE);
       return fail(
         url,
@@ -300,7 +349,7 @@ async function extractOne(
       status: "ok",
       text,
       chars: text.length,
-      headlines: extractHeadlines($, res.url || url),
+      headlines: extractHeadlines($, res.finalUrl || url),
     };
   } catch (err) {
     console.error(`news source fetch failed for ${url}`, err);
@@ -319,9 +368,14 @@ async function extractOne(
 /** Every configured source with its outcome, failures included. */
 export async function fetchNewsSources(
   urls: string[],
-  options: { facebookToken?: string } = {},
+  options: { facebookToken?: string; extraCaCerts?: string } = {},
 ): Promise<NewsSourceResult[]> {
-  return Promise.all(urls.map((url) => extractOne(url, options.facebookToken)));
+  const extraCerts = options.extraCaCerts
+    ? parsePemBundle(options.extraCaCerts)
+    : [];
+  return Promise.all(
+    urls.map((url) => extractOne(url, options.facebookToken, extraCerts)),
+  );
 }
 
 /** Just the sources that produced usable text, for the AI prompt. */

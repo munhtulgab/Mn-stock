@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
 
   const results = await fetchNewsSources(urls, {
     facebookToken: settings.facebookToken,
+    extraCaCerts: settings.extraCaCerts,
   });
 
   return NextResponse.json({

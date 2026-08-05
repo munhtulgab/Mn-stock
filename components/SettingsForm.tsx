@@ -5,6 +5,7 @@ import { useState } from "react";
 interface MaskedSettings {
   newsSources: string[];
   facebookToken: string | null;
+  extraCaCount: number;
   apiKeys: {
     anthropic: string | null;
     gemini: string | null;
@@ -96,6 +97,8 @@ export default function SettingsForm({
   const [newSourceInput, setNewSourceInput] = useState("");
   const [fbTokenInput, setFbTokenInput] = useState("");
   const [fbCurrent, setFbCurrent] = useState(initial.facebookToken);
+  const [caInput, setCaInput] = useState("");
+  const [caCount, setCaCount] = useState(initial.extraCaCount);
   const [sourceCheck, setSourceCheck] = useState<
     | { kind: "idle" }
     | { kind: "checking" }
@@ -137,6 +140,7 @@ export default function SettingsForm({
     setNewsSources(initial.newsSources);
     setNewSourceInput("");
     setFbTokenInput("");
+    setCaInput("");
     setSourceCheck({ kind: "idle" });
     setKeyInputs({});
     setSmsEnabled(smsCurrent.enabled);
@@ -256,6 +260,7 @@ export default function SettingsForm({
       }
       if (smsKeyInput.trim()) body.smsApiKey = smsKeyInput.trim();
       if (fbTokenInput.trim()) body.facebookToken = fbTokenInput.trim();
+      if (caInput.trim()) body.extraCaCerts = caInput.trim();
 
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -268,9 +273,11 @@ export default function SettingsForm({
       setSmsCurrent(data.sms);
       setNotifCurrent(data.notifications);
       setFbCurrent(data.facebookToken);
+      setCaCount(data.extraCaCount);
       setKeyInputs({});
       setSmsKeyInput("");
       setFbTokenInput("");
+      setCaInput("");
       setStatus("saved");
       setTimeout(() => setStatus("idle"), 2000);
     } catch {
@@ -419,6 +426,46 @@ export default function SettingsForm({
             value={fbTokenInput}
             onChange={(e) => setFbTokenInput(e.target.value)}
             className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
+          />
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-app-border space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-app-text">
+              Нэмэлт SSL сертификат
+            </label>
+            <span
+              className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${
+                caCount > 0
+                  ? "bg-app-positive-bg text-app-positive"
+                  : "bg-app-bg text-app-muted"
+              }`}
+            >
+              {caCount > 0 ? `${caCount} гэрчилгээ` : "Тохируулаагүй"}
+            </span>
+          </div>
+          <p className="text-[11px] text-app-muted">
+            Зарим сайт (жишээ нь <code>marketinfo.mn</code>) SSL гинжнийхээ
+            завсрын гэрчилгээг илгээдэггүй тул &quot;SSL сертификат&quot; алдаа
+            өгдөг. Дутуу гэрчилгээг энд PEM хэлбэрээр буулгавал холболт сэргэнэ.
+            Гэрчилгээ нь нууц мэдээлэл биш бөгөөд шалгалт унтардаггүй — зөвхөн
+            дутуу холбоос нөхөгдөнө.
+          </p>
+          <p className="text-[11px] text-app-muted">
+            Авах команд:{" "}
+            <code className="break-all">
+              openssl s_client -showcerts -connect marketinfo.mn:443
+            </code>{" "}
+            — гарсан хоёр дахь <code>BEGIN CERTIFICATE</code> блокийг хуулна.
+            Устгахын тулд <code>-</code> бичээд хадгална.
+          </p>
+          <textarea
+            rows={4}
+            spellCheck={false}
+            placeholder={"-----BEGIN CERTIFICATE-----\n..."}
+            value={caInput}
+            onChange={(e) => setCaInput(e.target.value)}
+            className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-[11px] font-mono text-app-text outline-none focus:border-brand"
           />
         </div>
       </section>

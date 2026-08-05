@@ -72,6 +72,7 @@ export async function GET(
     try {
       const results = await fetchNewsSources(settings.newsSources, {
         facebookToken: settings.facebookToken,
+        extraCaCerts: settings.extraCaCerts,
       });
       for (const r of results.filter((r) => r.status !== "ok")) {
         console.warn(`news source unusable (${r.status}): ${r.url} — ${r.reason}`);

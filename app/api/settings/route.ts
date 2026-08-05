@@ -39,6 +39,14 @@ export async function POST(req: NextRequest) {
       ? body.facebookToken.trim()
       : undefined;
 
+  // Empty means "keep what's stored"; "-" clears it.
+  const extraCaCerts =
+    typeof body.extraCaCerts === "string" && body.extraCaCerts.trim()
+      ? body.extraCaCerts.trim() === "-"
+        ? ""
+        : body.extraCaCerts.trim()
+      : undefined;
+
   const newsSources = Array.isArray(body.newsSources)
     ? body.newsSources.filter((s: unknown): s is string => typeof s === "string" && s.trim().length > 0)
     : undefined;
@@ -69,6 +77,7 @@ export async function POST(req: NextRequest) {
   const updated = await updateSettings(db, {
     newsSources,
     facebookToken,
+    extraCaCerts,
     apiKeys,
     sms: Object.keys(sms).length > 0 ? sms : undefined,
     notifications:
