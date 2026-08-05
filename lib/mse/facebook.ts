@@ -378,11 +378,13 @@ const APIFY_POST_LIMIT = 20;
 const APIFY_MAX_AGE_DAYS = 30;
 
 /**
- * Scraped posts are cached per page, because a run costs credits and the
- * sources are re-read for every company whose news is built. Without this a
- * single page view could start a dozen identical runs.
+ * How long a scrape stands. Long, because it costs credits: the scheduled
+ * refresh takes one set of posts each weekday and everything else — company
+ * pages, the market feed, the AI prompt — reads that. The window is a little
+ * over a day so a missed run degrades to a second fetch rather than to
+ * silence.
  */
-const CACHE_TTL_MS = 30 * 60 * 1000;
+const CACHE_TTL_MS = 26 * 60 * 60 * 1000;
 
 interface FacebookCache {
   key: string;
@@ -472,14 +474,16 @@ export async function fetchWithApify(
   pageUrl: string,
   token: string,
   db?: Db,
+  /** Set by the scheduled refresh: spend the credits and take fresh posts. */
+  force = false,
 ): Promise<FacebookFetch> {
   const key = `apify:${pageUrl}`;
   const cached = db ? await readCache(db, key) : null;
-  if (cached && Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS) {
+  if (!force && cached && Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS) {
     return { posts: cached.posts };
   }
 
-  const recovered = await lastRunPosts(pageUrl, token);
+  const recovered = force ? null : await lastRunPosts(pageUrl, token);
   if (recovered) {
     if (db) await writeCache(db, key, recovered);
     return { posts: recovered };

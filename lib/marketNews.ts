@@ -192,7 +192,11 @@ export async function getMarketNews(db: Db): Promise<MarketNews> {
  * Slow by nature, so it runs from the refresh endpoint and the daily sync
  * rather than from a page render.
  */
-export async function refreshMarketNews(db: Db): Promise<number> {
+export async function refreshMarketNews(
+  db: Db,
+  /** Scheduled run: spend Facebook credits for fresh posts. */
+  options: { force?: boolean } = {},
+): Promise<number> {
   const cutoff = new Date(Date.now() - WINDOW_DAYS * 86_400_000)
     .toISOString()
     .slice(0, 10);
@@ -219,6 +223,7 @@ export async function refreshMarketNews(db: Db): Promise<number> {
           facebookCookie: settings.facebookCookie,
           db,
           extraCaCerts: settings.extraCaCerts,
+          forceFacebook: options.force,
         }).catch((err) => {
           console.error("news sources fetch failed", err);
           return [];

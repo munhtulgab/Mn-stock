@@ -58,8 +58,8 @@ async function handle(req: NextRequest) {
       console.error("index snapshot refresh failed", err);
     }
 
-    // Keeps the news tab warm, so the first visitor of the day reads a feed
-    // that is already built rather than waiting for one.
+    // Keeps the news tab warm without spending Facebook credits — the 12:30
+    // run owns those; this one reuses whatever it stored.
     let newsCount = 0;
     try {
       newsCount = await refreshMarketNews(db);

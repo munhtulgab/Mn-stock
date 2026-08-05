@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
 import { getMarketNews, type MarketNewsItem } from "@/lib/marketNews";
 import NewsRefresher from "@/components/NewsRefresher";
+import NewsList from "@/components/NewsList";
 
 export const dynamic = "force-dynamic";
 
@@ -76,23 +77,7 @@ export default async function NewsPage() {
             <h2 className="text-xs font-semibold text-app-muted mb-2">
               {dayHeading(day, today, yesterday)}
             </h2>
-            <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
-              {dayItems.map((item) => (
-                <a
-                  key={`${item.url}|${item.title}`}
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block px-4 py-3 active:bg-app-elevated"
-                >
-                  <div className="text-sm text-app-text leading-snug">{item.title}</div>
-                  <div className="text-[11px] text-app-muted mt-1 flex items-center gap-1.5">
-                    <span className="text-brand">{item.source}</span>
-                    {item.date.length > 10 && <span>· {item.date.slice(11, 16)}</span>}
-                  </div>
-                </a>
-              ))}
-            </div>
+            <NewsList items={dayItems} />
           </section>
         ))
       )}

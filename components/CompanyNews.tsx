@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import NewsList from "./NewsList";
 
 interface MseItem {
   title: string;
@@ -22,18 +23,6 @@ interface Item {
   /** Local `YYYY-MM-DD[THH:MM:SS]`, or "" when the source states none. */
   date: string;
   source: string;
-}
-
-/**
- * Renders a timestamp without going through Date. The sources state
- * Ulaanbaatar local time, and parsing would re-interpret it in whatever
- * zone the reader's device is set to.
- */
-function formatWhen(date: string): string {
-  if (!date) return "";
-  const day = date.slice(0, 10);
-  const time = date.slice(11, 16);
-  return time ? `${day} ${time}` : day;
 }
 
 type State =
@@ -113,8 +102,10 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
     };
   }, [symbol]);
 
+  // No card of its own: NewsList draws one, and nesting them boxes every
+  // headline twice. A heading over the list matches the market feed.
   return (
-    <div className="rounded-2xl border border-app-border bg-app-card p-4">
+    <section>
       <h2 className="text-sm font-semibold text-app-text mb-3">
         {symbol}-тай холбоотой мэдээ
       </h2>
@@ -122,7 +113,7 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
       {state.kind === "loading" && (
         <div className="space-y-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-9 rounded-lg bg-app-bg animate-pulse" />
+            <div key={i} className="h-14 rounded-2xl bg-app-card animate-pulse" />
           ))}
         </div>
       )}
@@ -132,33 +123,14 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
       )}
 
       {state.kind === "ready" && state.items.length === 0 && (
-        <p className="text-xs text-app-muted">
+        <div className="rounded-2xl border border-dashed border-app-border p-5 text-center text-xs text-app-muted">
           Энэ компанитай холбоотой мэдээ олдсонгүй.
-        </p>
+        </div>
       )}
 
       {state.kind === "ready" && state.items.length > 0 && (
-        <ul className="space-y-2.5">
-          {state.items.map((item) => (
-            <li key={item.url}>
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block active:opacity-70"
-              >
-                <div className="text-xs text-app-text leading-snug">
-                  {item.title}
-                </div>
-                <div className="text-[11px] text-app-muted mt-0.5">
-                  {item.source}
-                  {item.date && ` · ${formatWhen(item.date)}`}
-                </div>
-              </a>
-            </li>
-          ))}
-        </ul>
+        <NewsList items={state.items} />
       )}
-    </div>
+    </section>
   );
 }

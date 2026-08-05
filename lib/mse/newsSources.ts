@@ -117,6 +117,8 @@ interface FacebookCredentials {
   cookie?: string;
   token?: string;
   db?: Db;
+  /** Scheduled refresh only: take fresh posts rather than the stored ones. */
+  force?: boolean;
 }
 
 function hostOf(url: string): string | null {
@@ -264,7 +266,7 @@ async function fetchFacebook(
   if (!pageSlug(url)) {
     return fail(url, "error", "Facebook хуудасны нэрийг линкээс уншиж чадсангүй.");
   }
-  const { apifyToken, cookie, token, db } = credentials;
+  const { apifyToken, cookie, token, db, force } = credentials;
   if (!apifyToken && !cookie && !token) {
     return fail(
       url,
@@ -279,7 +281,7 @@ async function fetchFacebook(
   // Cheapest to set up first; each is only tried if the one before it came
   // back with nothing, so a working route costs a single request.
   const routes: (() => Promise<FacebookFetch>)[] = [];
-  if (apifyToken) routes.push(() => fetchWithApify(url, apifyToken, db));
+  if (apifyToken) routes.push(() => fetchWithApify(url, apifyToken, db, force));
   if (cookie) routes.push(() => fetchWithCookie(url, cookie));
   if (token) routes.push(() => fetchWithToken(url, token));
 
@@ -740,6 +742,11 @@ export async function fetchNewsSources(
      * own search use them; the rest are filtered after fetching as before.
      */
     searchTerms?: string[];
+    /**
+     * Scheduled refresh only. Facebook costs credits per scrape, so ordinary
+     * reads take the stored posts and one run a day takes new ones.
+     */
+    forceFacebook?: boolean;
   } = {},
 ): Promise<NewsSourceResult[]> {
   const extraCerts = options.extraCaCerts
@@ -750,6 +757,7 @@ export async function fetchNewsSources(
     cookie: options.facebookCookie,
     token: options.facebookToken,
     db: options.db,
+    force: options.forceFacebook,
   };
   return Promise.all(
     urls.map((url) => extractOne(url, facebook, extraCerts, options.searchTerms ?? [])),
