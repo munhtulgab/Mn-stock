@@ -2,6 +2,7 @@ import type { Db } from "mongodb";
 import { fetchSecuritiesList } from "@/lib/mse/securities";
 import { fetchPriceHistory } from "@/lib/mse/prices";
 import { fetchLatestFinancials } from "@/lib/mse/financials";
+import type { PricePoint } from "@/lib/types";
 
 export interface SyncState {
   key: "main";
@@ -36,15 +37,34 @@ async function syncSecuritiesList(db: Db): Promise<number> {
   return ops.length;
 }
 
+/**
+ * The exchange serves a company's whole history in one blob, and almost all
+ * of it is the same as last time. Only what is new or has actually changed is
+ * written: re-upserting three thousand unchanged rows on every visit to a
+ * company's page was most of the time that page took.
+ */
 export async function syncPricesForCompany(
   db: Db,
   companyCode: number,
 ): Promise<number> {
   const points = await fetchPriceHistory(companyCode);
   if (points.length === 0) return 0;
+
+  const stored = await db
+    .collection<PricePoint>("prices")
+    .find({ companyCode }, { projection: { _id: 0, date: 1, close: 1, volume: 1 } })
+    .toArray();
+  const known = new Map(stored.map((p) => [p.date, p]));
+
+  const changed = points.filter((p) => {
+    const before = known.get(p.date);
+    return !before || before.close !== p.close || before.volume !== p.volume;
+  });
+  if (changed.length === 0) return 0;
+
   const CHUNK = 500;
-  for (let i = 0; i < points.length; i += CHUNK) {
-    const chunk = points.slice(i, i + CHUNK);
+  for (let i = 0; i < changed.length; i += CHUNK) {
+    const chunk = changed.slice(i, i + CHUNK);
     await db.collection("prices").bulkWrite(
       chunk.map((p) => ({
         updateOne: {
@@ -56,7 +76,7 @@ export async function syncPricesForCompany(
       { ordered: false },
     );
   }
-  return points.length;
+  return changed.length;
 }
 
 async function syncFinancialsForCompany(

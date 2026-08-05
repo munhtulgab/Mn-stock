@@ -103,7 +103,7 @@ const CACHE_KEY = "market";
 const CACHE_MS = 30 * 60 * 1000;
 
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 interface MarketNewsSnapshot {
   key: string;
@@ -231,7 +231,7 @@ export async function refreshMarketNews(
       .map((n) => ({
         title: n.title,
         url: n.url,
-        source: "МХБ",
+        source: "mse.mn",
         date: n.date,
       })),
     ...collect(results, cutoff, symbols),

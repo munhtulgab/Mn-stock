@@ -9,16 +9,105 @@ function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
+function Avatar({
+  src,
+  name,
+  size,
+}: {
+  src: string;
+  name: string;
+  size: number;
+}) {
+  if (src) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        style={{ width: size, height: size }}
+        className="rounded-full object-cover shrink-0"
+      />
+    );
+  }
+  return (
+    <div
+      style={{ width: size, height: size, fontSize: size * 0.32 }}
+      className="flex items-center justify-center rounded-full bg-brand text-white font-bold shrink-0"
+    >
+      {initials(name)}
+    </div>
+  );
+}
+
+function CameraIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 8.5h3l1.5-2h7L17 8.5h3a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="13.2" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+/**
+ * Shrinks a chosen picture to a square of {@link AVATAR_SIZE} before it ever
+ * leaves the browser. A phone camera produces four megabytes; what the app
+ * needs is a 56px disc, and a couple of hundred pixels of it is enough for a
+ * retina screen. Cropped from the centre so a portrait is not squashed.
+ */
+const AVATAR_SIZE = 256;
+
+function toSquareDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const side = Math.min(img.width, img.height);
+      const canvas = document.createElement("canvas");
+      canvas.width = AVATAR_SIZE;
+      canvas.height = AVATAR_SIZE;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Зураг боловсруулж чадсангүй"));
+      ctx.drawImage(
+        img,
+        (img.width - side) / 2,
+        (img.height - side) / 2,
+        side,
+        side,
+        0,
+        0,
+        AVATAR_SIZE,
+        AVATAR_SIZE,
+      );
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Зургийг уншиж чадсангүй"));
+    };
+    img.src = url;
+  });
+}
+
 export default function ProfileForm({
   username,
   fullName,
   email,
   phone,
+  avatar,
 }: {
   username: string;
   fullName: string;
   email: string;
   phone: string;
+  avatar: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -26,6 +115,8 @@ export default function ProfileForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ fullName, email, phone });
+  const [picture, setPicture] = useState(avatar);
+  const [uploading, setUploading] = useState(false);
 
   const displayName = fullName || username;
 
@@ -41,7 +132,7 @@ export default function ProfileForm({
       const res = await fetch("/api/auth/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, avatar: picture }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -64,8 +155,46 @@ export default function ProfileForm({
         onSubmit={save}
         className="rounded-3xl bg-app-card border border-app-border p-5 space-y-3"
       >
-        <div className="flex items-center justify-center rounded-full bg-brand text-white font-bold w-14 h-14 text-lg shrink-0 mx-auto">
-          {initials(displayName)}
+        <div className="flex flex-col items-center gap-2">
+          <label className="relative cursor-pointer">
+            <Avatar src={picture} name={displayName} size={72} />
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-app-card bg-brand text-black">
+              <CameraIcon size={14} />
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                setUploading(true);
+                setError(null);
+                try {
+                  setPicture(await toSquareDataUrl(file));
+                } catch (err) {
+                  setError((err as Error).message);
+                } finally {
+                  setUploading(false);
+                }
+              }}
+            />
+          </label>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-app-muted">
+              {uploading ? "Боловсруулж байна…" : "Зураг солих"}
+            </span>
+            {picture && (
+              <button
+                type="button"
+                onClick={() => setPicture("")}
+                className="text-app-negative font-medium"
+              >
+                Устгах
+              </button>
+            )}
+          </div>
         </div>
         <div className="space-y-2.5">
           <input
@@ -115,9 +244,7 @@ export default function ProfileForm({
   return (
     <div>
       <div className="rounded-3xl bg-app-card border border-app-border p-5 flex items-center gap-4">
-        <div className="flex items-center justify-center rounded-full bg-brand text-white font-bold w-14 h-14 text-lg shrink-0">
-          {initials(displayName)}
-        </div>
+        <Avatar src={avatar} name={displayName} size={56} />
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-app-text truncate">{displayName}</div>
           <div className="text-sm text-app-muted truncate">@{username}</div>

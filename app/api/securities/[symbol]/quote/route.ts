@@ -128,7 +128,7 @@ export async function GET(
     date: last?.date ?? null,
     at: null,
     isLive: false,
-    source: "МХБ",
+    source: "mse.mn",
     checkedAt: new Date().toISOString(),
   });
 }

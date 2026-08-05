@@ -23,6 +23,7 @@ export default async function ProfilePage() {
         fullName={user?.fullName || ""}
         email={user?.email || ""}
         phone={user?.phone || ""}
+        avatar={user?.avatar || ""}
       />
 
       <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">

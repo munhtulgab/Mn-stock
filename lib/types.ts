@@ -9,6 +9,8 @@ export interface Security {
   isin?: string;
   listedDate?: string;
   updatedAt: Date;
+  /** Last time this company's price history was pulled from the exchange. */
+  pricesSyncedAt?: Date;
 }
 
 export interface PricePoint {
@@ -124,6 +126,13 @@ export interface User {
   email?: string;
   phone?: string;
   createdAt: Date;
+  /**
+   * Profile picture as a `data:image/...` URL. Held on the user document
+   * rather than in object storage: it is cropped and shrunk to a couple of
+   * hundred pixels before it is sent, which is a few tens of kilobytes, and
+   * this app has no bucket to put it in.
+   */
+  avatar?: string;
   /** Everything created after this is unread for the user. */
   notificationsReadAt?: Date;
 }
@@ -145,7 +154,10 @@ export interface AppNotification {
   previousSignal?: Signal | "NEW";
 }
 
-export type SafeUser = Pick<User, "username" | "fullName" | "email" | "phone"> & {
+export type SafeUser = Pick<
+  User,
+  "username" | "fullName" | "email" | "phone" | "avatar"
+> & {
   id: string;
 };
 

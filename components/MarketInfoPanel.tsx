@@ -51,11 +51,23 @@ type State =
   | { kind: "none" };
 
 /**
- * marketinfo.mn figures the exchange feed doesn't carry: market
- * capitalisation, shares in issue, dividend history and who owns the
- * company. Loaded client-side so a slow third party never delays the page.
+ * The figures around the price: the year's extremes, what the company is
+ * worth, what it has paid out and who owns it.
+ *
+ * The range comes from the price history the page already has, so it is
+ * there for every listing. The rest is fetched client-side, because it comes
+ * from a third party that carries nothing at all for a good many companies
+ * and should never hold up the page.
  */
-export default function MarketInfoPanel({ symbol }: { symbol: string }) {
+export default function MarketInfoPanel({
+  symbol,
+  weekHigh52,
+  weekLow52,
+}: {
+  symbol: string;
+  weekHigh52: number | null;
+  weekLow52: number | null;
+}) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [loadedFor, setLoadedFor] = useState(symbol);
 
@@ -81,14 +93,33 @@ export default function MarketInfoPanel({ symbol }: { symbol: string }) {
     };
   }, [symbol]);
 
-  // Nothing to show beats an error box for an optional third-party source.
-  if (state.kind === "none") return null;
+  const range = (
+    <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
+      <Row label="52 долоо хоногийн дээд">
+        {weekHigh52 === null ? "—" : <Num value={weekHigh52} digits={2} suffix="₮" />}
+      </Row>
+      <Row label="52 долоо хоногийн доод">
+        {weekLow52 === null ? "—" : <Num value={weekLow52} digits={2} suffix="₮" />}
+      </Row>
+    </dl>
+  );
+
+  // The extremes stand on their own when the third party has nothing.
+  if (state.kind === "none") {
+    return (
+      <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-app-text">Зах зээлийн үзүүлэлт</h2>
+        {range}
+      </div>
+    );
+  }
 
   if (state.kind === "loading") {
     return (
-      <div className="rounded-2xl border border-app-border bg-app-card p-4">
-        <div className="h-4 w-40 rounded bg-app-bg animate-pulse mb-3" />
-        <div className="h-20 rounded bg-app-bg animate-pulse" />
+      <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-app-text">Зах зээлийн үзүүлэлт</h2>
+        {range}
+        <div className="h-16 rounded bg-app-bg animate-pulse" />
       </div>
     );
   }
@@ -98,19 +129,15 @@ export default function MarketInfoPanel({ symbol }: { symbol: string }) {
 
   return (
     <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-app-text">Зах зээлийн үзүүлэлт</h2>
-        <a
-          href={state.data.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[11px] text-brand font-medium"
-        >
-          marketinfo.mn
-        </a>
-      </div>
+      <h2 className="text-sm font-semibold text-app-text">Зах зээлийн үзүүлэлт</h2>
 
       <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
+        <Row label="52 долоо хоногийн дээд">
+          {weekHigh52 === null ? "—" : <Num value={weekHigh52} digits={2} suffix="₮" />}
+        </Row>
+        <Row label="52 долоо хоногийн доод">
+          {weekLow52 === null ? "—" : <Num value={weekLow52} digits={2} suffix="₮" />}
+        </Row>
         {profile.marketCap !== null && (
           <Row label="Зах зээлийн үнэлгээ">
             <Num value={profile.marketCap} digits={0} suffix="₮" />

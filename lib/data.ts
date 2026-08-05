@@ -431,7 +431,7 @@ export async function refreshDashboardSnapshot(db: Db): Promise<number> {
   return rows.length;
 }
 
-async function getStockDetail(
+export async function getStockDetail(
   db: Db,
   symbol: string,
 ): Promise<StockDetail | null> {
@@ -466,27 +466,52 @@ async function getStockDetail(
 }
 
 /**
- * Same as getStockDetail, but first pulls this one company's price live from
- * MSE. The background sync rotates through ~200 companies on a time-boxed
- * cursor, so a given symbol's cached price can be many cycles stale; a
- * single company's page is one cheap fetch, so pages that show "today's"
- * price or chart use this instead. Falls back to whatever was already
- * cached if the live fetch fails (network hiccup, MSE briefly down, etc).
+ * How long a company's stored history is trusted before the exchange is
+ * asked again. The published series only changes when a session closes, and
+ * the running price the page shows comes from the live quote either way — so
+ * asking on every visit bought nothing and cost the whole page a round trip
+ * to mse.mn plus a rewrite of the company's entire history.
  */
-export async function getStockDetailFresh(
+const PRICE_SYNC_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * Same as getStockDetail, but pulls this one company's prices from MSE first
+ * when what is stored has gone stale. The background sync rotates through
+ * ~400 companies on a time-boxed cursor, so a given symbol can be many
+ * cycles behind; this closes that gap without making every page view pay for
+ * it. Falls back to whatever was already stored if the fetch fails.
+ */
+export async function refreshPricesIfStale(
   db: Db,
   symbol: string,
-): Promise<StockDetail | null> {
+): Promise<void> {
   const security = await db
     .collection<Security>("securities")
     .findOne({ symbol: symbol.toUpperCase() });
-  if (!security) return null;
+  if (!security) return;
+
+  const syncedAt = security.pricesSyncedAt?.getTime() ?? 0;
+  if (Date.now() - syncedAt <= PRICE_SYNC_TTL_MS) return;
 
   try {
     await syncPricesForCompany(db, security.companyCode);
   } catch (err) {
-    console.error(`live price refresh failed for ${symbol}`, err);
+    console.error(`price refresh failed for ${symbol}`, err);
   }
+  // Stamped even when the fetch failed: a source that is down should not be
+  // retried on every render of the page.
+  await db
+    .collection<Security>("securities")
+    .updateOne(
+      { companyCode: security.companyCode },
+      { $set: { pricesSyncedAt: new Date() } },
+    );
+}
 
+export async function getStockDetailFresh(
+  db: Db,
+  symbol: string,
+): Promise<StockDetail | null> {
+  await refreshPricesIfStale(db, symbol);
   return getStockDetail(db, symbol);
 }

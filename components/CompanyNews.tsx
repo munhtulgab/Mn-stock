@@ -45,7 +45,7 @@ function merge(mse: MseItem[], external: ExternalItem[]): Item[] {
       title: m.title,
       url: m.url,
       date: m.date ?? "",
-      source: "МХБ",
+      source: "mse.mn",
     })),
     ...external.map((e) => ({
       title: e.title,

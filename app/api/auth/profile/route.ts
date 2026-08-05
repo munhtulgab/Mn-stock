@@ -14,6 +14,20 @@ export async function PATCH(req: NextRequest) {
   const fullName = typeof body.fullName === "string" ? body.fullName.trim() : undefined;
   const email = typeof body.email === "string" ? body.email.trim() : undefined;
   const phone = typeof body.phone === "string" ? body.phone.trim() : undefined;
+  const avatar = typeof body.avatar === "string" ? body.avatar.trim() : undefined;
+
+  // Sent as a data URL, so its size is the request's size. The picture is
+  // shrunk to 256px before it leaves the browser; anything much larger than
+  // that is not a profile picture, and the user document is not the place
+  // for it either way.
+  if (avatar !== undefined && avatar !== "") {
+    if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatar)) {
+      return NextResponse.json({ error: "Зураг танигдсангүй" }, { status: 400 });
+    }
+    if (avatar.length > 400_000) {
+      return NextResponse.json({ error: "Зураг хэт том байна" }, { status: 413 });
+    }
+  }
 
   if (fullName === "") {
     return NextResponse.json({ error: "Нэрээ оруулна уу" }, { status: 400 });
@@ -25,6 +39,7 @@ export async function PATCH(req: NextRequest) {
     ["fullName", fullName],
     ["email", email],
     ["phone", phone],
+    ["avatar", avatar],
   ];
   const toSet: Record<string, string> = {};
   const toUnset: Record<string, ""> = {};

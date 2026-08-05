@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
-import { getStockDetailFresh } from "@/lib/data";
+import { getStockDetail, refreshPricesIfStale } from "@/lib/data";
 import { sessionChangePct } from "@/lib/priceChange";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getSettings } from "@/lib/settings";
@@ -46,10 +47,17 @@ export default async function StockDetailPage({
   const { symbol } = await params;
   const db = await getDb();
   const [detail, user] = await Promise.all([
-    getStockDetailFresh(db, symbol),
+    getStockDetail(db, symbol),
     getCurrentUser(db),
   ]);
   if (!detail) notFound();
+
+  // The exchange is asked for this company's history after the page has been
+  // sent, not before it renders. The published series only changes when a
+  // session closes and the running price comes from the live quote, so making
+  // the reader wait on that round trip bought nothing — it was twelve seconds
+  // of the thirteen this page took.
+  after(() => refreshPricesIfStale(db, symbol));
 
   const { security, financials, priceHistory, fullHistory, recommendation, marketMedianPe } =
     detail;
@@ -225,7 +233,11 @@ export default async function StockDetailPage({
       </div>
 
       <div>
-        <MarketInfoPanel symbol={security.symbol} />
+        <MarketInfoPanel
+          symbol={security.symbol}
+          weekHigh52={recommendation.indicators.weekHigh52}
+          weekLow52={recommendation.indicators.weekLow52}
+        />
       </div>
 
       <div className="lg:col-span-3">

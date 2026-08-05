@@ -9,23 +9,23 @@ import {
   useRef,
   useState,
 } from "react";
-import { AlertIcon, CheckIcon, CloseIcon, InfoIcon } from "./icons";
+import { AlertIcon, CheckIcon, InfoIcon } from "./icons";
 
 /**
- * Transient feedback.
+ * What the app says back after you ask it for something.
  *
- * The app used to say "it worked" with `alert()` — a modal that blocks the
- * page, looks nothing like the rest of it, and has to be dismissed before
- * anything else can happen — or with a line of text under a button that is
- * easy to miss on a phone. A toast says the same thing without taking the
- * screen, and shows how long it has left rather than vanishing unannounced.
+ * This used to be a small card sliding in above the tab bar, which is easy to
+ * miss on a phone held at arm's length — a trade is confirmed, and the reader
+ * is left looking for the confirmation. It is a card in the middle of the
+ * screen now: one thing, said plainly, with a button to carry on. It still
+ * clears itself, so nobody is made to dismiss a piece of good news.
  */
 
 export type ToastVariant = "success" | "error" | "info";
 
 export interface ToastOptions {
   title: string;
-  /** Second line. Optional: a one-line toast is a legitimate shape. */
+  /** Second line. Optional: a one-line message is a legitimate shape. */
   body?: string;
   variant?: ToastVariant;
   /** Milliseconds on screen. Errors linger; confirmations need less. */
@@ -41,19 +41,16 @@ interface Toast extends Required<Pick<ToastOptions, "title" | "variant" | "durat
 }
 
 const DEFAULT_DURATION: Record<ToastVariant, number> = {
-  success: 3_500,
-  info: 4_500,
+  success: 4_000,
+  info: 5_000,
   // Something went wrong is worth reading twice.
-  error: 6_500,
+  error: 7_000,
 };
-
-/** Beyond this the stack covers the screen it is reporting on. */
-const MAX_VISIBLE = 3;
 
 const ToastContext = createContext<((options: ToastOptions) => void) | null>(null);
 
 /**
- * Raises a toast. Safe to call from anywhere under the provider; outside it
+ * Raises a message. Safe to call from anywhere under the provider; outside it
  * the call is a no-op rather than a crash, so a component can be rendered in
  * isolation without dragging the provider along.
  */
@@ -64,108 +61,116 @@ export function useToast(): (options: ToastOptions) => void {
 
 const STYLES: Record<
   ToastVariant,
-  { rail: string; disc: string; bar: string; icon: React.ReactNode }
+  { card: string; button: string; icon: React.ReactNode; iconColor: string }
 > = {
   success: {
-    rail: "bg-app-positive",
-    disc: "bg-white/20 text-white",
-    bar: "bg-white/40",
-    icon: <CheckIcon size={20} />,
+    card: "from-[#3a9fd8] to-[#37c07a]",
+    button: "text-[#1c7fb8]",
+    icon: <CheckIcon size={34} />,
+    iconColor: "text-[#37c07a]",
   },
   error: {
-    rail: "bg-app-negative",
-    disc: "bg-white/20 text-white",
-    bar: "bg-white/40",
-    icon: <AlertIcon size={20} />,
+    card: "from-[#e0574a] to-[#b8323f]",
+    button: "text-[#c0392b]",
+    icon: <AlertIcon size={34} />,
+    iconColor: "text-[#c0392b]",
   },
-  // Not the brand colour: it is the same green as "positive", so a neutral
-  // message would have been indistinguishable from a confirmation. A card
-  // surface with a brand-tinted disc says "read this" without claiming
-  // anything went right.
   info: {
-    rail: "bg-app-elevated border border-app-border",
-    disc: "bg-brand-light text-brand",
-    bar: "bg-brand",
-    icon: <InfoIcon size={20} />,
+    card: "from-[#3f4a5c] to-[#232a36]",
+    button: "text-[#2f3746]",
+    icon: <InfoIcon size={34} />,
+    iconColor: "text-[#3f4a5c]",
   },
 };
 
+/**
+ * The scalloped disc the check sits in, drawn from a polar rosette rather
+ * than assembled out of circles — ten lobes, sampled finely enough that
+ * the outline reads as smooth at any size it is shown at.
+ */
+const ROSETTE_PATH = (() => {
+  const lobes = 10;
+  const points: string[] = [];
+  for (let i = 0; i <= 360; i++) {
+    const angle = (i / 360) * Math.PI * 2;
+    const radius = 42 + 7 * Math.cos(lobes * angle);
+    const x = 50 + radius * Math.cos(angle);
+    const y = 50 + radius * Math.sin(angle);
+    points.push(`${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`);
+  }
+  return `${points.join(" ")} Z`;
+})();
+
 function ToastCard({ toast, onClose }: { toast: Toast; onClose: () => void }) {
   const style = STYLES[toast.variant];
-  const [remaining, setRemaining] = useState(1);
 
-  // The bar is driven from a timer rather than a CSS animation so it stays in
-  // step with the dismissal even when the tab is throttled in the background.
   useEffect(() => {
-    const started = Date.now();
-    const tick = setInterval(() => {
-      const left = 1 - (Date.now() - started) / toast.duration;
-      setRemaining(left > 0 ? left : 0);
-      if (left <= 0) onClose();
-    }, 50);
-    return () => clearInterval(tick);
+    const timer = setTimeout(onClose, toast.duration);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [toast.duration, onClose]);
 
   return (
     <div
-      role="status"
-      aria-live={toast.variant === "error" ? "assertive" : "polite"}
-      className={`pointer-events-auto overflow-hidden rounded-2xl shadow-lg shadow-black/20 ${style.rail} ${
-        toast.variant === "info" ? "text-app-text" : "text-white"
-      } animate-[toast-in_180ms_ease-out]`}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-6 backdrop-blur-[2px]"
+      onClick={onClose}
     >
-      <div className="flex items-center gap-3 px-3.5 py-3">
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${style.disc}`}
-        >
-          {style.icon}
+      <div
+        role="status"
+        aria-live={toast.variant === "error" ? "assertive" : "polite"}
+        onClick={(e) => e.stopPropagation()}
+        className={`animate-[toast-in_200ms_ease-out] relative w-full max-w-xs overflow-hidden rounded-3xl bg-linear-to-br ${style.card} px-6 pb-6 pt-8 text-center text-white shadow-2xl shadow-black/40`}
+      >
+        {/* The lighter disc in the corner, as on the reference. */}
+        <span className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-white/10" />
+
+        <span className="relative mx-auto mb-4 flex h-20 w-20 items-center justify-center">
+          <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full">
+            <path d={ROSETTE_PATH} fill="rgba(255,255,255,0.94)" />
+          </svg>
+          <span className={`relative ${style.iconColor}`}>{style.icon}</span>
         </span>
 
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold leading-tight">{toast.title}</div>
-          {toast.body && (
-            <div className="mt-0.5 text-xs leading-snug opacity-90 break-words">
-              {toast.body}
-            </div>
-          )}
-        </div>
-
-        {toast.action && (
-          <button
-            onClick={() => {
-              toast.action!.onClick();
-              onClose();
-            }}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${
-              toast.variant === "info" ? "bg-brand text-black" : "bg-white/20"
-            } active:scale-95 transition-transform`}
-          >
-            {toast.action.label}
-          </button>
+        <h2 className="relative text-2xl font-bold leading-tight">{toast.title}</h2>
+        {toast.body && (
+          <p className="relative mt-1.5 text-sm leading-snug text-white/90 break-words">
+            {toast.body}
+          </p>
         )}
 
-        <button
-          onClick={onClose}
-          aria-label="Хаах"
-          className="shrink-0 opacity-70 active:opacity-100"
-        >
-          <CloseIcon size={16} />
-        </button>
-      </div>
-
-      {/* How long is left, so a message never simply disappears mid-read. */}
-      <div className="h-1 w-full bg-black/20">
-        <div
-          className={`h-full ${style.bar} transition-[width] duration-75 ease-linear`}
-          style={{ width: `${remaining * 100}%` }}
-        />
+        <div className="relative mt-6 flex flex-col gap-2">
+          {toast.action && (
+            <button
+              onClick={() => {
+                toast.action!.onClick();
+                onClose();
+              }}
+              className="w-full rounded-full bg-white/20 py-3 text-base font-bold text-white active:scale-[0.98] transition-transform"
+            >
+              {toast.action.label}
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            autoFocus
+            className={`w-full rounded-full bg-white py-3 text-base font-bold ${style.button} active:scale-[0.98] transition-transform`}
+          >
+            Үргэлжлүүлэх
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 export default function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [queue, setQueue] = useState<Toast[]>([]);
   const nextId = useRef(0);
 
   const show = useCallback((options: ToastOptions) => {
@@ -178,23 +183,27 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
       duration: options.duration ?? DEFAULT_DURATION[variant],
       action: options.action,
     };
-    setToasts((prev) => [...prev, toast].slice(-MAX_VISIBLE));
+    // A card in the middle of the screen can only say one thing at a time;
+    // anything raised while it is up waits its turn rather than stacking.
+    setQueue((prev) => [...prev, toast].slice(-3));
   }, []);
 
   const dismiss = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setQueue((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const current = queue[0];
 
   return (
     <ToastContext.Provider value={show}>
       {children}
-      {/* Above the bottom bar and clear of the home indicator; the wrapper
-          ignores taps so the page underneath stays usable. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col gap-2 px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)]">
-        {toasts.map((toast) => (
-          <ToastCard key={toast.id} toast={toast} onClose={() => dismiss(toast.id)} />
-        ))}
-      </div>
+      {current && (
+        <ToastCard
+          key={current.id}
+          toast={current}
+          onClose={() => dismiss(current.id)}
+        />
+      )}
     </ToastContext.Provider>
   );
 }
