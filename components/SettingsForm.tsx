@@ -423,7 +423,7 @@ export default function SettingsForm({
                   </a>
                   <button
                     onClick={() => removeSource(i)}
-                    className="text-app-negative text-[11px] ml-3 font-medium shrink-0"
+                    className="flex items-center gap-1 text-app-negative text-[11px] ml-3 font-medium shrink-0"
                   >
                     <TrashIcon size={13} /> Устгах
                   </button>
@@ -477,7 +477,7 @@ export default function SettingsForm({
               type="button"
               onClick={checkSources}
               disabled={sourceCheck.kind === "checking"}
-              className="flex-1 rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
             >
               <RefreshIcon size={15} />
               {sourceCheck.kind === "checking"
@@ -754,7 +754,7 @@ export default function SettingsForm({
               type="button"
               onClick={checkKey}
               disabled={!smsEnabled || !smsCurrent.apiKey || keyCheck.kind === "checking"}
-              className="w-full rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
             >
               <SearchIcon size={15} />
               {keyCheck.kind === "checking" ? "Шалгаж байна..." : "Түлхүүр шалгах"}
@@ -831,7 +831,7 @@ export default function SettingsForm({
                   <button
                     type="button"
                     onClick={() => setSmsRecipients((prev) => prev.filter((x) => x !== r))}
-                    className="text-app-negative text-[11px] font-medium"
+                    className="flex items-center gap-1 text-app-negative text-[11px] font-medium"
                   >
                     <TrashIcon size={13} /> Устгах
                   </button>
@@ -858,7 +858,7 @@ export default function SettingsForm({
                 type="button"
                 onClick={sendTest}
                 disabled={!smsEnabled || !testTo.trim() || testState.kind === "sending"}
-                className="rounded-xl border border-app-border px-4 py-2 text-sm font-medium text-brand disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-xl border border-app-border px-4 py-2 text-sm font-medium text-brand disabled:opacity-50"
               >
                 <SendIcon size={15} />
                 {testState.kind === "sending" ? "Илгээж байна..." : "Илгээх"}
