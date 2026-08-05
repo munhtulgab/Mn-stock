@@ -220,7 +220,12 @@ function extractHeadlines($: cheerio.CheerioAPI, baseUrl: string): NewsHeadline[
     const min = dated ? MIN_DATED_HEADLINE_CHARS : MIN_HEADLINE_CHARS;
     if (title.length < min || title.length > 250) return;
     const href = $(el).attr("href");
-    if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+    // "%23" is "#" already encoded, which a menu built for a single-page app
+    // routinely emits — tavanbogdcapital.com's one "headline" was a nav entry
+    // linking there.
+    if (!href || href.startsWith("#") || href === "%23" || href.startsWith("javascript:")) {
+      return;
+    }
 
     let absolute: string;
     try {
@@ -228,6 +233,8 @@ function extractHeadlines($: cheerio.CheerioAPI, baseUrl: string): NewsHeadline[
     } catch {
       return;
     }
+    // A link back to the page it sits on is navigation, not an article.
+    if (absolute.replace(/[#?].*$/, "") === baseUrl.replace(/[#?].*$/, "")) return;
     const key = `${title}|${absolute}`;
     if (seen.has(key)) return;
     seen.add(key);
