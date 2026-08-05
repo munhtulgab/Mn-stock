@@ -89,6 +89,47 @@ export async function GET(req: NextRequest) {
   $("script, style, noscript, svg").remove();
   const text = $("body").text().replace(/\s+/g, " ").trim();
 
+  // Try the endpoints the widgets name, so one report carries both where the
+  // data comes from and what it looks like — otherwise finding the endpoint
+  // and learning its shape would take two round trips.
+  const origin = new URL(finalUrl).origin;
+  const probes = await Promise.all(
+    dataUrls
+      .filter((u) => u.startsWith("/") || u.startsWith(origin))
+      .slice(0, 8)
+      .map(async (path) => {
+        const endpoint = path.startsWith("/") ? `${origin}${path}` : path;
+        for (const method of ["POST", "GET"] as const) {
+          try {
+            const res = await fetch(endpoint, {
+              method,
+              headers: {
+                ...headers,
+                "X-Requested-With": "XMLHttpRequest",
+                ...(method === "POST"
+                  ? { "Content-Type": "application/x-www-form-urlencoded" }
+                  : {}),
+              },
+              body: method === "POST" ? "" : undefined,
+              signal: AbortSignal.timeout(15_000),
+            });
+            const preview = (await res.text()).slice(0, 400);
+            if (res.ok && /^[[{]/.test(preview.trim())) {
+              return { endpoint, method, status: res.status, preview };
+            }
+            if (method === "GET") {
+              return { endpoint, method, status: res.status, preview: preview.slice(0, 120) };
+            }
+          } catch (err) {
+            if (method === "GET") {
+              return { endpoint, method, status: 0, preview: (err as Error).message };
+            }
+          }
+        }
+        return null;
+      }),
+  );
+
   return NextResponse.json({
     url: target,
     finalUrl,
@@ -103,5 +144,6 @@ export async function GET(req: NextRequest) {
     payloadTextLength: extractNextPayloadText(body).length,
     scripts,
     dataUrls,
+    endpointProbes: probes.filter(Boolean),
   });
 }
