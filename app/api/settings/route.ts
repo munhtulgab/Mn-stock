@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getSettings, maskSettings, updateSettings } from "@/lib/settings";
 import { isSettingsRequestAuthorized } from "@/lib/settingsAuth";
+import { normaliseCookie } from "@/lib/mse/facebook";
 
 export async function GET(req: NextRequest) {
   const db = await getDb();
@@ -37,6 +38,15 @@ export async function POST(req: NextRequest) {
   const facebookToken =
     typeof body.facebookToken === "string" && body.facebookToken.trim()
       ? body.facebookToken.trim()
+      : undefined;
+
+  // Same rule, plus "-" to clear: a cookie expires and the operator needs a
+  // way to remove a dead one without replacing it.
+  const facebookCookie =
+    typeof body.facebookCookie === "string" && body.facebookCookie.trim()
+      ? body.facebookCookie.trim() === "-"
+        ? ""
+        : normaliseCookie(body.facebookCookie)
       : undefined;
 
   // Empty means "keep what's stored"; "-" clears it.
@@ -77,6 +87,7 @@ export async function POST(req: NextRequest) {
   const updated = await updateSettings(db, {
     newsSources,
     facebookToken,
+    facebookCookie,
     extraCaCerts,
     apiKeys,
     sms: Object.keys(sms).length > 0 ? sms : undefined,

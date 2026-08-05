@@ -28,6 +28,14 @@ export interface AppSettings {
    */
   facebookToken?: string;
   /**
+   * Facebook session cookie ("c_user=...; xs=...") used to read saved pages.
+   * A token only reaches pages it was issued for, so this is what makes an
+   * ordinary followed page readable. It is sent to facebook.com and nowhere
+   * else, and it carries the account's full access — hence a secondary
+   * account is the sane thing to use.
+   */
+  facebookCookie?: string;
+  /**
    * PEM bundle of intermediate certificates that sources fail to send
    * themselves (marketinfo.mn is one). Added to the trust list so those
    * sites verify — not a secret, and not a way around verification.
@@ -68,6 +76,7 @@ export async function getSettings(db: Db): Promise<AppSettings> {
   return {
     newsSources: Array.isArray(doc.newsSources) ? doc.newsSources : [],
     facebookToken: doc.facebookToken,
+    facebookCookie: doc.facebookCookie,
     extraCaCerts: doc.extraCaCerts,
     apiKeys: doc.apiKeys ?? {},
     sms: {
@@ -93,6 +102,7 @@ export function maskSettings(settings: AppSettings) {
   return {
     newsSources: settings.newsSources,
     facebookToken: mask(settings.facebookToken),
+    facebookCookie: mask(settings.facebookCookie),
     // A certificate is public, but sending the whole bundle to the browser on
     // every settings load is pointless — the form only needs to know it's set.
     extraCaCount: settings.extraCaCerts
@@ -120,6 +130,7 @@ export async function updateSettings(
   patch: {
     newsSources?: string[];
     facebookToken?: string;
+    facebookCookie?: string;
     extraCaCerts?: string;
     apiKeys?: Partial<AppSettings["apiKeys"]>;
     sms?: Partial<SmsSettings>;
@@ -130,6 +141,7 @@ export async function updateSettings(
   const next: AppSettings = {
     newsSources: patch.newsSources ?? current.newsSources,
     facebookToken: patch.facebookToken ?? current.facebookToken,
+    facebookCookie: patch.facebookCookie ?? current.facebookCookie,
     extraCaCerts: patch.extraCaCerts ?? current.extraCaCerts,
     apiKeys: { ...current.apiKeys, ...patch.apiKeys },
     sms: { ...current.sms, ...patch.sms },

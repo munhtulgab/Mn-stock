@@ -5,6 +5,7 @@ import { useState } from "react";
 interface MaskedSettings {
   newsSources: string[];
   facebookToken: string | null;
+  facebookCookie: string | null;
   extraCaCount: number;
   apiKeys: {
     anthropic: string | null;
@@ -98,6 +99,8 @@ export default function SettingsForm({
   const [newSourceInput, setNewSourceInput] = useState("");
   const [fbTokenInput, setFbTokenInput] = useState("");
   const [fbCurrent, setFbCurrent] = useState(initial.facebookToken);
+  const [fbCookieInput, setFbCookieInput] = useState("");
+  const [fbCookieCurrent, setFbCookieCurrent] = useState(initial.facebookCookie);
   const [caInput, setCaInput] = useState("");
   const [caCount, setCaCount] = useState(initial.extraCaCount);
   const [sourceCheck, setSourceCheck] = useState<
@@ -261,6 +264,7 @@ export default function SettingsForm({
       }
       if (smsKeyInput.trim()) body.smsApiKey = smsKeyInput.trim();
       if (fbTokenInput.trim()) body.facebookToken = fbTokenInput.trim();
+      if (fbCookieInput.trim()) body.facebookCookie = fbCookieInput.trim();
       if (caInput.trim()) body.extraCaCerts = caInput.trim();
 
       const res = await fetch("/api/settings", {
@@ -274,6 +278,8 @@ export default function SettingsForm({
       setSmsCurrent(data.sms);
       setNotifCurrent(data.notifications);
       setFbCurrent(data.facebookToken);
+      setFbCookieCurrent(data.facebookCookie);
+      setFbCookieInput("");
       setCaCount(data.extraCaCount);
       setKeyInputs({});
       setSmsKeyInput("");
@@ -406,6 +412,42 @@ export default function SettingsForm({
         <div className="mt-4 pt-4 border-t border-app-border space-y-1.5">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-app-text">
+              Facebook cookie
+            </label>
+            <span
+              className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${
+                fbCookieCurrent
+                  ? "bg-app-positive-bg text-app-positive"
+                  : "bg-app-bg text-app-muted"
+              }`}
+            >
+              {fbCookieCurrent ? "Идэвхтэй" : "Тохируулаагүй"}
+            </span>
+          </div>
+          <p className="text-[11px] text-app-muted">
+            Хадгалсан Facebook хуудаснуудаас мэдээ татахад хэрэглэнэ. Компьютерийн
+            хөтөч дээр facebook.com-д нэвтэрч → DevTools (F12) → Application →
+            Cookies → facebook.com хэсгээс <b>c_user</b> болон <b>xs</b> хоёрын
+            утгыг <code>c_user=...; xs=...</code> хэлбэрээр хуулж тавина.
+            Цэвэрлэхийн тулд <code>-</code> бичнэ.
+          </p>
+          <p className="text-[11px] text-app-negative">
+            Анхаар: энэ cookie нь тухайн Facebook бүртгэлд бүрэн хандах эрх өгдөг
+            тул үндсэн бус (туслах) бүртгэл ашиглахыг зөвлөе. Гарах товч дарвал
+            cookie хүчингүй болно.
+          </p>
+          <input
+            type="password"
+            placeholder={fbCookieCurrent ? `Одоогийн: ${fbCookieCurrent}` : "c_user=...; xs=..."}
+            value={fbCookieInput}
+            onChange={(e) => setFbCookieInput(e.target.value)}
+            className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
+          />
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-app-border space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-app-text">
               Facebook хандалтын токен
             </label>
             <span
@@ -417,9 +459,9 @@ export default function SettingsForm({
             </span>
           </div>
           <p className="text-[11px] text-app-muted">
-            Facebook нэвтрээгүй хүнд агуулгаа харуулдаггүй тул facebook.com линк
-            зөвхөн Page access token-той үед ажиллана. Токенгүй бол тухайн эх
-            сурвалж алгасагдана.
+            Өөрийн эзэмшдэг хуудсанд зориулсан нэмэлт арга. Cookie байхгүй үед,
+            эсвэл cookie хүчингүй болсон үед энэ токеноор уншина. Хоёулаа
+            байхгүй бол facebook.com эх сурвалж алгасагдана.
           </p>
           <input
             type="password"

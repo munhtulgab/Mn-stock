@@ -11,6 +11,12 @@ import {
 } from "@/lib/marketinfo/news";
 import { extractNextPayloadText } from "./nextPayload";
 import {
+  fetchWithCookie,
+  fetchWithToken,
+  pageSlug,
+  type FacebookPost,
+} from "./facebook";
+import {
   FEED_PATHS,
   feedLinkFromHtml,
   feedToText,
@@ -211,71 +217,63 @@ function extractHeadlines($: cheerio.CheerioAPI, baseUrl: string): NewsHeadline[
 }
 
 /**
- * Facebook has no anonymous read path: the page HTML redirects to a login
- * wall and the Graph API rejects unauthenticated reads outright. A page
- * access token is the only way in, so without one we say so plainly rather
- * than pretending the source is merely broken.
+ * Facebook has no anonymous read path: every entry point redirects to a
+ * login wall or returns a shell that fills itself in with JavaScript. A
+ * saved page therefore needs either the operator's session cookie — which
+ * reads any page the account can see — or a Graph API token, which reads
+ * only the pages it was issued for. The cookie is tried first because that
+ * is the one that makes an ordinary saved page work.
  */
 async function fetchFacebook(
   url: string,
-  token?: string,
+  credentials: { cookie?: string; token?: string },
 ): Promise<NewsSourceResult> {
-  const slug = url
-    .replace(/^https?:\/\/(?:[\w-]+\.)?facebook\.com\//i, "")
-    .split(/[/?#]/)[0]
-    .trim();
-  if (!slug) {
+  if (!pageSlug(url)) {
     return fail(url, "error", "Facebook хуудасны нэрийг линкээс уншиж чадсангүй.");
   }
-  if (!token) {
+  if (!credentials.cookie && !credentials.token) {
     return fail(
       url,
       "login_required",
-      "Facebook нэвтрэлтгүйгээр уншигдахгүй. Тохиргоо дотор Facebook хандалтын токен нэмвэл ажиллана.",
+      "Facebook нэвтрэлтгүйгээр уншигдахгүй. Тохиргоо дотор Facebook cookie эсвэл " +
+        "хандалтын токен нэмвэл хадгалсан хуудаснууд ажиллана.",
     );
   }
 
-  try {
-    const api = new URL(`https://graph.facebook.com/v21.0/${slug}/posts`);
-    api.searchParams.set("fields", "message,created_time,permalink_url");
-    api.searchParams.set("limit", "25");
-    api.searchParams.set("access_token", token);
+  let result = credentials.cookie
+    ? await fetchWithCookie(url, credentials.cookie)
+    : { posts: [] as FacebookPost[], error: undefined as string | undefined };
 
-    const res = await fetch(api, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const message = body?.error?.message ?? `Graph API ${res.status}`;
-      return fail(url, "error", `Facebook: ${message}`);
-    }
+  // A token issued for this page still works when the cookie has expired.
+  if (result.posts.length === 0 && credentials.token) {
+    const viaToken = await fetchWithToken(url, credentials.token);
+    if (viaToken.posts.length > 0) result = viaToken;
+    else result.error = result.error ?? viaToken.error;
+  }
 
-    const posts: { message?: string; created_time?: string; permalink_url?: string }[] =
-      Array.isArray(body?.data) ? body.data : [];
-    const withText = posts.filter((p) => p.message?.trim());
-    if (withText.length === 0) {
-      return fail(url, "empty", "Facebook хуудсанд бичвэртэй пост олдсонгүй.");
-    }
-
-    const text = withText
-      .map((p) => `[${p.created_time?.slice(0, 10) ?? ""}] ${p.message!.trim()}`)
-      .join("\n\n");
-    return {
-      url,
-      status: "ok",
-      text,
-      chars: text.length,
-      headlines: withText.map((p) => ({
-        title: p.message!.trim().replace(/\s+/g, " ").slice(0, 200),
-        url: p.permalink_url ?? url,
-      })),
-    };
-  } catch (err) {
-    const timeout = err instanceof Error && err.name === "TimeoutError";
+  if (result.posts.length === 0) {
     return fail(
       url,
-      timeout ? "timeout" : "error",
-      timeout ? "Facebook хугацаа хэтэрлээ." : `Facebook: ${(err as Error).message}`,
+      result.loginWall ? "login_required" : "empty",
+      result.error ?? "Facebook хуудсанд бичвэртэй пост олдсонгүй.",
     );
   }
+
+  const text = result.posts
+    .map((p) => `[${p.date ?? ""}] ${p.text}`)
+    .join("\n\n");
+  return {
+    url,
+    status: "ok",
+    via: "api",
+    text,
+    chars: text.length,
+    headlines: result.posts.map((p) => ({
+      title: p.text.slice(0, 200),
+      url: p.url ?? url,
+      date: p.date,
+    })),
+  };
 }
 
 /**
@@ -487,12 +485,12 @@ async function tryContentPaths(
  */
 async function extractOne(
   url: string,
-  facebookToken?: string,
+  facebook: { cookie?: string; token?: string } = {},
   extraCerts: string[] = [],
 ): Promise<NewsSourceResult> {
   const host = hostOf(url);
   if (!host) return fail(url, "error", "Линк буруу байна.");
-  if (hostMatches(host, FACEBOOK_HOSTS)) return fetchFacebook(url, facebookToken);
+  if (hostMatches(host, FACEBOOK_HOSTS)) return fetchFacebook(url, facebook);
   if (isMarketInfoHost(host)) return fetchMarketInfo(url);
   if (hostMatches(host, LOGIN_WALLED_HOSTS)) {
     return fail(
@@ -605,14 +603,20 @@ async function extractOne(
 /** Every configured source with its outcome, failures included. */
 export async function fetchNewsSources(
   urls: string[],
-  options: { facebookToken?: string; extraCaCerts?: string } = {},
+  options: {
+    facebookToken?: string;
+    facebookCookie?: string;
+    extraCaCerts?: string;
+  } = {},
 ): Promise<NewsSourceResult[]> {
   const extraCerts = options.extraCaCerts
     ? parsePemBundle(options.extraCaCerts)
     : [];
-  return Promise.all(
-    urls.map((url) => extractOne(url, options.facebookToken, extraCerts)),
-  );
+  const facebook = {
+    cookie: options.facebookCookie,
+    token: options.facebookToken,
+  };
+  return Promise.all(urls.map((url) => extractOne(url, facebook, extraCerts)));
 }
 
 /** Just the sources that produced usable text, for the AI prompt. */
