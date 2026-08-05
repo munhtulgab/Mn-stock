@@ -365,7 +365,16 @@ export default function SettingsForm({
             return (
               <li key={i} className="rounded-xl bg-app-bg px-3 py-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="truncate text-app-text">{s}</span>
+                  {/* The address is the useful thing about a source row, so
+                      it opens the site rather than sitting there as text. */}
+                  <a
+                    href={s}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-w-0 truncate text-brand underline underline-offset-2 active:opacity-70"
+                  >
+                    {s}
+                  </a>
                   <button
                     onClick={() => removeSource(i)}
                     className="text-app-negative text-[11px] ml-3 font-medium shrink-0"
