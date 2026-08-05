@@ -53,15 +53,15 @@ export default async function NewsPage() {
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-app-text">Зах зээлийн мэдээ</h1>
-        <p className="text-xs text-app-muted mt-0.5">
-          Сүүлийн 30 хоног
-          {items.length > 0 && ` · ${items.length} мэдээ`}
-        </p>
-        <div className="mt-1.5">
-          <NewsRefresher stale={stale} empty={items.length === 0} />
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-app-text">Зах зээлийн мэдээ</h1>
+          <p className="text-xs text-app-muted mt-0.5">
+            Сүүлийн 30 хоног
+            {items.length > 0 && ` · ${items.length} мэдээ`}
+          </p>
         </div>
+        <NewsRefresher stale={stale} empty={items.length === 0} />
       </div>
 
       {items.length === 0 ? (

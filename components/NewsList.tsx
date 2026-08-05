@@ -30,8 +30,10 @@ export default function NewsList({ items }: { items: NewsListItem[] }) {
           <div className="text-sm font-semibold uppercase text-app-text leading-snug">
             {item.title}
           </div>
-          <div className="text-[11px] text-app-muted mt-1">{formatWhen(item.date)}</div>
-          <div className="text-[11px] text-brand mt-0.5">{item.source}</div>
+          <div className="mt-1 flex items-baseline justify-between gap-3 text-[11px]">
+            <span className="text-app-muted">{formatWhen(item.date)}</span>
+            <span className="text-brand truncate">{item.source}</span>
+          </div>
         </a>
       ))}
     </div>
