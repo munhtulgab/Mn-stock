@@ -144,7 +144,12 @@ export default async function StockDetailPage({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-app-border bg-app-card p-4">
+      {/* From a laptop up the page becomes a board rather than a scroll: the
+          chart takes two thirds with the numbers beside it, and the news sits
+          next to who owns the company. Source order is the same either way,
+          so the reading sequence does not depend on the screen. */}
+      <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:items-start">
+      <div className="lg:col-span-3 rounded-2xl border border-app-border bg-app-card p-4">
         <div className="flex items-center gap-3 mb-3">
           <SignalBadge signal={recommendation.signal} />
           <span className="text-xs text-app-muted">
@@ -162,12 +167,14 @@ export default async function StockDetailPage({
       </div>
 
       {priceHistory.length > 0 && (
-        <div className="rounded-2xl border border-app-border bg-app-card p-4">
+        <div className="lg:col-span-2 rounded-2xl border border-app-border bg-app-card p-4">
           <PriceChart data={chartData} title="Ханшийн график" />
         </div>
       )}
 
-      <div className="grid sm:grid-cols-2 gap-4">
+      {/* Beside the chart on a wide screen, where one under the other keeps
+          the pair the same height as it. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
         <div className="rounded-2xl border border-app-border bg-app-card p-4">
           <h2 className="text-sm font-semibold text-app-text mb-3">Техник үзүүлэлт</h2>
           <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
@@ -209,13 +216,24 @@ export default async function StockDetailPage({
         </div>
       </div>
 
-      <MarketInfoPanel symbol={security.symbol} />
+      {/* News first: marketinfo.mn carries nothing for a good many listings
+          and its panel then renders nothing at all, which on a wide screen
+          would leave the news stranded in the right two thirds beside a
+          hole where the panel would have been. */}
+      <div className="lg:col-span-2">
+        <CompanyNews symbol={security.symbol} />
+      </div>
 
-      <CompanyNews symbol={security.symbol} />
+      <div>
+        <MarketInfoPanel symbol={security.symbol} />
+      </div>
 
-      <AiSignalPanel symbol={security.symbol} />
+      <div className="lg:col-span-3">
+        <AiSignalPanel symbol={security.symbol} />
+      </div>
+      </div>
 
-      <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-1 bg-linear-to-t from-app-bg via-app-bg to-transparent">
+      <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-1 bg-linear-to-t from-app-bg via-app-bg to-transparent lg:mx-auto lg:max-w-md">
         <TradeModal
           symbol={security.symbol}
           currentPrice={last?.close ?? null}

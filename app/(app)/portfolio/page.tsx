@@ -45,7 +45,7 @@ export default async function PortfolioPage() {
             <div className="text-xs font-normal text-app-muted">өнөөдөр</div>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 pt-4 border-t border-app-border">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-4 border-t border-app-border">
           <div>
             <div className="text-xs text-app-muted">Бэлэн мөнгө</div>
             <div className="text-sm text-app-text">
@@ -77,6 +77,9 @@ export default async function PortfolioPage() {
         </div>
       </div>
 
+      {/* Holdings and the trades that produced them, side by side once there
+          is room for both. */}
+      <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
       <section>
         <h2 className="font-semibold text-app-text text-sm mb-3">Хувьцаанууд</h2>
         {portfolio.holdings.length === 0 ? (
@@ -134,6 +137,7 @@ export default async function PortfolioPage() {
           <TransactionList transactions={transactions.slice(0, RECENT_ORDERS)} />
         )}
       </section>
+      </div>
     </div>
   );
 }

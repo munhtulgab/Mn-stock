@@ -24,7 +24,7 @@ let currentActionId: string | null = null;
  * are a mix of refs, markers and the payload itself, so every line is tried
  * and the caller decides which shape it wanted.
  */
-export function parseActionPayload<T>(
+function parseActionPayload<T>(
   text: string,
   matches: (value: unknown) => value is T,
 ): T | null {

@@ -7,7 +7,7 @@
  * morning's alert under yesterday.
  */
 
-export const ULAANBAATAR_TZ = "Asia/Ulaanbaatar";
+const ULAANBAATAR_TZ = "Asia/Ulaanbaatar";
 
 const DAY_FORMAT = new Intl.DateTimeFormat("en-CA", {
   timeZone: ULAANBAATAR_TZ,

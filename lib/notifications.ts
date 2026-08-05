@@ -51,7 +51,7 @@ export async function recordNotifications(
   }
 }
 
-export async function getNotifications(
+async function getNotifications(
   db: Db,
   limit = 50,
 ): Promise<AppNotification[]> {

@@ -45,9 +45,11 @@ export async function GET(
       extraCaCerts: settings.extraCaCerts,
     });
     if (!data) {
-      // Stale beats empty; otherwise say plainly that there's nothing yet.
+      // Stale beats empty. Otherwise this is a plain "nothing here" and not
+      // an error: a 404 made every company page log a failed request in the
+      // console for an optional panel that is meant to stay quiet.
       if (cached) return NextResponse.json(cached.data);
-      return NextResponse.json({ error: "UNAVAILABLE" }, { status: 404 });
+      return NextResponse.json({ available: false });
     }
     await snapshots.updateOne(
       { key },

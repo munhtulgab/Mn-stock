@@ -112,7 +112,12 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <div className="rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-black">
+      {/* One column on a phone, two from a laptop up — and the same source
+          order in both, so nothing has to be read in a different sequence
+          depending on the screen. Sections that carry a row of cards or a
+          full-width list keep both columns; the two short lists pair up. */}
+      <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
+      <div className="lg:col-span-2 rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-black">
         <div className="text-xs font-medium opacity-70 mb-1">Багцын үнэ цэнэ</div>
         <div className="text-3xl">
           <Num value={portfolio.totalValue} digits={2} suffix="₮" />
@@ -126,7 +131,7 @@ export default async function HomePage() {
       </div>
 
       {indices.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="lg:col-span-2 grid grid-cols-3 gap-2 lg:gap-4">
           {indices.map((idx) => (
             <div
               key={idx.key}
@@ -200,12 +205,12 @@ export default async function HomePage() {
 
       {watchlist.length > 0 && (
         <Section title="Хяналтын жагсаалт">
-          <div className="flex gap-3 overflow-x-auto -mx-4 px-4">
+          <div className="flex gap-3 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-cols-2 lg:overflow-visible">
             {watchlist.map((w) => (
               <Link
                 key={w.symbol}
                 href={`/stock/${w.symbol}`}
-                className="shrink-0 w-60 rounded-2xl border border-app-border bg-app-card px-4 py-3 active:bg-app-elevated"
+                className="shrink-0 w-60 lg:w-auto rounded-2xl border border-app-border bg-app-card px-4 py-3 active:bg-app-elevated"
               >
                 <div className="flex items-center gap-3">
                   <StockAvatar symbol={w.symbol} size={40} />
@@ -232,16 +237,21 @@ export default async function HomePage() {
         title="Өсөлттэй"
         note={session}
         action={{ href: "/discover", label: "Зах зээл" }}
+        className="lg:col-span-2"
       >
         <MoverList rows={gainers} />
       </Section>
 
-      <Section title="Уналттай" note={session}>
+      <Section title="Уналттай" note={session} className="lg:col-span-2">
         <MoverList rows={losers} />
       </Section>
 
       {topPicks.length > 0 && (
-      <Section title="Онооны шилдэг" action={{ href: "/discover", label: "Бүгд" }}>
+      <Section
+        title="Онооны шилдэг"
+        action={{ href: "/discover", label: "Бүгд" }}
+        className="lg:col-span-2"
+      >
         <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
           {topPicks.map((r) => (
             <Link
@@ -261,6 +271,7 @@ export default async function HomePage() {
         </div>
       </Section>
       )}
+      </div>
     </div>
   );
 }
@@ -269,16 +280,19 @@ function Section({
   title,
   note,
   action,
+  className = "",
   children,
 }: {
   title: string;
   /** Which session the figures belong to, when that isn't obvious. */
   note?: string | null;
   action?: { href: string; label: string };
+  /** Placement in the wide-screen grid. */
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section>
+    <section className={className}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-app-text text-sm">
           {title}
@@ -308,12 +322,12 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
     return <Empty>Арилжааны мэдээлэл алга.</Empty>;
   }
   return (
-    <div className="flex gap-3 overflow-x-auto -mx-4 px-4">
+    <div className="flex gap-3 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-cols-6 lg:overflow-visible">
       {rows.map((r) => (
         <Link
           key={r.symbol}
           href={`/stock/${r.symbol}`}
-          className="shrink-0 w-44 rounded-2xl border border-app-border bg-app-card p-3"
+          className="shrink-0 w-44 lg:w-auto rounded-2xl border border-app-border bg-app-card p-3"
         >
           <div className="flex items-center gap-1.5">
             <StockAvatar symbol={r.symbol} size={18} />

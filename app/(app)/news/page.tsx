@@ -42,14 +42,18 @@ export default async function NewsPage() {
           </Link>
         </div>
       ) : (
-        days.map(([day, dayItems]) => (
-          <section key={day}>
+        // Two columns of days on a wide screen; the days keep their order
+        // down the left column and then the right.
+        <div className="space-y-5 lg:space-y-0 lg:columns-2 lg:gap-5">
+        {days.map(([day, dayItems]) => (
+          <section key={day} className="lg:mb-5 lg:break-inside-avoid">
             <h2 className="text-xs font-semibold text-app-muted mb-2">
               {dayHeading(day, today, yesterday)}
             </h2>
             <NewsList items={dayItems} />
           </section>
-        ))
+        ))}
+        </div>
       )}
     </div>
   );

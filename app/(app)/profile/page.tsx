@@ -14,7 +14,7 @@ export default async function ProfilePage() {
   const user = await getCurrentUser(db);
 
   return (
-    <div className="px-4 pt-6 pb-4 space-y-6">
+    <div className="px-4 pt-6 pb-4 space-y-6 lg:max-w-2xl">
       <h1 className="text-xl font-bold text-app-text">Профайл</h1>
 
       <ProfileForm

@@ -34,6 +34,8 @@ interface Slice {
   percent: number;
 }
 interface Data {
+  /** False when marketinfo.mn carries nothing for this company. */
+  available?: boolean;
   sourceUrl: string;
   profile: Profile;
   changes: PeriodChange[];
@@ -66,7 +68,13 @@ export default function MarketInfoPanel({ symbol }: { symbol: string }) {
     let cancelled = false;
     fetch(`/api/securities/${symbol}/marketinfo`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error("unavailable"))))
-      .then((data: Data) => !cancelled && setState({ kind: "ready", data }))
+      .then(
+        (data: Data) =>
+          !cancelled &&
+          setState(
+            data.available === false ? { kind: "none" } : { kind: "ready", data },
+          ),
+      )
       .catch(() => !cancelled && setState({ kind: "none" }));
     return () => {
       cancelled = true;

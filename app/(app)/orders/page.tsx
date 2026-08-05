@@ -12,7 +12,7 @@ export default async function OrdersPage() {
   const transactions = await getTransactions(db, user!._id!);
 
   return (
-    <div className="px-4 pt-6 pb-4 space-y-4">
+    <div className="px-4 pt-6 pb-4 space-y-4 lg:max-w-2xl">
       {/* Reached from the portfolio rather than the tab bar, so it carries
           its own way back. */}
       <Link href="/portfolio" className="text-sm text-app-muted">

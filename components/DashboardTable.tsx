@@ -111,6 +111,16 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
       </div>
 
       <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+        {/* Named once at the top rather than on every row, which is what a
+            table is for and what the phone has no width to do. */}
+        <div className="hidden lg:flex items-center gap-3 px-4 py-2 text-[10px] uppercase tracking-wide text-app-muted">
+          <span className="w-10 shrink-0" />
+          <span className="flex-1">Компани</span>
+          <span className="w-20 text-right">Оноо</span>
+          <span className="w-28 text-right">Ширхэг</span>
+          <span className="w-32 text-center">Чиг хандлага</span>
+          <span className="w-28 text-right">Ханш</span>
+        </div>
         {filtered.map((row) => (
           <Link
             key={row.symbol}
@@ -127,12 +137,27 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
               </div>
               <div className="text-xs text-app-muted truncate">{row.name}</div>
             </div>
-            <div className="flex items-center justify-center shrink-0 w-16">
-              <Sparkline data={row.sparkline} positive={(row.changePct ?? 0) >= 0} />
+            {/* Room on a wide screen for what the phone has to leave out:
+                the score behind the badge, the day's turnover, and a longer
+                trend line than a 56px stub. */}
+            <div className="hidden lg:block shrink-0 w-20 text-right text-sm tabular-nums text-app-text">
+              {row.score}
+            </div>
+            <div className="hidden lg:block shrink-0 w-28 text-right text-sm tabular-nums text-app-text">
+              {row.volume === null ? "—" : <Num value={row.volume} digits={0} />}
+            </div>
+            <div className="shrink-0 w-16 lg:w-32">
+              <Sparkline
+                data={row.sparkline}
+                positive={(row.changePct ?? 0) >= 0}
+                width={56}
+                height={24}
+                fill
+              />
             </div>
             {/* Units are dropped here: every row is ₮ and every change is a
                 percent, so the suffixes only cost width the figures can use. */}
-            <div className="text-right shrink-0">
+            <div className="text-right shrink-0 lg:w-28">
               <div className="text-sm text-app-text">
                 {row.lastPrice === null ? (
                   <span className="text-app-muted">—</span>

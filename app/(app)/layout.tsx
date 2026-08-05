@@ -1,8 +1,20 @@
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
+import { getUnreadCount } from "@/lib/notifications";
 import BottomNav from "@/components/BottomNav";
+import SideNav from "@/components/SideNav";
 
+/**
+ * One shell, three shapes.
+ *
+ * A phone gets the column it always had, with the tab bar under the thumb.
+ * A portrait iPad keeps that bar — it is still a held device — but the
+ * column widens, because a 448px strip down the middle of a 768px screen
+ * reads as a phone app someone forgot to finish. From 1024px up, which is a
+ * landscape iPad or any laptop, navigation moves to a side rail and the
+ * content takes the width it is given.
+ */
 export default async function AppLayout({
   children,
 }: {
@@ -12,10 +24,17 @@ export default async function AppLayout({
   const user = await getCurrentUser(db);
   if (!user) redirect("/login");
 
+  const unread = await getUnreadCount(db, user);
+
   return (
-    <div className="min-h-screen flex flex-col bg-app-bg">
-      <div className="flex-1 mx-auto w-full max-w-md pb-4">{children}</div>
-      <BottomNav />
+    <div className="min-h-screen bg-app-bg lg:flex">
+      <SideNav unread={unread} />
+      <div className="flex min-h-screen flex-1 flex-col lg:min-h-0">
+        <main className="mx-auto w-full max-w-md flex-1 pb-4 md:max-w-3xl lg:max-w-6xl lg:px-6">
+          {children}
+        </main>
+        <BottomNav />
+      </div>
     </div>
   );
 }
