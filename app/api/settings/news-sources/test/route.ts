@@ -31,12 +31,13 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({
-    results: results.map(({ url, status, chars, reason, headlines }) => ({
+    results: results.map(({ url, status, chars, reason, headlines, via }) => ({
       url,
       status,
       chars,
       reason: reason ?? null,
       headlines: headlines.length,
+      via: via ?? null,
     })),
   });
 }

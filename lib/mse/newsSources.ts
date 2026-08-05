@@ -4,6 +4,13 @@ import {
   parsePemBundle,
   type PageResponse,
 } from "@/lib/tls/extraCa";
+import {
+  FEED_PATHS,
+  feedLinkFromHtml,
+  feedToText,
+  looksLikeFeed,
+  parseFeed,
+} from "./feed";
 
 export interface NewsSourceExtract {
   url: string;
@@ -29,6 +36,8 @@ export interface NewsSourceResult extends NewsSourceExtract {
   status: NewsSourceStatus;
   chars: number;
   headlines: NewsHeadline[];
+  /** Where the content came from: the publisher's feed or the rendered page. */
+  via?: "feed" | "html";
   /** Shown in settings when the source didn't yield anything usable. */
   reason?: string;
 }
@@ -258,7 +267,7 @@ const BROWSER_HEADERS = {
 async function loadPage(
   url: string,
   extraCerts: string[],
-): Promise<PageResponse & { viaExtraCa: boolean }> {
+): Promise<PageResponse & { viaExtraCa: boolean; contentType?: string }> {
   try {
     const res = await fetch(url, {
       headers: BROWSER_HEADERS,
@@ -278,7 +287,13 @@ async function loadPage(
         viaExtraCa: true,
       };
     }
-    return { status: res.status, finalUrl: res.url, body, viaExtraCa: false };
+    return {
+      status: res.status,
+      finalUrl: res.url,
+      body,
+      viaExtraCa: false,
+      contentType: res.headers.get("content-type") ?? undefined,
+    };
   } catch (err) {
     if (isTlsFailure(err) && extraCerts.length > 0) {
       return {
@@ -292,6 +307,63 @@ async function loadPage(
     }
     throw err;
   }
+}
+
+/** Builds a result from feed XML, or null when it holds no usable items. */
+function fromFeed(
+  url: string,
+  xml: string,
+  feedUrl: string,
+): NewsSourceResult | null {
+  const items = parseFeed(xml, feedUrl);
+  if (items.length === 0) return null;
+  const text = feedToText(items);
+  return {
+    url,
+    status: "ok",
+    text,
+    chars: text.length,
+    headlines: items.map((i) => ({ title: i.title, url: i.url })),
+    via: "feed",
+  };
+}
+
+/**
+ * Locates a page's feed: the standard autodiscovery hint first, then the
+ * handful of conventional paths, since none of the Mongolian outlets
+ * checked publish the hint even when they do serve a feed.
+ */
+async function findFeed(
+  $: cheerio.CheerioAPI,
+  url: string,
+  pageUrl: string,
+  extraCerts: string[],
+): Promise<NewsSourceResult | null> {
+  const candidates: string[] = [];
+  const advertised = feedLinkFromHtml($, pageUrl);
+  if (advertised) candidates.push(advertised);
+  for (const path of FEED_PATHS) {
+    try {
+      candidates.push(new URL(path, new URL(pageUrl).origin).toString());
+    } catch {
+      // A malformed page URL just means one fewer candidate to try.
+    }
+  }
+
+  const fetched = await Promise.all(
+    candidates.map((candidate) =>
+      loadPage(candidate, extraCerts).catch(() => null),
+    ),
+  );
+
+  for (let i = 0; i < fetched.length; i++) {
+    const res = fetched[i];
+    if (!res || res.status < 200 || res.status >= 300) continue;
+    if (!looksLikeFeed(res.body, res.contentType)) continue;
+    const result = fromFeed(url, res.body, candidates[i]);
+    if (result) return result;
+  }
+  return null;
 }
 
 /**
@@ -332,7 +404,19 @@ async function extractOne(
       );
     }
 
+    // The address itself may already be a feed, if that's what was configured.
+    if (looksLikeFeed(html, res.contentType)) {
+      const direct = fromFeed(url, html, res.finalUrl || url);
+      if (direct) return direct;
+    }
+
     const $ = cheerio.load(html);
+
+    // Prefer the publisher's own feed over the rendered page: same articles,
+    // with dates and summaries and none of the nav furniture.
+    const feed = await findFeed($, url, res.finalUrl || url, extraCerts);
+    if (feed) return feed;
+
     $("script, style, noscript, svg").remove();
     const text = $("body").text().replace(/\s+/g, " ").trim();
 

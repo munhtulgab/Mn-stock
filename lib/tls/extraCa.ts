@@ -28,6 +28,7 @@ export interface PageResponse {
   /** Address after redirects, for login-wall detection. */
   finalUrl: string;
   body: string;
+  contentType?: string;
 }
 
 const MAX_REDIRECTS = 5;
@@ -37,7 +38,7 @@ function requestOnce(
   ca: string[],
   headers: Record<string, string>,
   timeoutMs: number,
-): Promise<{ status: number; location?: string; body: string }> {
+): Promise<{ status: number; location?: string; body: string; contentType?: string }> {
   return new Promise((resolve, reject) => {
     const target = new URL(url);
     const req = https.request(
@@ -64,6 +65,7 @@ function requestOnce(
             status: res.statusCode ?? 0,
             location: res.headers.location,
             body,
+            contentType: res.headers["content-type"],
           }),
         );
       },
@@ -96,7 +98,12 @@ export async function fetchWithExtraCa(
     const res = await requestOnce(current, ca, headers, timeoutMs);
     const redirecting = res.status >= 300 && res.status < 400 && res.location;
     if (!redirecting) {
-      return { status: res.status, finalUrl: current, body: res.body };
+      return {
+        status: res.status,
+        finalUrl: current,
+        body: res.body,
+        contentType: res.contentType,
+      };
     }
     current = new URL(res.location!, current).toString();
   }
