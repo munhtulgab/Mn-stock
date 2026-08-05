@@ -7,23 +7,25 @@ interface Quote {
   price: number | null;
   changePct: number | null;
   date: string | null;
-  /** False while the exchange has yet to publish today's session. */
-  isToday: boolean;
+  /** Exchange entry time, "HH:MM", when the quote is live. */
+  at?: string | null;
+  /** True while marketinfo's order book is answering for the open session. */
+  isLive?: boolean;
 }
 
-/** How often to ask, while the page is actually being looked at. */
-const POLL_MS = 60_000;
+/** Fast enough to feel current, slow enough not to hammer a third party. */
+const POLL_MS = 30_000;
 
 /**
- * The security's price, labelled with the trading day it belongs to.
+ * The security's price, labelled with where and when it came from.
  *
- * MSE publishes a session after it closes rather than tick by tick, so
- * during trading hours the newest figure available is the previous day's
- * close. Presenting that as the current price would misread the market, so
- * the day is always shown and a figure that isn't today's says so.
+ * During a session marketinfo carries the live book, so the figure moves and
+ * is stamped with the exchange's entry time. Outside one, or if that source
+ * is unreachable, the newest published close stands in and says which day it
+ * belongs to — the exchange publishes a session only after it ends, and a
+ * stale close shown unlabelled would misread the market.
  *
- * Polling exists to catch the moment a new session is published, and pauses
- * with the tab hidden rather than waking a phone in someone's pocket.
+ * Polling pauses with the tab hidden rather than waking a phone in a pocket.
  */
 export default function LivePrice({
   symbol,
@@ -49,6 +51,7 @@ export default function LivePrice({
       }
     }
 
+    refresh();
     const timer = setInterval(refresh, POLL_MS);
     document.addEventListener("visibilitychange", refresh);
     return () => {
@@ -70,11 +73,20 @@ export default function LivePrice({
       <div className="text-sm">
         <Pct value={quote.changePct} />
       </div>
-      {quote.date && (
-        <div className="text-[10px] text-app-muted mt-0.5">
-          {quote.isToday ? "Өнөөдрийн хаалт" : `${quote.date}-ний хаалт`}
-        </div>
-      )}
+      <div className="text-[10px] text-app-muted mt-0.5 flex items-center justify-end gap-1">
+        {quote.isLive ? (
+          <>
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-app-positive opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-app-positive" />
+            </span>
+            <span className="text-app-positive font-medium">Шууд</span>
+            {quote.at && <span>· {quote.at}</span>}
+          </>
+        ) : (
+          quote.date && <span>{quote.date}-ний хаалт</span>
+        )}
+      </div>
     </div>
   );
 }

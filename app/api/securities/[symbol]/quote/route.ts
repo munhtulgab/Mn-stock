@@ -1,26 +1,29 @@
 import { NextResponse } from "next/server";
 import type { Db } from "mongodb";
 import { getDb } from "@/lib/mongodb";
+import { getSettings } from "@/lib/settings";
 import { syncPricesForCompany } from "@/lib/sync";
+import { fetchLiveQuotes } from "@/lib/marketinfo/quotes";
 import type { PricePoint, Security } from "@/lib/types";
 
 /**
- * Latest published price for one security.
+ * Current price for one security.
  *
- * MSE has no intraday feed: open.mse.mn publishes a day's trading after the
- * close, so during a session the newest figure available is the previous
- * day's. This endpoint therefore reports what is published *and when it is
- * from*, letting the page label a price rather than implying it is live.
+ * marketinfo.mn carries the live order book, so during a session that is the
+ * real answer: last trade, best bid and offer, running volume, stamped with
+ * the exchange's own entry time. The exchange's open-data portal publishes a
+ * day only once it has closed, so it serves as the fallback — and outside
+ * trading hours the two agree anyway.
  *
- * A live re-scrape is attempted only when the stored figure predates today,
- * and at most once per REFRESH_INTERVAL_MS, so polling stays cheap.
+ * Either way the response says which session the figure belongs to and
+ * whether it is live, so the page can label it rather than implying.
  */
 
 /** Mongolia is UTC+8 year round. */
 const ULAANBAATAR_OFFSET_MS = 8 * 60 * 60 * 1000;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
-/** Last attempt per company, so concurrent viewers don't each re-scrape. */
+/** Last stored-price refresh per company, so viewers don't each re-scrape. */
 const lastRefresh = new Map<number, number>();
 
 function ulaanbaatarToday(): string {
@@ -51,9 +54,43 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  let { last, prev } = await latestTwo(db, security.companyCode);
-
   const today = ulaanbaatarToday();
+
+  // Live book first — it is the only source that moves during a session.
+  let live = null;
+  try {
+    const settings = await getSettings(db);
+    const quotes = await fetchLiveQuotes({ extraCaCerts: settings.extraCaCerts });
+    live = quotes.get(security.companyCode) ?? null;
+  } catch (err) {
+    console.error(`live quote lookup failed for ${symbol}`, err);
+  }
+
+  if (live?.price != null) {
+    return NextResponse.json({
+      symbol: security.symbol,
+      price: live.price,
+      changePct: live.changePct,
+      previousClose: live.previousClose,
+      open: live.open,
+      high: live.high,
+      low: live.low,
+      vwap: live.vwap,
+      volume: live.volume,
+      turnover: live.turnover,
+      trades: live.trades,
+      bid: live.bid,
+      ask: live.ask,
+      date: live.at?.slice(0, 10) ?? today,
+      /** Exchange entry time, e.g. "12:58". */
+      at: live.at?.slice(11, 16) ?? null,
+      isLive: true,
+      source: "marketinfo.mn",
+      checkedAt: new Date().toISOString(),
+    });
+  }
+
+  let { last, prev } = await latestTwo(db, security.companyCode);
   const since = Date.now() - (lastRefresh.get(security.companyCode) ?? 0);
   if ((!last || last.date < today) && since > REFRESH_INTERVAL_MS) {
     lastRefresh.set(security.companyCode, Date.now());
@@ -66,20 +103,19 @@ export async function GET(
     }
   }
 
-  const changePct =
-    last && prev && prev.close > 0
-      ? ((last.close - prev.close) / prev.close) * 100
-      : null;
-
   return NextResponse.json({
     symbol: security.symbol,
     price: last?.close ?? null,
-    changePct,
+    changePct:
+      last && prev && prev.close > 0
+        ? ((last.close - prev.close) / prev.close) * 100
+        : null,
+    previousClose: prev?.close ?? null,
     volume: last?.volume ?? null,
-    /** Trading day the figure belongs to. */
     date: last?.date ?? null,
-    /** False while the exchange has yet to publish today's session. */
-    isToday: last?.date === today,
+    at: null,
+    isLive: false,
+    source: "МХБ",
     checkedAt: new Date().toISOString(),
   });
 }

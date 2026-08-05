@@ -29,11 +29,6 @@ function money(value: number | null | undefined, digits = 2): string {
   return text === "—" ? text : `${text}\u00A0₮`;
 }
 
-/** Mongolia is UTC+8 year round; the exchange keeps no daylight saving. */
-function ulaanbaatarToday(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
 function sma(values: number[], period: number, index: number): number | null {
   if (index + 1 < period) return null;
   const window = values.slice(index + 1 - period, index + 1);
@@ -109,7 +104,7 @@ export default async function StockDetailPage({
               price: last?.close ?? null,
               changePct,
               date: last?.date ?? null,
-              isToday: last?.date === ulaanbaatarToday(),
+              isLive: false,
             }}
           />
           <WatchlistButton symbol={security.symbol} initialActive={inWatchlist} />
