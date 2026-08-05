@@ -18,6 +18,14 @@ const USER_AGENT =
   "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 const TIMEOUT_MS = 12_000;
 
+/**
+ * The whole lookup, across every candidate endpoint and the certificate
+ * retry each one may need. Without it a slow host multiplies: three
+ * addresses at twelve seconds apiece is over half a minute of a page render
+ * spent waiting, which is what made tapping a tab feel like a freeze.
+ */
+const TOTAL_BUDGET_MS = 9_000;
+
 /** Quotes move constantly; this bounds how often the upstream is asked. */
 const CACHE_MS = 30_000;
 
@@ -202,15 +210,19 @@ let inFlight: Promise<Map<number, LiveQuote>> | null = null;
 async function load(extraCaCerts?: string): Promise<Map<number, LiveQuote>> {
   const extraCerts = extraCaCerts ? parsePemBundle(extraCaCerts) : [];
   const headers = { "User-Agent": USER_AGENT, Accept: "application/json" };
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
 
   for (const endpoint of ENDPOINTS) {
+    const left = deadline - Date.now();
+    if (left <= 0) break;
+    const timeout = Math.min(TIMEOUT_MS, left);
     try {
       let body: string;
       let ok: boolean;
       try {
         const res = await fetch(endpoint, {
           headers,
-          signal: AbortSignal.timeout(TIMEOUT_MS),
+          signal: AbortSignal.timeout(timeout),
         });
         body = await res.text();
         ok = res.ok;
@@ -219,7 +231,7 @@ async function load(extraCaCerts?: string): Promise<Map<number, LiveQuote>> {
         const res = await fetchWithExtraCa(endpoint, {
           extraCerts,
           headers,
-          timeoutMs: TIMEOUT_MS,
+          timeoutMs: Math.max(1_000, deadline - Date.now()),
         });
         body = res.body;
         ok = res.status >= 200 && res.status < 300;

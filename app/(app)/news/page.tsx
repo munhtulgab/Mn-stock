@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
 import { getMarketNews, type MarketNewsItem } from "@/lib/marketNews";
+import NewsRefresher from "@/components/NewsRefresher";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ function groupByDay(items: MarketNewsItem[]): [string, MarketNewsItem[]][] {
 
 export default async function NewsPage() {
   const db = await getDb();
-  const { items, today, yesterday } = await getMarketNews(db);
+  const { items, today, yesterday, stale } = await getMarketNews(db);
   const days = groupByDay(items);
 
   return (
@@ -57,11 +58,14 @@ export default async function NewsPage() {
           Сүүлийн 30 хоног
           {items.length > 0 && ` · ${items.length} мэдээ`}
         </p>
+        <div className="mt-1.5">
+          <NewsRefresher stale={stale} empty={items.length === 0} />
+        </div>
       </div>
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-muted space-y-2">
-          <p>Сүүлийн 30 хоногт мэдээ олдсонгүй.</p>
+          <p>{stale ? "Мэдээ бэлдэж байна." : "Сүүлийн 30 хоногт мэдээ олдсонгүй."}</p>
           <Link href="/settings" className="text-brand font-semibold">
             Мэдээллийн сайт нэмэх
           </Link>

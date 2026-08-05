@@ -4,6 +4,7 @@ import { runSyncBatch } from "@/lib/sync";
 import { checkSignalChangesAndNotify } from "@/lib/signalHistory";
 import { refreshDashboardSnapshot } from "@/lib/data";
 import { refreshMarketIndices } from "@/lib/indices";
+import { refreshMarketNews } from "@/lib/marketNews";
 
 export const maxDuration = 300;
 
@@ -57,12 +58,22 @@ async function handle(req: NextRequest) {
       console.error("index snapshot refresh failed", err);
     }
 
+    // Keeps the news tab warm, so the first visitor of the day reads a feed
+    // that is already built rather than waiting for one.
+    let newsCount = 0;
+    try {
+      newsCount = await refreshMarketNews(db);
+    } catch (err) {
+      console.error("market news refresh failed", err);
+    }
+
     return NextResponse.json({
       ok: true,
       ...result,
       signalChanges,
       snapshotRows,
       indexCount,
+      newsCount,
     });
   } catch (err) {
     console.error("sync failed", err);

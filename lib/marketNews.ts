@@ -1,6 +1,7 @@
 import type { Db } from "mongodb";
 import { getSettings } from "@/lib/settings";
 import { fetchNewsSources, type NewsHeadline } from "@/lib/mse/newsSources";
+import { fetchExchangeNews } from "@/lib/mse/exchangeNews";
 import type { Security } from "@/lib/types";
 
 /**
@@ -89,6 +90,12 @@ export interface MarketNews {
   /** Ulaanbaatar's today and yesterday, for "Өнөөдөр"/"Өчигдөр" headings. */
   today: string;
   yesterday: string;
+  /**
+   * True when the stored feed is old enough to be worth rebuilding. The page
+   * shows what it has and refreshes behind it — building the feed means
+   * fetching every configured site, which is far too long to hold a tab.
+   */
+  stale: boolean;
 }
 
 /** Enough to scroll for a while; beyond it the page is just weight. */
@@ -98,7 +105,7 @@ const CACHE_KEY = "market";
 const CACHE_MS = 30 * 60 * 1000;
 
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 interface MarketNewsSnapshot {
   key: string;
@@ -152,8 +159,9 @@ function collect(
 }
 
 /**
- * Cached: every configured site is fetched to build this, which takes long
- * enough that doing it per view would make the tab feel broken.
+ * Reads the stored feed. Deliberately does no fetching: tapping the tab used
+ * to wait on every configured site at once, which is what made the bar feel
+ * stuck. {@link refreshMarketNews} does the work, from the background.
  */
 export async function getMarketNews(db: Db): Promise<MarketNews> {
   // Resolved here rather than in the page: the window is defined by "now",
@@ -164,58 +172,90 @@ export async function getMarketNews(db: Db): Promise<MarketNews> {
     yesterday: new Date(local.getTime() - 86_400_000).toISOString().slice(0, 10),
   };
 
-  const snapshots = db.collection<MarketNewsSnapshot>("marketNewsSnapshots");
-  const cached = await snapshots.findOne({ key: CACHE_KEY });
-  if (
-    cached &&
-    cached.schemaVersion === SCHEMA_VERSION &&
-    Date.now() - cached.computedAt.getTime() < CACHE_MS
-  ) {
-    return { items: cached.items, ...days };
-  }
+  const cached = await db
+    .collection<MarketNewsSnapshot>("marketNewsSnapshots")
+    .findOne({ key: CACHE_KEY });
 
-  const settings = await getSettings(db);
-  if (settings.newsSources.length === 0) return { items: [], ...days };
+  const current =
+    cached?.schemaVersion === SCHEMA_VERSION &&
+    Date.now() - cached.computedAt.getTime() < CACHE_MS;
 
+  return {
+    items: cached?.schemaVersion === SCHEMA_VERSION ? cached.items : [],
+    stale: !current,
+    ...days,
+  };
+}
+
+/**
+ * Rebuilds the feed: the exchange's own newsroom plus every configured site.
+ * Slow by nature, so it runs from the refresh endpoint and the daily sync
+ * rather than from a page render.
+ */
+export async function refreshMarketNews(db: Db): Promise<number> {
   const cutoff = new Date(Date.now() - WINDOW_DAYS * 86_400_000)
     .toISOString()
     .slice(0, 10);
 
-  try {
-    const listed = await db
-      .collection<Security>("securities")
-      .find({}, { projection: { _id: 0, symbol: 1 } })
-      .toArray();
-    const symbols = new Set(listed.map((s) => s.symbol));
+  const settings = await getSettings(db);
+  const listed = await db
+    .collection<Security>("securities")
+    .find({}, { projection: { _id: 0, symbol: 1 } })
+    .toArray();
+  const symbols = new Set(listed.map((s) => s.symbol));
 
-    const results = await fetchNewsSources(settings.newsSources, {
-      apifyToken: settings.apifyToken,
-      facebookToken: settings.facebookToken,
-      facebookCookie: settings.facebookCookie,
-      db,
-      extraCaCerts: settings.extraCaCerts,
-    });
-    const items = collect(results, cutoff, symbols);
+  // The exchange is a source in its own right and needs no configuring: it
+  // publishes the daily trading report, listing decisions and dividend
+  // notices, which is the core of what a market-news page is for.
+  const [exchange, results] = await Promise.all([
+    fetchExchangeNews(30).catch((err) => {
+      console.error("exchange news fetch failed", err);
+      return [];
+    }),
+    settings.newsSources.length > 0
+      ? fetchNewsSources(settings.newsSources, {
+          apifyToken: settings.apifyToken,
+          facebookToken: settings.facebookToken,
+          facebookCookie: settings.facebookCookie,
+          db,
+          extraCaCerts: settings.extraCaCerts,
+        }).catch((err) => {
+          console.error("news sources fetch failed", err);
+          return [];
+        })
+      : Promise.resolve([]),
+  ]);
 
-    // Don't cache a run that produced nothing: it would repeat an empty page
-    // for the next half hour over what may have been one bad minute.
-    if (items.length > 0) {
-      await snapshots.updateOne(
-        { key: CACHE_KEY },
-        {
-          $set: {
-            key: CACHE_KEY,
-            items,
-            computedAt: new Date(),
-            schemaVersion: SCHEMA_VERSION,
-          },
-        },
-        { upsert: true },
-      );
-    }
-    return { items: items.length > 0 ? items : (cached?.items ?? []), ...days };
-  } catch (err) {
-    console.error("market news build failed", err);
-    return { items: cached?.items ?? [], ...days };
-  }
+  const items = [
+    // Exchange notices skip the relevance test — everything the exchange
+    // publishes is market news by definition.
+    ...exchange
+      .filter((n) => n.date >= cutoff)
+      .map((n) => ({
+        title: n.title,
+        url: n.url,
+        source: "МХБ",
+        date: n.date,
+      })),
+    ...collect(results, cutoff, symbols),
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, MAX_ITEMS);
+
+  // A run that produced nothing is not an answer worth storing.
+  if (items.length === 0) return 0;
+
+  await db.collection<MarketNewsSnapshot>("marketNewsSnapshots").updateOne(
+    { key: CACHE_KEY },
+    {
+      $set: {
+        key: CACHE_KEY,
+        items,
+        computedAt: new Date(),
+        schemaVersion: SCHEMA_VERSION,
+      },
+    },
+    { upsert: true },
+  );
+  return items.length;
 }
