@@ -41,6 +41,9 @@ interface SourceCheckResult {
   reason: string | null;
   headlines: number;
   via: "feed" | "html" | "payload" | "api" | null;
+  /** How many of this source's headlines name the symbol being checked. */
+  matched: number | null;
+  matchedTitles: string[];
 }
 
 const SOURCE_STATUS_LABELS: Record<SourceCheckResult["status"], string> = {
@@ -109,9 +112,15 @@ export default function SettingsForm({
   const [sourceCheck, setSourceCheck] = useState<
     | { kind: "idle" }
     | { kind: "checking" }
-    | { kind: "done"; results: SourceCheckResult[] }
+    | {
+        kind: "done";
+        results: SourceCheckResult[];
+        company: { symbol: string; name: string } | null;
+        symbolNotFound: boolean;
+      }
     | { kind: "err"; message: string }
   >({ kind: "idle" });
+  const [checkSymbol, setCheckSymbol] = useState("");
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
@@ -239,14 +248,19 @@ export default function SettingsForm({
       const res = await fetch("/api/settings/news-sources/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newsSources }),
+        body: JSON.stringify({ newsSources, symbol: checkSymbol.trim() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setSourceCheck({ kind: "err", message: data.error || `Алдаа ${res.status}` });
         return;
       }
-      setSourceCheck({ kind: "done", results: data.results ?? [] });
+      setSourceCheck({
+        kind: "done",
+        results: data.results ?? [],
+        company: data.company ?? null,
+        symbolNotFound: !!data.symbolNotFound,
+      });
     } catch (err) {
       setSourceCheck({ kind: "err", message: (err as Error).message });
     }
@@ -395,11 +409,20 @@ export default function SettingsForm({
                     </span>
                     <span className="text-[11px] text-app-muted">
                       {result.status === "ok"
-                        ? `${result.chars.toLocaleString("mn-MN")} тэмдэгт · ${result.headlines} гарчиг${result.via === "feed" ? " · RSS feed" : result.via === "payload" ? " · JS payload" : result.via === "api" ? " · JSON API" : ""}${result.reason ? ` · ${result.reason}` : ""}`
+                        ? `${result.chars.toLocaleString("mn-MN")} тэмдэгт · ${result.headlines} гарчиг${result.via === "feed" ? " · RSS feed" : result.via === "payload" ? " · JS payload" : result.via === "api" ? " · JSON API" : ""}${result.matched !== null ? ` · ${result.matched} тохирсон` : ""}${result.reason ? ` · ${result.reason}` : ""}`
                         : result.reason}
                     </span>
                   </div>
                 )}
+                {result?.matchedTitles.length ? (
+                  <ul className="mt-1 space-y-0.5">
+                    {result.matchedTitles.map((title, n) => (
+                      <li key={n} className="text-[11px] text-app-text/80 truncate">
+                        · {title}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             );
           })}
@@ -409,16 +432,37 @@ export default function SettingsForm({
         </ul>
 
         {newsSources.length > 0 && (
-          <button
-            type="button"
-            onClick={checkSources}
-            disabled={sourceCheck.kind === "checking"}
-            className="w-full mt-3 rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
-          >
-            {sourceCheck.kind === "checking"
-              ? "Шалгаж байна..."
-              : "Эх сурвалжуудыг шалгах"}
-          </button>
+          <div className="mt-3 flex gap-2">
+            {/* A source can be working and still put nothing on a company's
+                page. Naming a symbol counts the two apart. */}
+            <input
+              value={checkSymbol}
+              onChange={(e) => setCheckSymbol(e.target.value.toUpperCase())}
+              placeholder="Симбол (сонголт)"
+              className="w-32 shrink-0 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand placeholder:text-app-muted"
+            />
+            <button
+              type="button"
+              onClick={checkSources}
+              disabled={sourceCheck.kind === "checking"}
+              className="flex-1 rounded-xl border border-app-border py-2 text-sm font-medium text-brand disabled:opacity-50"
+            >
+              {sourceCheck.kind === "checking"
+                ? "Шалгаж байна..."
+                : "Эх сурвалжуудыг шалгах"}
+            </button>
+          </div>
+        )}
+        {sourceCheck.kind === "done" && sourceCheck.symbolNotFound && (
+          <p className="text-xs text-app-negative mt-2">
+            Ийм симбол бүртгэлгүй байна.
+          </p>
+        )}
+        {sourceCheck.kind === "done" && sourceCheck.company && (
+          <p className="text-[11px] text-app-muted mt-2">
+            {sourceCheck.company.symbol} ({sourceCheck.company.name}) — эх сурвалж
+            бүрийн хажууд хэдэн гарчиг тохирсныг доор харуулав.
+          </p>
         )}
         {sourceCheck.kind === "err" && (
           <p className="text-xs text-app-negative mt-2 break-words">
