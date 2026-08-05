@@ -27,6 +27,12 @@ export interface NewsSourceExtract {
 export interface NewsHeadline {
   title: string;
   url: string;
+  /**
+   * Publication date as YYYY-MM-DD where the source states one. Feeds and
+   * JSON APIs do; a headline scraped from an anchor usually does not, so
+   * consumers that sort by date must tolerate it being absent.
+   */
+  date?: string;
 }
 
 export type NewsSourceStatus =
@@ -358,7 +364,7 @@ function fromFeed(
     status: "ok",
     text,
     chars: text.length,
-    headlines: items.map((i) => ({ title: i.title, url: i.url })),
+    headlines: items.map((i) => ({ title: i.title, url: i.url, date: i.date })),
     via: "feed",
   };
 }
@@ -414,7 +420,7 @@ async function fetchMarketInfo(url: string): Promise<NewsSourceResult> {
       status: "ok",
       text,
       chars: text.length,
-      headlines: items.map((i) => ({ title: i.title, url: i.url })),
+      headlines: items.map((i) => ({ title: i.title, url: i.url, date: i.date })),
       via: "api",
       reason: "marketinfo.mn-ийн JSON API-аас уншлаа.",
     };

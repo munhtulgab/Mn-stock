@@ -12,12 +12,55 @@ interface ExternalItem {
   title: string;
   url: string;
   source: string;
+  date?: string;
+}
+
+/** One news list, whichever publisher an item came from. */
+interface Item {
+  title: string;
+  url: string;
+  /** YYYY-MM-DD, or "" when the source states no date. */
+  date: string;
+  source: string;
 }
 
 type State =
   | { kind: "loading" }
-  | { kind: "ready"; mse: MseItem[]; external: ExternalItem[] }
+  | { kind: "ready"; items: Item[] }
   | { kind: "error" };
+
+/**
+ * Merges the exchange's own notices with matching headlines from the
+ * configured news sites into a single dated list, newest first.
+ *
+ * Keeping them apart put every MSE notice above every news story regardless
+ * of age, so a filing from two years ago sat over this morning's coverage.
+ * Items whose source states no date sort last rather than claiming a
+ * position they cannot support.
+ */
+function merge(mse: MseItem[], external: ExternalItem[]): Item[] {
+  const items: Item[] = [
+    ...mse.map((m) => ({
+      title: m.title,
+      url: m.url,
+      date: (m.date ?? "").slice(0, 10),
+      source: "МХБ",
+    })),
+    ...external.map((e) => ({
+      title: e.title,
+      url: e.url,
+      date: (e.date ?? "").slice(0, 10),
+      source: e.source,
+    })),
+  ];
+
+  return items.sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return b.date.localeCompare(a.date);
+  });
+}
 
 /**
  * Loads over the wire rather than during the page render: the MSE profile
@@ -45,8 +88,10 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
         if (cancelled) return;
         setState({
           kind: "ready",
-          mse: Array.isArray(data.mse) ? data.mse : [],
-          external: Array.isArray(data.external) ? data.external : [],
+          items: merge(
+            Array.isArray(data.mse) ? data.mse : [],
+            Array.isArray(data.external) ? data.external : [],
+          ),
         });
       })
       .catch(() => !cancelled && setState({ kind: "error" }));
@@ -74,63 +119,33 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
         <p className="text-xs text-app-muted">Мэдээ ачаалахад алдаа гарлаа.</p>
       )}
 
-      {state.kind === "ready" && (
-        <>
-          {state.mse.length === 0 && state.external.length === 0 && (
-            <p className="text-xs text-app-muted">
-              Энэ компанитай холбоотой мэдээ олдсонгүй.
-            </p>
-          )}
+      {state.kind === "ready" && state.items.length === 0 && (
+        <p className="text-xs text-app-muted">
+          Энэ компанитай холбоотой мэдээ олдсонгүй.
+        </p>
+      )}
 
-          {state.mse.length > 0 && (
-            <ul className="space-y-2.5">
-              {state.mse.map((item) => (
-                <li key={item.url + item.date}>
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block active:opacity-70"
-                  >
-                    <div className="text-xs text-app-text leading-snug">
-                      {item.title}
-                    </div>
-                    <div className="text-[11px] text-app-muted mt-0.5">
-                      МХБ · {item.date.slice(0, 10)}
-                    </div>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {state.external.length > 0 && (
-            <div className={state.mse.length > 0 ? "mt-4 pt-3 border-t border-app-border" : ""}>
-              <div className="text-[11px] text-app-muted mb-2">
-                Мэдээллийн сайтуудаас
-              </div>
-              <ul className="space-y-2.5">
-                {state.external.map((item) => (
-                  <li key={item.url}>
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block active:opacity-70"
-                    >
-                      <div className="text-xs text-app-text leading-snug">
-                        {item.title}
-                      </div>
-                      <div className="text-[11px] text-app-muted mt-0.5">
-                        {item.source}
-                      </div>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </>
+      {state.kind === "ready" && state.items.length > 0 && (
+        <ul className="space-y-2.5">
+          {state.items.map((item) => (
+            <li key={item.url}>
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block active:opacity-70"
+              >
+                <div className="text-xs text-app-text leading-snug">
+                  {item.title}
+                </div>
+                <div className="text-[11px] text-app-muted mt-0.5">
+                  {item.source}
+                  {item.date && ` · ${item.date}`}
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

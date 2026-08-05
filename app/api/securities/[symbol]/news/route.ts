@@ -18,7 +18,7 @@ const CACHE_MS = 60 * 60 * 1000;
 interface NewsSnapshot {
   key: string;
   mse: CompanyNewsItem[];
-  external: { title: string; url: string; source: string }[];
+  external: { title: string; url: string; source: string; date?: string }[];
   computedAt: Date;
 }
 
