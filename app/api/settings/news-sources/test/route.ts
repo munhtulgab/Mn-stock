@@ -26,8 +26,10 @@ export async function POST(req: NextRequest) {
     : settings.newsSources;
 
   const results = await fetchNewsSources(urls, {
+    apifyToken: settings.apifyToken,
     facebookToken: settings.facebookToken,
     facebookCookie: settings.facebookCookie,
+    db,
     extraCaCerts: settings.extraCaCerts,
   });
 

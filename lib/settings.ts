@@ -22,6 +22,13 @@ export interface SmsSettings {
 export interface AppSettings {
   newsSources: string[];
   /**
+   * apify.com API token, used to read Facebook pages through their scraper.
+   * A free account carries a monthly credit allowance and needs no card, and
+   * unlike a cookie it puts none of the operator's own account at risk — so
+   * it is the first route tried for a facebook.com source.
+   */
+  apifyToken?: string;
+  /**
    * Page access token for reading Facebook sources. Facebook serves a login
    * wall to anonymous readers and the Graph API refuses unauthenticated
    * reads, so any facebook.com source needs this to return anything.
@@ -75,6 +82,7 @@ export async function getSettings(db: Db): Promise<AppSettings> {
   if (!doc) return DEFAULT_SETTINGS;
   return {
     newsSources: Array.isArray(doc.newsSources) ? doc.newsSources : [],
+    apifyToken: doc.apifyToken,
     facebookToken: doc.facebookToken,
     facebookCookie: doc.facebookCookie,
     extraCaCerts: doc.extraCaCerts,
@@ -101,6 +109,7 @@ export function maskSettings(settings: AppSettings) {
     !key ? null : key.length <= 8 ? "****" : `${key.slice(0, 4)}****${key.slice(-4)}`;
   return {
     newsSources: settings.newsSources,
+    apifyToken: mask(settings.apifyToken),
     facebookToken: mask(settings.facebookToken),
     facebookCookie: mask(settings.facebookCookie),
     // A certificate is public, but sending the whole bundle to the browser on
@@ -129,6 +138,7 @@ export async function updateSettings(
   db: Db,
   patch: {
     newsSources?: string[];
+    apifyToken?: string;
     facebookToken?: string;
     facebookCookie?: string;
     extraCaCerts?: string;
@@ -140,6 +150,7 @@ export async function updateSettings(
   const current = await getSettings(db);
   const next: AppSettings = {
     newsSources: patch.newsSources ?? current.newsSources,
+    apifyToken: patch.apifyToken ?? current.apifyToken,
     facebookToken: patch.facebookToken ?? current.facebookToken,
     facebookCookie: patch.facebookCookie ?? current.facebookCookie,
     extraCaCerts: patch.extraCaCerts ?? current.extraCaCerts,

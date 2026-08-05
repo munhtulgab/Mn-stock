@@ -4,6 +4,7 @@ import { useState } from "react";
 
 interface MaskedSettings {
   newsSources: string[];
+  apifyToken: string | null;
   facebookToken: string | null;
   facebookCookie: string | null;
   extraCaCount: number;
@@ -99,6 +100,8 @@ export default function SettingsForm({
   const [newSourceInput, setNewSourceInput] = useState("");
   const [fbTokenInput, setFbTokenInput] = useState("");
   const [fbCurrent, setFbCurrent] = useState(initial.facebookToken);
+  const [apifyInput, setApifyInput] = useState("");
+  const [apifyCurrent, setApifyCurrent] = useState(initial.apifyToken);
   const [fbCookieInput, setFbCookieInput] = useState("");
   const [fbCookieCurrent, setFbCookieCurrent] = useState(initial.facebookCookie);
   const [caInput, setCaInput] = useState("");
@@ -144,6 +147,8 @@ export default function SettingsForm({
     setNewsSources(initial.newsSources);
     setNewSourceInput("");
     setFbTokenInput("");
+    setApifyInput("");
+    setFbCookieInput("");
     setCaInput("");
     setSourceCheck({ kind: "idle" });
     setKeyInputs({});
@@ -265,6 +270,7 @@ export default function SettingsForm({
       if (smsKeyInput.trim()) body.smsApiKey = smsKeyInput.trim();
       if (fbTokenInput.trim()) body.facebookToken = fbTokenInput.trim();
       if (fbCookieInput.trim()) body.facebookCookie = fbCookieInput.trim();
+      if (apifyInput.trim()) body.apifyToken = apifyInput.trim();
       if (caInput.trim()) body.extraCaCerts = caInput.trim();
 
       const res = await fetch("/api/settings", {
@@ -278,6 +284,8 @@ export default function SettingsForm({
       setSmsCurrent(data.sms);
       setNotifCurrent(data.notifications);
       setFbCurrent(data.facebookToken);
+      setApifyCurrent(data.apifyToken);
+      setApifyInput("");
       setFbCookieCurrent(data.facebookCookie);
       setFbCookieInput("");
       setCaCount(data.extraCaCount);
@@ -408,6 +416,37 @@ export default function SettingsForm({
             {sourceCheck.message}
           </p>
         )}
+
+        <div className="mt-4 pt-4 border-t border-app-border space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-app-text">
+              Apify түлхүүр (Facebook — хамгийн хялбар)
+            </label>
+            <span
+              className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${
+                apifyCurrent
+                  ? "bg-app-positive-bg text-app-positive"
+                  : "bg-app-bg text-app-muted"
+              }`}
+            >
+              {apifyCurrent ? "Идэвхтэй" : "Тохируулаагүй"}
+            </span>
+          </div>
+          <p className="text-[11px] text-app-muted">
+            Хадгалсан Facebook хуудаснуудаас мэдээ татах хамгийн хялбар арга.
+            <b> apify.com</b> дээр үнэгүй бүртгүүлээд (карт шаардахгүй, сар бүр
+            үнэгүй эрх өгдөг) → Settings → API &amp; Integrations хэсгээс
+            токеноо хуулж тавина. Cookie эсвэл өөрийн бүртгэл шаардлагагүй.
+            Цэвэрлэхийн тулд <code>-</code> бичнэ.
+          </p>
+          <input
+            type="password"
+            placeholder={apifyCurrent ? `Одоогийн: ${apifyCurrent}` : "apify_api_..."}
+            value={apifyInput}
+            onChange={(e) => setApifyInput(e.target.value)}
+            className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
+          />
+        </div>
 
         <div className="mt-4 pt-4 border-t border-app-border space-y-1.5">
           <div className="flex items-center justify-between">

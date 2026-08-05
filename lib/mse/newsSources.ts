@@ -1,3 +1,4 @@
+import type { Db } from "mongodb";
 import * as cheerio from "cheerio";
 import {
   fetchWithExtraCa,
@@ -11,10 +12,11 @@ import {
 } from "@/lib/marketinfo/news";
 import { extractNextPayloadText } from "./nextPayload";
 import {
+  fetchWithApify,
   fetchWithCookie,
   fetchWithToken,
   pageSlug,
-  type FacebookPost,
+  type FacebookFetch,
 } from "./facebook";
 import {
   FEED_PATHS,
@@ -92,6 +94,14 @@ const LOGIN_WALLED_HOSTS = [
 ];
 
 const FACEBOOK_HOSTS = ["facebook.com", "fb.com", "fb.watch"];
+
+/** Every way in that the operator has configured, in preference order. */
+interface FacebookCredentials {
+  apifyToken?: string;
+  cookie?: string;
+  token?: string;
+  db?: Db;
+}
 
 function hostOf(url: string): string | null {
   try {
@@ -226,29 +236,37 @@ function extractHeadlines($: cheerio.CheerioAPI, baseUrl: string): NewsHeadline[
  */
 async function fetchFacebook(
   url: string,
-  credentials: { cookie?: string; token?: string },
+  credentials: FacebookCredentials,
 ): Promise<NewsSourceResult> {
   if (!pageSlug(url)) {
     return fail(url, "error", "Facebook хуудасны нэрийг линкээс уншиж чадсангүй.");
   }
-  if (!credentials.cookie && !credentials.token) {
+  const { apifyToken, cookie, token, db } = credentials;
+  if (!apifyToken && !cookie && !token) {
     return fail(
       url,
       "login_required",
-      "Facebook нэвтрэлтгүйгээр уншигдахгүй. Тохиргоо дотор Facebook cookie эсвэл " +
-        "хандалтын токен нэмвэл хадгалсан хуудаснууд ажиллана.",
+      "Facebook нэвтрэлтгүйгээр уншигдахгүй. Тохиргоо дотор Apify түлхүүр " +
+        "(үнэгүй), Facebook cookie эсвэл хандалтын токены аль нэгийг нэмвэл " +
+        "хадгалсан хуудаснууд ажиллана.",
     );
   }
 
-  let result = credentials.cookie
-    ? await fetchWithCookie(url, credentials.cookie)
-    : { posts: [] as FacebookPost[], error: undefined as string | undefined };
+  let result: FacebookFetch = { posts: [] };
+  // Cheapest to set up first; each is only tried if the one before it came
+  // back with nothing, so a working route costs a single request.
+  const routes: (() => Promise<FacebookFetch>)[] = [];
+  if (apifyToken) routes.push(() => fetchWithApify(url, apifyToken, db));
+  if (cookie) routes.push(() => fetchWithCookie(url, cookie));
+  if (token) routes.push(() => fetchWithToken(url, token));
 
-  // A token issued for this page still works when the cookie has expired.
-  if (result.posts.length === 0 && credentials.token) {
-    const viaToken = await fetchWithToken(url, credentials.token);
-    if (viaToken.posts.length > 0) result = viaToken;
-    else result.error = result.error ?? viaToken.error;
+  for (const route of routes) {
+    const attempt = await route();
+    if (attempt.posts.length > 0) {
+      result = attempt;
+      break;
+    }
+    result = { ...attempt, error: result.error ?? attempt.error };
   }
 
   if (result.posts.length === 0) {
@@ -485,7 +503,7 @@ async function tryContentPaths(
  */
 async function extractOne(
   url: string,
-  facebook: { cookie?: string; token?: string } = {},
+  facebook: FacebookCredentials = {},
   extraCerts: string[] = [],
 ): Promise<NewsSourceResult> {
   const host = hostOf(url);
@@ -604,17 +622,22 @@ async function extractOne(
 export async function fetchNewsSources(
   urls: string[],
   options: {
+    apifyToken?: string;
     facebookToken?: string;
     facebookCookie?: string;
     extraCaCerts?: string;
+    /** Lets the Facebook scrape cache its result instead of re-running. */
+    db?: Db;
   } = {},
 ): Promise<NewsSourceResult[]> {
   const extraCerts = options.extraCaCerts
     ? parsePemBundle(options.extraCaCerts)
     : [];
-  const facebook = {
+  const facebook: FacebookCredentials = {
+    apifyToken: options.apifyToken,
     cookie: options.facebookCookie,
     token: options.facebookToken,
+    db: options.db,
   };
   return Promise.all(urls.map((url) => extractOne(url, facebook, extraCerts)));
 }

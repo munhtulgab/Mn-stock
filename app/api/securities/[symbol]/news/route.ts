@@ -43,8 +43,10 @@ async function build(
     fetchCompanyNews(security.companyCode, 12),
     settings.newsSources.length > 0
       ? fetchNewsSources(settings.newsSources, {
+          apifyToken: settings.apifyToken,
           facebookToken: settings.facebookToken,
           facebookCookie: settings.facebookCookie,
+          db,
           extraCaCerts: settings.extraCaCerts,
         })
       : Promise.resolve([]),

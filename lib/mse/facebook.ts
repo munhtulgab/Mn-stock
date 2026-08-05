@@ -1,3 +1,4 @@
+import type { Db } from "mongodb";
 import * as cheerio from "cheerio";
 
 /**
@@ -5,16 +6,17 @@ import * as cheerio from "cheerio";
  *
  * Facebook has no anonymous read path. Every entry point — www, m, touch,
  * mbasic, the page plugin — either redirects to /login or returns a shell
- * that fills itself in with JavaScript, so a server-side fetch sees a login
- * form and nothing else. Two things get past that:
+ * that fills itself in with JavaScript. The free public bridges that used to
+ * paper over this no longer do either: RSSHub answers a Cloudflare challenge,
+ * and four RSS-Bridge instances all fail at Facebook itself ("Unable to find
+ * anything useful", "Unable to get the page id"). Three routes remain:
  *
+ *   a scraping API, which needs only a free key and no account of one's own,
  *   a session cookie, which reads any page the account can see, and
  *   a Graph API token, which reads only pages the token was issued for.
  *
- * The cookie is what makes an ordinary saved page work, so it is tried
- * first. It is read against mbasic.facebook.com: the no-JavaScript version
- * renders posts as plain server-side HTML, which is both parseable and a
- * fraction of the bytes.
+ * They are tried in that order — cheapest thing to set up first, and the one
+ * that puts nothing of the operator's own at risk.
  */
 
 const MBASIC = "https://mbasic.facebook.com";
@@ -320,6 +322,181 @@ export async function fetchWithCookie(
     return {
       posts: [],
       error: timeout ? "Facebook хугацаа хэтэрлээ." : `Facebook: ${(err as Error).message}`,
+    };
+  }
+}
+
+/**
+ * apify.com's Facebook posts scraper, which does the awkward part on its own
+ * infrastructure and hands back JSON. A free account carries a monthly credit
+ * allowance and needs no card, so this is the least troublesome way in — and
+ * unlike a cookie it exposes no account of the operator's.
+ */
+const APIFY_ACTOR = "apify~facebook-posts-scraper";
+const APIFY_ACTOR_URL = `https://api.apify.com/v2/acts/${APIFY_ACTOR}`;
+const APIFY_RUN_URL = `${APIFY_ACTOR_URL}/run-sync-get-dataset-items`;
+
+/** A scrape is a real browser run; it takes tens of seconds, not milliseconds. */
+const APIFY_TIMEOUT_MS = 55_000;
+
+/** How much history is worth paying credits for. */
+const APIFY_POST_LIMIT = 20;
+const APIFY_MAX_AGE_DAYS = 30;
+
+/**
+ * Scraped posts are cached per page, because a run costs credits and the
+ * sources are re-read for every company whose news is built. Without this a
+ * single page view could start a dozen identical runs.
+ */
+const CACHE_TTL_MS = 30 * 60 * 1000;
+
+interface FacebookCache {
+  key: string;
+  posts: FacebookPost[];
+  fetchedAt: Date;
+}
+
+async function readCache(db: Db, key: string): Promise<FacebookCache | null> {
+  return db.collection<FacebookCache>("facebookSnapshots").findOne({ key });
+}
+
+async function writeCache(db: Db, key: string, posts: FacebookPost[]): Promise<void> {
+  await db
+    .collection<FacebookCache>("facebookSnapshots")
+    .updateOne({ key }, { $set: { key, posts, fetchedAt: new Date() } }, { upsert: true });
+}
+
+interface ApifyPost {
+  text?: string;
+  time?: string;
+  url?: string;
+  facebookUrl?: string;
+  pageName?: string;
+}
+
+function toPosts(items: unknown): FacebookPost[] {
+  return (Array.isArray(items) ? (items as ApifyPost[]) : [])
+    .filter((p) => p.text?.trim())
+    .map((p) => ({
+      text: p.text!.replace(/\s+/g, " ").trim(),
+      url: p.url,
+      date: p.time?.slice(0, 10),
+    }));
+}
+
+/**
+ * Results of the most recent successful run, if it was for this page and
+ * recent enough to still be current.
+ *
+ * A run outlives the request that started it: when a scrape takes longer
+ * than the caller can wait, it finishes on Apify's side anyway and the
+ * credits are already spent. Reading it back on the next attempt collects
+ * results that would otherwise be paid for and thrown away.
+ */
+async function lastRunPosts(
+  pageUrl: string,
+  token: string,
+): Promise<FacebookPost[] | null> {
+  const auth = `token=${encodeURIComponent(token)}&status=SUCCEEDED`;
+  try {
+    const runRes = await fetch(`${APIFY_ACTOR_URL}/runs/last?${auth}`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!runRes.ok) return null;
+    const run = (await runRes.json()) as { data?: { finishedAt?: string } };
+    const finishedAt = Date.parse(run.data?.finishedAt ?? "");
+    if (!Number.isFinite(finishedAt) || Date.now() - finishedAt > CACHE_TTL_MS) {
+      return null;
+    }
+
+    const itemsRes = await fetch(`${APIFY_ACTOR_URL}/runs/last/dataset/items?${auth}`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!itemsRes.ok) return null;
+    const items = (await itemsRes.json()) as ApifyPost[];
+
+    // The last run may have been for a different page.
+    const slug = pageSlug(pageUrl)?.toLowerCase();
+    const matches = items.some(
+      (p) =>
+        p.pageName?.toLowerCase() === slug ||
+        (p.facebookUrl ?? "").toLowerCase().includes(slug ?? " "),
+    );
+    if (!matches) return null;
+
+    const posts = toPosts(items);
+    return posts.length > 0 ? posts : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchWithApify(
+  pageUrl: string,
+  token: string,
+  db?: Db,
+): Promise<FacebookFetch> {
+  const key = `apify:${pageUrl}`;
+  const cached = db ? await readCache(db, key) : null;
+  if (cached && Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS) {
+    return { posts: cached.posts };
+  }
+
+  const recovered = await lastRunPosts(pageUrl, token);
+  if (recovered) {
+    if (db) await writeCache(db, key, recovered);
+    return { posts: recovered };
+  }
+
+  const since = new Date(Date.now() - APIFY_MAX_AGE_DAYS * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  try {
+    const res = await fetch(`${APIFY_RUN_URL}?token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startUrls: [{ url: pageUrl }],
+        resultsLimit: APIFY_POST_LIMIT,
+        onlyPostsNewerThan: since,
+      }),
+      signal: AbortSignal.timeout(APIFY_TIMEOUT_MS),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string; type?: string };
+      };
+      // 402 is the free allowance being spent, which is worth saying plainly
+      // rather than reporting as a generic failure.
+      const message =
+        res.status === 401
+          ? "Apify токен буруу байна."
+          : res.status === 402
+            ? "Apify-н үнэгүй эрх дууссан байна — дараа сар шинэчлэгдэнэ."
+            : (body.error?.message ?? `Apify ${res.status}`);
+      return { posts: cached?.posts ?? [], error: message, status: res.status };
+    }
+
+    const posts = toPosts(await res.json());
+    if (posts.length === 0) {
+      return {
+        posts: cached?.posts ?? [],
+        error: "Apify хуудаснаас бичвэртэй пост олсонгүй.",
+      };
+    }
+
+    if (db) await writeCache(db, key, posts);
+    return { posts };
+  } catch (err) {
+    const timeout = err instanceof Error && err.name === "TimeoutError";
+    return {
+      // A scrape that ran long doesn't invalidate what it returned last time.
+      posts: cached?.posts ?? [],
+      error: timeout
+        ? "Apify хугацаа хэтэрлээ — дараагийн оролдлогод амжина."
+        : `Apify: ${(err as Error).message}`,
     };
   }
 }

@@ -71,8 +71,10 @@ export async function GET(
   if (settings.newsSources.length > 0) {
     try {
       const results = await fetchNewsSources(settings.newsSources, {
+        apifyToken: settings.apifyToken,
         facebookToken: settings.facebookToken,
         facebookCookie: settings.facebookCookie,
+        db,
         extraCaCerts: settings.extraCaCerts,
       });
       for (const r of results.filter((r) => r.status !== "ok")) {

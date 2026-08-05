@@ -34,6 +34,13 @@ export async function POST(req: NextRequest) {
     apiKeys.openrouter = body.openrouterApiKey.trim();
   }
 
+  const apifyToken =
+    typeof body.apifyToken === "string" && body.apifyToken.trim()
+      ? body.apifyToken.trim() === "-"
+        ? ""
+        : body.apifyToken.trim()
+      : undefined;
+
   // Blank means "leave the stored token alone", same as the AI keys.
   const facebookToken =
     typeof body.facebookToken === "string" && body.facebookToken.trim()
@@ -86,6 +93,7 @@ export async function POST(req: NextRequest) {
 
   const updated = await updateSettings(db, {
     newsSources,
+    apifyToken,
     facebookToken,
     facebookCookie,
     extraCaCerts,
