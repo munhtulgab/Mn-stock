@@ -5,6 +5,8 @@ import Num, { Pct } from "./Num";
 
 interface Quote {
   price: number | null;
+  /** Most recent individual trade, which can sit away from the close. */
+  lastTrade?: number | null;
   changePct: number | null;
   date: string | null;
   /** Exchange entry time, "HH:MM", when the quote is live. */
@@ -73,6 +75,11 @@ export default function LivePrice({
       <div className="text-sm">
         <Pct value={quote.changePct} />
       </div>
+      {quote.isLive && quote.lastTrade != null && quote.lastTrade !== quote.price && (
+        <div className="text-[10px] text-app-muted">
+          сүүлийн хэлцэл <Num value={quote.lastTrade} digits={2} suffix="₮" />
+        </div>
+      )}
       <div className="text-[10px] text-app-muted mt-0.5 flex items-center justify-end gap-1">
         {quote.isLive ? (
           <>

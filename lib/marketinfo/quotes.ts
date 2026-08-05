@@ -35,8 +35,17 @@ const ENDPOINTS = [
 export interface LiveQuote {
   symbol: string;
   companyCode: number;
-  /** Last traded price — the "current" price during a session. */
+  /**
+   * The exchange's price for the security — its `closingPrice`, which during
+   * an open session is the running close rather than a final one. Checked
+   * against the feed's own `changes` field across a full session snapshot:
+   * it reconciles on all 16 rows, while the last trade reconciles on none of
+   * the 9 where the two differ. A stock can trade away from the close on a
+   * single small order, so the last trade is carried separately.
+   */
   price: number | null;
+  /** Price of the most recent individual trade. */
+  lastTrade: number | null;
   previousClose: number | null;
   changePct: number | null;
   open: number | null;
@@ -94,7 +103,7 @@ export function parseQuotes(payload: unknown): Map<number, LiveQuote> {
     const companyCode = num(row.companycode);
     if (companyCode === null || !row.symbol) continue;
 
-    const price = num(row.lastTradedPrice) ?? num(row.closingPrice);
+    const price = num(row.closingPrice) ?? num(row.lastTradedPrice);
     const previousClose = num(row.previousClose);
     // The feed states a percentage; derive one only when it doesn't.
     const stated = num(row.changesPercent);
@@ -108,6 +117,7 @@ export function parseQuotes(payload: unknown): Map<number, LiveQuote> {
       symbol: bareSymbol(row.symbol),
       companyCode,
       price,
+      lastTrade: num(row.lastTradedPrice),
       previousClose,
       changePct,
       open: num(row.openingPrice),

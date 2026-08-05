@@ -70,6 +70,7 @@ export async function GET(
     return NextResponse.json({
       symbol: security.symbol,
       price: live.price,
+      lastTrade: live.lastTrade,
       changePct: live.changePct,
       previousClose: live.previousClose,
       open: live.open,
