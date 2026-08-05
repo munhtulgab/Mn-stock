@@ -19,11 +19,12 @@ const CACHE_MS = 60 * 60 * 1000;
 /**
  * Bump when the stored shape changes or the matching does, so entries
  * written by an older build are rebuilt rather than served. Headlines gained
- * a date field (v2), and then began matching on an item's body rather than
- * its title alone (v3) — a cached row from before that is missing every
- * story that names the company anywhere but the headline.
+ * a date field (v2), then began matching on an item's body rather than its
+ * title alone (v3), and then gained tavanbogdcapital.com as an API-read
+ * source (v4). A row cached under an older version is missing whatever the
+ * newer one would have found.
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 interface NewsSnapshot {
   key: string;

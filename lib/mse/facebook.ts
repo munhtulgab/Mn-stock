@@ -66,6 +66,13 @@ export interface FacebookPost {
   date?: string;
 }
 
+/**
+ * Path segments that are Facebook's own routing rather than a page name.
+ * "share" is the one the app's share sheet produces, and every such link
+ * begins with it — so it identifies no page at all.
+ */
+const ROUTING_SEGMENTS = ["share", "groups", "watch", "photo", "events", "reel"];
+
 /** The page name in a facebook.com URL: profile.php ids included. */
 export function pageSlug(url: string): string | null {
   let parsed: URL;
@@ -77,14 +84,30 @@ export function pageSlug(url: string): string | null {
   const id = parsed.searchParams.get("id");
   if (parsed.pathname.startsWith("/profile.php") && id) return `profile.php?id=${id}`;
 
-  const segment = parsed.pathname.split("/").filter(Boolean)[0];
+  const parts = parsed.pathname.split("/").filter(Boolean);
+  const segment = parts[0];
   if (!segment) return null;
   // "people", "pages" and "pg" prefix the real name in older link formats.
   if (["pages", "pg", "people"].includes(segment.toLowerCase())) {
-    const parts = parsed.pathname.split("/").filter(Boolean);
     return parts[parts.length - 1] ?? null;
   }
+  // A share link names no page, so the whole path is its identity. Returning
+  // "share" for all of them made eleven different sources look like one.
+  if (ROUTING_SEGMENTS.includes(segment.toLowerCase())) {
+    return parts.join("/");
+  }
   return segment;
+}
+
+/** Comparable form of a page address: no scheme, no www, no query. */
+function canonicalUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.hostname.replace(/^www\./, "")}${parsed.pathname.replace(/\/+$/, "")}`
+      .toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
 }
 
 /** Facebook redirects an unauthenticated reader here. */
@@ -277,9 +300,13 @@ export async function fetchWithCookie(
     return { posts: [], error: "Facebook хуудасны нэрийг линкээс уншиж чадсангүй." };
   }
 
+  // A share link has no page name to rebuild from, so its own path is used
+  // and mbasic follows the redirect.
   const target = slug.includes("profile.php?id=")
     ? `${MBASIC}/${slug}&locale=en_US&v=timeline`
-    : `${MBASIC}/${encodeURIComponent(slug)}?locale=en_US&v=timeline`;
+    : slug.includes("/")
+      ? `${MBASIC}/${slug}?locale=en_US`
+      : `${MBASIC}/${encodeURIComponent(slug)}?locale=en_US&v=timeline`;
 
   try {
     const res = await fetch(target, {
@@ -422,12 +449,15 @@ async function lastRunPosts(
     if (!itemsRes.ok) return null;
     const items = (await itemsRes.json()) as ApifyPost[];
 
-    // The last run may have been for a different page.
+    // The last run was very likely for a different page, so this has to be
+    // exact. A substring test against the slug reused one page's posts for
+    // every share link in the source list, because they all begin "/share/".
+    const wanted = canonicalUrl(pageUrl);
     const slug = pageSlug(pageUrl)?.toLowerCase();
     const matches = items.some(
       (p) =>
-        p.pageName?.toLowerCase() === slug ||
-        (p.facebookUrl ?? "").toLowerCase().includes(slug ?? " "),
+        (p.facebookUrl ? canonicalUrl(p.facebookUrl) === wanted : false) ||
+        (!!slug && !slug.includes("/") && p.pageName?.toLowerCase() === slug),
     );
     if (!matches) return null;
 
