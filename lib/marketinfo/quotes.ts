@@ -27,14 +27,14 @@ const CACHE_MS = 30_000;
  * `service.marketinfo.mn/mse/indexs`. The alternatives are kept behind it in
  * case the prefix moves.
  */
-export const QUOTE_ENDPOINTS = [
+const QUOTE_ENDPOINTS = [
   "https://service.marketinfo.mn/mse/trades",
   "https://api.marketinfo.mn/mse/trades",
   "https://api.marketinfo.mn/trades",
 ];
 
 /** Whether the exchange is currently in session, per the same API. */
-export const STATUS_ENDPOINT = "https://service.marketinfo.mn/mse/status";
+const STATUS_ENDPOINT = "https://service.marketinfo.mn/mse/status";
 
 /** Overrides the built-in list once the working address is known. */
 const CONFIGURED = process.env.MARKETINFO_QUOTES_URL;
@@ -99,7 +99,7 @@ function bareSymbol(raw: string): string {
   return raw.split("-")[0].trim().toUpperCase();
 }
 
-export function parseQuotes(payload: unknown): Map<number, LiveQuote> {
+function parseQuotes(payload: unknown): Map<number, LiveQuote> {
   const rows: RawQuote[] = Array.isArray(payload)
     ? (payload as RawQuote[])
     : Array.isArray((payload as { data?: unknown })?.data)

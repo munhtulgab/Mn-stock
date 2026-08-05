@@ -44,12 +44,19 @@ interface NewsSnapshot {
  */
 const EXTERNAL_BUDGET_MS = 30_000;
 
-/** Resolves to an empty list if the work has not finished in time. */
+/**
+ * Resolves to an empty list if the work has not finished in time. The timer
+ * is cleared either way: left running it keeps the function alive for the
+ * rest of the budget after the answer has already gone out.
+ */
 function withBudget<T>(work: Promise<T[]>, ms: number): Promise<T[]> {
+  let timer: ReturnType<typeof setTimeout>;
   return Promise.race([
     work,
-    new Promise<T[]>((resolve) => setTimeout(() => resolve([]), ms)),
-  ]);
+    new Promise<T[]>((resolve) => {
+      timer = setTimeout(() => resolve([]), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 async function build(

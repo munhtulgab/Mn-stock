@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AiSignalSchema = z.object({
+const AiSignalSchema = z.object({
   ticker: z.string(),
   company_name: z.string(),
   timestamp: z.string(),
@@ -26,7 +26,7 @@ export const AiSignalSchema = z.object({
 
 export type ParsedAiSignal = z.infer<typeof AiSignalSchema>;
 
-export function extractJson(text: string): unknown {
+function extractJson(text: string): unknown {
   const fenced =
     text.match(/```json\s*([\s\S]*?)```/i) ?? text.match(/```\s*([\s\S]*?)```/);
   const jsonText = (fenced ? fenced[1] : text).trim();

@@ -12,7 +12,7 @@ export interface SyncState {
   lastFullFinancialsSyncCompletedAt?: Date;
 }
 
-export async function syncSecuritiesList(db: Db): Promise<number> {
+async function syncSecuritiesList(db: Db): Promise<number> {
   const list = await fetchSecuritiesList();
   const ops = list.map((s) => ({
     updateOne: {
@@ -59,7 +59,7 @@ export async function syncPricesForCompany(
   return points.length;
 }
 
-export async function syncFinancialsForCompany(
+async function syncFinancialsForCompany(
   db: Db,
   companyCode: number,
 ): Promise<boolean> {

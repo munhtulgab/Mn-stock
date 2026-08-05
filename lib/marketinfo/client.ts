@@ -175,7 +175,7 @@ async function getJson<T>(
 }
 
 /** Company page URL. A dedicated per-company host wins when one exists. */
-export function companyUrl(companyCode: number, host?: string): string {
+function companyUrl(companyCode: number, host?: string): string {
   return host
     ? `https://${host}/`
     : `https://marketinfo.mn/stock/company/${companyCode}`;

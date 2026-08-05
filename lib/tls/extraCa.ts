@@ -108,7 +108,7 @@ function caIssuersUrl(cert: X509Certificate): string | null {
  * certificates name, and returns them as PEM. Empty when the host publishes
  * no AIA pointer — then only an operator-supplied certificate can help.
  */
-export function recoverChain(hostname: string, port = 443): Promise<string[]> {
+function recoverChain(hostname: string, port = 443): Promise<string[]> {
   const key = `${hostname}:${port}`;
   const existing = recoveredChains.get(key);
   if (existing) return existing;

@@ -7,7 +7,7 @@
  * into an unreadable smudge at avatar size, where the lettered fallback reads
  * better. To add one, drop a square PNG in and list the symbol here.
  */
-export const LOGO_SYMBOLS = new Set([
+const LOGO_SYMBOLS = new Set([
   "AARD",
   "AIC",
   "AIG",

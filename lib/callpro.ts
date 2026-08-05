@@ -25,7 +25,7 @@ export interface SendSmsResult {
  * CallPro expects a local 8-digit subscriber number, so the Mongolian country
  * code is stripped whether it arrives as +976, 976, or with spaces/dashes.
  */
-export function normalizePhone(raw: string): string | null {
+function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/[^\d]/g, "");
   const local = digits.startsWith("976") && digits.length > 8 ? digits.slice(3) : digits;
   return /^\d{8}$/.test(local) ? local : null;

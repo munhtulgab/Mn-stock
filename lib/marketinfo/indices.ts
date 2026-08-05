@@ -55,7 +55,7 @@ function num(value: unknown): number | null {
   return typeof n === "number" && Number.isFinite(n) ? n : null;
 }
 
-export function parseIndices(payload: unknown): Map<IndexKey, LiveIndex> {
+function parseIndices(payload: unknown): Map<IndexKey, LiveIndex> {
   const rows: RawIndex[] = Array.isArray(payload) ? (payload as RawIndex[]) : [];
   const result = new Map<IndexKey, LiveIndex>();
 

@@ -38,16 +38,27 @@ export interface PortfolioSummary {
   todayGainPct: number | null;
 }
 
+/**
+ * The user's portfolio, opened with its starting balance the first time.
+ * Done as one upsert rather than a read followed by an insert: two requests
+ * arriving together would both find nothing, and the unique index on userId
+ * would then fail the second one outright.
+ */
 async function getOrCreatePortfolio(db: Db, userId: string): Promise<Portfolio> {
-  const existing = await db.collection<Portfolio>("portfolios").findOne({ userId });
-  if (existing) return existing;
-  const created: Portfolio = {
-    userId,
-    cashBalance: STARTING_CASH_BALANCE,
-    updatedAt: new Date(),
-  };
-  await db.collection<Portfolio>("portfolios").insertOne(created as never);
-  return created;
+  const portfolio = await db
+    .collection<Portfolio>("portfolios")
+    .findOneAndUpdate(
+      { userId },
+      {
+        $setOnInsert: {
+          userId,
+          cashBalance: STARTING_CASH_BALANCE,
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true, returnDocument: "after" },
+    );
+  return portfolio as Portfolio;
 }
 
 async function getLatestTwoPrices(
@@ -248,8 +259,18 @@ export async function buyStock(
   const price = await getCurrentPrice(db, security.companyCode);
   const total = price * quantity;
 
-  const portfolio = await getOrCreatePortfolio(db, userId);
-  if (portfolio.cashBalance < total) {
+  await getOrCreatePortfolio(db, userId);
+
+  // Checked and deducted in one step. Reading the balance, comparing it and
+  // writing back the difference lets two orders that arrive together both
+  // pass the check and the second overwrite the first — and a double-tap on
+  // a phone sends exactly that. The balance condition is part of the update,
+  // so the second order finds nothing to match and is refused.
+  const paid = await db.collection<Portfolio>("portfolios").updateOne(
+    { userId, cashBalance: { $gte: total } },
+    { $inc: { cashBalance: -total }, $set: { updatedAt: new Date() } },
+  );
+  if (paid.matchedCount === 0) {
     throw new PortfolioError("Үлдэгдэл хүрэлцэхгүй байна");
   }
 
@@ -274,12 +295,6 @@ export async function buyStock(
         updatedAt: new Date(),
       },
     },
-    { upsert: true },
-  );
-
-  await db.collection<Portfolio>("portfolios").updateOne(
-    { userId },
-    { $set: { cashBalance: portfolio.cashBalance - total, updatedAt: new Date() } },
     { upsert: true },
   );
 
@@ -308,35 +323,32 @@ export async function sellStock(
     throw new PortfolioError("Тоо ширхэг бүхэл, эерэг тоо байх ёстой");
   }
   const security = await resolveSecurity(db, symbol);
-  const existing = await db
-    .collection<Holding>("holdings")
-    .findOne({ userId, companyCode: security.companyCode });
-
-  if (!existing || existing.quantity < quantity) {
-    throw new PortfolioError("Танд хангалттай хувьцаа алга");
-  }
-
   const price = await getCurrentPrice(db, security.companyCode);
   const total = price * quantity;
-  const remaining = existing.quantity - quantity;
 
-  if (remaining > 0) {
-    await db.collection<Holding>("holdings").updateOne(
-      { userId, companyCode: security.companyCode },
-      { $set: { quantity: remaining, updatedAt: new Date() } },
-    );
-  } else {
+  // Same reasoning as the purchase: the holding is checked and reduced in one
+  // step, so two sells arriving together cannot both pass on the same shares.
+  const sold = await db.collection<Holding>("holdings").findOneAndUpdate(
+    { userId, companyCode: security.companyCode, quantity: { $gte: quantity } },
+    { $inc: { quantity: -quantity }, $set: { updatedAt: new Date() } },
+    { returnDocument: "after" },
+  );
+  if (!sold) {
+    throw new PortfolioError("Танд хангалттай хувьцаа алга");
+  }
+  if (sold.quantity === 0) {
     await db
       .collection<Holding>("holdings")
-      .deleteOne({ userId, companyCode: security.companyCode });
+      .deleteOne({ userId, companyCode: security.companyCode, quantity: 0 });
   }
 
-  const portfolio = await getOrCreatePortfolio(db, userId);
-  await db.collection<Portfolio>("portfolios").updateOne(
-    { userId },
-    { $set: { cashBalance: portfolio.cashBalance + total, updatedAt: new Date() } },
-    { upsert: true },
-  );
+  await getOrCreatePortfolio(db, userId);
+  await db
+    .collection<Portfolio>("portfolios")
+    .updateOne(
+      { userId },
+      { $inc: { cashBalance: total }, $set: { updatedAt: new Date() } },
+    );
 
   const transaction: Transaction = {
     userId,

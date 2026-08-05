@@ -111,7 +111,7 @@ function canonicalUrl(url: string): string {
 }
 
 /** Facebook redirects an unauthenticated reader here. */
-export function isLoginWall(finalUrl: string, html: string): boolean {
+function isLoginWall(finalUrl: string, html: string): boolean {
   if (/\/(login|checkpoint|recover)(\.php|\/|\?|$)/i.test(finalUrl)) return true;
   return /name="pass"|id="login_form"|Log into Facebook|Нэвтрэх/i.test(html)
     && !/data-ft=/.test(html);
@@ -148,7 +148,7 @@ const CHROME = new RegExp(
  * Date.parse fills that gap with 2001 — which is how "4 August at 16:20"
  * became 2001-08-04.
  */
-export function parseAbbrDate(text: string): string | undefined {
+function parseAbbrDate(text: string): string | undefined {
   const clean = text.replace(/\s+/g, " ").replace(/\bat\b/i, "").trim();
   const dayFirst = /^(\d{1,2}) ([A-Za-z]{3,}) ?(\d{4})?/.exec(clean);
   const monthFirst = /^([A-Za-z]{3,}) (\d{1,2})(?:,)? ?(\d{4})?/.exec(clean);
@@ -241,7 +241,7 @@ const MIN_POST_CHARS = 40;
  * obfuscated and rotate. Everything else here is defensive: containers that
  * hold no prose, or that repeat a post already seen, are dropped.
  */
-export function parseMbasicPosts(html: string): FacebookPost[] {
+function parseMbasicPosts(html: string): FacebookPost[] {
   const $ = cheerio.load(html);
   const posts: FacebookPost[] = [];
   const seen = new Set<string>();

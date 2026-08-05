@@ -226,7 +226,7 @@ function withLivePoint(
   return prices;
 }
 
-export async function computeDashboardRows(
+async function computeDashboardRows(
   db: Db,
   options: { live?: Map<number, LiveQuote> } = {},
 ): Promise<DashboardRow[]> {
@@ -419,7 +419,7 @@ export async function refreshDashboardSnapshot(db: Db): Promise<number> {
   return rows.length;
 }
 
-export async function getStockDetail(
+async function getStockDetail(
   db: Db,
   symbol: string,
 ): Promise<StockDetail | null> {
