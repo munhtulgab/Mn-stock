@@ -1,6 +1,7 @@
 import type { Db } from "mongodb";
 import { computeRecommendation } from "@/lib/recommendation";
 import { syncPricesForCompany } from "@/lib/sync";
+import { fetchLiveQuotes } from "@/lib/marketinfo/quotes";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 
 const INDICATOR_WINDOW_DAYS = 400;
@@ -256,6 +257,48 @@ export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
     }
     throw err;
   }
+}
+
+/**
+ * Overlays the running price on rows served from the snapshot.
+ *
+ * The snapshot is built from stored closes, so during a session every list
+ * — the market list, gainers, losers — shows the previous day's figures
+ * while the detail page shows the live one. Only the price, its change and
+ * the last sparkline point move; the signal and score stay as computed, so
+ * a intraday tick cannot flap a recommendation.
+ *
+ * Deliberately not folded into getDashboardRows: the sync job reads those
+ * rows too, and has no business making a third-party call.
+ */
+export async function applyLiveQuotes(
+  rows: DashboardRow[],
+  options: { extraCaCerts?: string } = {},
+): Promise<DashboardRow[]> {
+  let quotes: Awaited<ReturnType<typeof fetchLiveQuotes>>;
+  try {
+    quotes = await fetchLiveQuotes(options);
+  } catch {
+    return rows;
+  }
+  if (quotes.size === 0) return rows;
+
+  return rows.map((row) => {
+    const live = quotes.get(row.companyCode);
+    if (!live || live.price === null) return row;
+    return {
+      ...row,
+      lastPrice: live.price,
+      changePct: live.changePct,
+      lastDate: live.at?.slice(0, 10) ?? row.lastDate,
+      volume: live.volume ?? row.volume,
+      // Keep the line ending where the number says it does.
+      sparkline:
+        row.sparkline.length > 0
+          ? [...row.sparkline.slice(0, -1), live.price]
+          : row.sparkline,
+    };
+  });
 }
 
 /** Rebuild the snapshot immediately (called after a sync ingests new prices). */

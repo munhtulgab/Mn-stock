@@ -8,6 +8,7 @@ import type {
   WatchlistItem,
 } from "@/lib/types";
 import { STARTING_CASH_BALANCE } from "@/lib/types";
+import { fetchLiveQuotes } from "@/lib/marketinfo/quotes";
 
 export class PortfolioError extends Error {}
 
@@ -110,6 +111,30 @@ async function getLatestTwoPricesForMany(
   return result;
 }
 
+/**
+ * Running prices for the securities held, keyed by company code.
+ *
+ * Valuing a portfolio at yesterday's close while every list on screen shows
+ * the running price would have the same holding worth two different amounts
+ * depending on which page you were looking at.
+ */
+async function livePricesFor(
+  companyCodes: number[],
+): Promise<Map<number, number>> {
+  if (companyCodes.length === 0) return new Map();
+  try {
+    const quotes = await fetchLiveQuotes();
+    const prices = new Map<number, number>();
+    for (const code of companyCodes) {
+      const price = quotes.get(code)?.price;
+      if (price != null) prices.set(code, price);
+    }
+    return prices;
+  } catch {
+    return new Map();
+  }
+}
+
 export async function getPortfolioSummary(
   db: Db,
   userId: string,
@@ -123,12 +148,13 @@ export async function getPortfolioSummary(
   ]);
 
   const companyCodes = holdingDocs.map((h) => h.companyCode);
-  const [securities, pricesByCode] = await Promise.all([
+  const [securities, pricesByCode, livePrices] = await Promise.all([
     db
       .collection<Security>("securities")
       .find({ companyCode: { $in: companyCodes } })
       .toArray(),
     getLatestTwoPricesForMany(db, companyCodes),
+    livePricesFor(companyCodes),
   ]);
   const securityByCode = new Map(securities.map((s) => [s.companyCode, s]));
 
@@ -141,14 +167,17 @@ export async function getPortfolioSummary(
       last: null,
       prev: null,
     };
-    const currentPrice = last?.close ?? null;
+    const currentPrice = livePrices.get(h.companyCode) ?? last?.close ?? null;
     const marketValue = (currentPrice ?? h.avgCost) * h.quantity;
     const costBasis = h.avgCost * h.quantity;
     const gainLoss = marketValue - costBasis;
     holdingsValue += marketValue;
     totalCostBasis += costBasis;
-    if (currentPrice !== null && prev) {
-      todayGain += (currentPrice - prev.close) * h.quantity;
+    // Against the previous session's close, so "today" means today whether
+    // the price is a running one or the last published close.
+    const priorClose = livePrices.has(h.companyCode) ? last?.close : prev?.close;
+    if (currentPrice !== null && priorClose != null) {
+      todayGain += (currentPrice - priorClose) * h.quantity;
     }
     return {
       companyCode: h.companyCode,
@@ -188,7 +217,13 @@ async function resolveSecurity(db: Db, symbol: string): Promise<Security> {
   return security;
 }
 
+/**
+ * The price an order fills at. Uses the running price when the exchange is
+ * quoting one, so a trade executes at the figure the screen was showing.
+ */
 async function getCurrentPrice(db: Db, companyCode: number): Promise<number> {
+  const live = (await livePricesFor([companyCode])).get(companyCode);
+  if (live != null) return live;
   const { last } = await getLatestTwoPrices(db, companyCode);
   if (!last) throw new PortfolioError("Ханшийн мэдээлэл олдсонгүй");
   return last.close;
@@ -335,12 +370,13 @@ export async function getWatchlist(
     .toArray();
 
   const companyCodes = items.map((i) => i.companyCode);
-  const [securities, pricesByCode] = await Promise.all([
+  const [securities, pricesByCode, livePrices] = await Promise.all([
     db
       .collection<Security>("securities")
       .find({ companyCode: { $in: companyCodes } })
       .toArray(),
     getLatestTwoPricesForMany(db, companyCodes),
+    livePricesFor(companyCodes),
   ]);
   const securityByCode = new Map(securities.map((s) => [s.companyCode, s]));
 
@@ -349,14 +385,17 @@ export async function getWatchlist(
       last: null,
       prev: null,
     };
+    const live = livePrices.get(item.companyCode) ?? null;
+    const currentPrice = live ?? last?.close ?? null;
+    const priorClose = live !== null ? last?.close : prev?.close;
     const changePct =
-      last && prev && prev.close > 0
-        ? ((last.close - prev.close) / prev.close) * 100
+      currentPrice !== null && priorClose != null && priorClose > 0
+        ? ((currentPrice - priorClose) / priorClose) * 100
         : null;
     return {
       ...item,
       name: securityByCode.get(item.companyCode)?.name ?? item.symbol,
-      currentPrice: last?.close ?? null,
+      currentPrice,
       changePct,
     };
   });

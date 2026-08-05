@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
-import { getDashboardRows, type DashboardRow } from "@/lib/data";
+import { applyLiveQuotes, getDashboardRows, type DashboardRow } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getUnreadCount } from "@/lib/notifications";
 import { getMarketIndices } from "@/lib/indices";
+import { getSettings } from "@/lib/settings";
 import StockAvatar from "@/components/StockAvatar";
 import SignalBadge from "@/components/SignalBadge";
 import Sparkline from "@/components/Sparkline";
@@ -15,13 +16,17 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
-  const [rows, portfolio, watchlist, unread, indices] = await Promise.all([
+  const settings = await getSettings(db);
+  const [storedRows, portfolio, watchlist, unread, indices] = await Promise.all([
     getDashboardRows(db),
     getPortfolioSummary(db, user!._id!),
     getWatchlist(db, user!._id!),
     getUnreadCount(db, user!),
     getMarketIndices(db),
   ]);
+  const rows = await applyLiveQuotes(storedRows, {
+    extraCaCerts: settings.extraCaCerts,
+  });
 
   const displayName = user?.fullName || user?.username || "";
 

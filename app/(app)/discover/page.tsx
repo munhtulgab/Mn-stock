@@ -1,12 +1,19 @@
 import { getDb } from "@/lib/mongodb";
-import { getDashboardRows } from "@/lib/data";
+import { applyLiveQuotes, getDashboardRows } from "@/lib/data";
+import { getSettings } from "@/lib/settings";
 import DashboardTable from "@/components/DashboardTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function DiscoverPage() {
   const db = await getDb();
-  const rows = await getDashboardRows(db);
+  const [storedRows, settings] = await Promise.all([
+    getDashboardRows(db),
+    getSettings(db),
+  ]);
+  const rows = await applyLiveQuotes(storedRows, {
+    extraCaCerts: settings.extraCaCerts,
+  });
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-4">
