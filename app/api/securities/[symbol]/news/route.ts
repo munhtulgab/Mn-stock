@@ -77,7 +77,12 @@ async function build(
     mse: mseResult.status === "fulfilled" ? mseResult.value : [],
     external:
       externalResult.status === "fulfilled"
-        ? matchHeadlines(externalResult.value, terms).slice(0, 12)
+        ? matchHeadlines(externalResult.value, terms)
+            .slice(0, 12)
+            // The body was there to match on, not to keep: storing whole
+            // articles would bloat the snapshot and send them to the phone
+            // for nothing.
+            .map(({ title, url, source, date }) => ({ title, url, source, date }))
         : [],
   };
 }

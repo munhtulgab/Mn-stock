@@ -10,6 +10,11 @@ import {
   isMarketInfoHost,
   newsToText,
 } from "@/lib/marketinfo/news";
+import {
+  fetchTavanBogdNews,
+  isTavanBogdHost,
+  newsToText as tavanBogdNewsToText,
+} from "@/lib/tavanbogd/news";
 import { extractNextPayloadText } from "./nextPayload";
 import {
   fetchWithApify,
@@ -464,6 +469,39 @@ async function fetchMarketInfo(url: string): Promise<NewsSourceResult> {
 }
 
 /**
+ * Same story at tavanbogdcapital.com: the markup is a shell whose articles
+ * arrive from an API afterwards, so reading the page returned its navigation
+ * menu and called it news.
+ */
+async function fetchTavanBogd(url: string): Promise<NewsSourceResult> {
+  try {
+    const items = await fetchTavanBogdNews();
+    if (items.length === 0) {
+      return fail(url, "empty", "tavanbogdcapital.com API хоосон хариу өглөө.");
+    }
+    const text = tavanBogdNewsToText(items);
+    return {
+      url,
+      status: "ok",
+      text,
+      chars: text.length,
+      headlines: items.map((i) => ({
+        title: i.title,
+        url: i.url,
+        date: i.date,
+        // Standfirst, tags and the article text: a company is named in the
+        // piece far more often than in its headline.
+        summary: `${i.brief} ${i.body}`.trim(),
+      })),
+      via: "api",
+      reason: "tavanbogdcapital.com-ийн JSON API-аас уншлаа.",
+    };
+  } catch (err) {
+    return fail(url, "error", `tavanbogdcapital API: ${(err as Error).message}`);
+  }
+}
+
+/**
  * Reads a site's news section when the address configured was its root and
  * that root turned out to be an empty shell. Only ever a fallback, and the
  * address that actually produced the text is reported back.
@@ -528,6 +566,7 @@ async function extractOne(
   if (!host) return fail(url, "error", "Линк буруу байна.");
   if (hostMatches(host, FACEBOOK_HOSTS)) return fetchFacebook(url, facebook);
   if (isMarketInfoHost(host)) return fetchMarketInfo(url);
+  if (isTavanBogdHost(host)) return fetchTavanBogd(url);
   if (hostMatches(host, LOGIN_WALLED_HOSTS)) {
     return fail(
       url,
@@ -697,31 +736,60 @@ export function distinctiveNameWords(names: string[]): Set<string> {
   return new Set([...counts].filter(([, n]) => n === 1).map(([word]) => word));
 }
 
+/** A term is either a phrase to find or a shape to recognise. */
+export type MatchTerm = string | RegExp;
+
+/** How a Mongolian listing is written: the form follows the name. */
+const COMPANY_FORMS = "ХК|ХХК|ББСБ|ТӨХК|банк";
+
+/** Room for the rest of a registered name between the two. */
+const NAME_TAIL_CHARS = 24;
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Search terms for a company: its ticker, the trading name with the legal
  * form dropped so "Бодь Даатгал ХК" also matches "Бодь Даатгал", and — when
  * it identifies this company alone — the name's first word.
+ *
+ * That first word is required to be followed by a company form, because
+ * uniqueness among registered names says nothing about uniqueness in
+ * Mongolian: TDB is "Худалдаа Хөгжлийн банк" and SBM is "Төрийн Банк", and
+ * on their own those words picked up "дэлхийн худалдааны байгууллага" and
+ * "БНХАУ-ын төрийн өмчит SAIC Motor". Demanding the form leaves
+ * "Инновэйшн ХК" matching while those two do not.
  */
 export function companyMatchTerms(
   symbol: string,
   name: string,
   distinctiveWords?: Set<string>,
-): string[] {
+): MatchTerm[] {
   const bare = bareName(name);
   const first = bare.split(/\s+/)[0] ?? "";
-  const terms = [symbol, bare, name];
+  const terms: MatchTerm[] = [symbol, bare, name].filter((t) => t.length >= 3);
+
   if (first && first !== bare && distinctiveWords?.has(first.toLowerCase())) {
-    terms.push(first);
+    terms.push(
+      new RegExp(
+        `${escapeRegExp(first)}[^\\n.!?]{0,${NAME_TAIL_CHARS}}?(?:${COMPANY_FORMS})`,
+        "i",
+      ),
+    );
   }
-  return terms.filter((t) => t.length >= 3);
+  return terms;
 }
 
 /** Headlines that name the company, deduplicated across all sources. */
 export function matchHeadlines(
   results: NewsSourceResult[],
-  terms: string[],
+  terms: MatchTerm[],
 ): (NewsHeadline & { source: string })[] {
-  const needles = terms.map((t) => t.toLowerCase());
+  const needles = terms
+    .filter((t): t is string => typeof t === "string")
+    .map((t) => t.toLowerCase());
+  const patterns = terms.filter((t): t is RegExp => t instanceof RegExp);
   const seen = new Set<string>();
   const matches: (NewsHeadline & { source: string })[] = [];
 
@@ -730,7 +798,10 @@ export function matchHeadlines(
     const source = hostOf(result.url) ?? result.url;
     for (const headline of result.headlines) {
       const haystack = `${headline.title} ${headline.summary ?? ""}`.toLowerCase();
-      if (!needles.some((n) => haystack.includes(n))) continue;
+      const named =
+        needles.some((n) => haystack.includes(n)) ||
+        patterns.some((p) => p.test(haystack));
+      if (!named) continue;
       // Keyed by title as well as address: a Facebook page's posts share the
       // page's URL when no permalink is present, and keying on the URL alone
       // let one post stand for the whole page.
