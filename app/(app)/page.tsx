@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
-import { applyLiveQuotes, getDashboardRows, type DashboardRow } from "@/lib/data";
+import {
+  applyLiveQuotes,
+  getDashboardRows,
+  latestSessionDate,
+  pricedRecently,
+  tradedInLatestSession,
+  type DashboardRow,
+} from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getUnreadCount } from "@/lib/notifications";
@@ -12,6 +19,14 @@ import Sparkline from "@/components/Sparkline";
 import Num, { Pct } from "@/components/Num";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * How stale a security's last trade may be before its score stops meaning
+ * anything. Many MSE listings trade a handful of times a month, so the bound
+ * has to be generous enough to keep them — but not so generous that a
+ * listing dormant since 2006 is offered as a pick.
+ */
+const TOP_PICK_MAX_AGE_DAYS = 45;
 
 export default async function HomePage() {
   const db = await getDb();
@@ -30,7 +45,11 @@ export default async function HomePage() {
 
   const displayName = user?.fullName || user?.username || "";
 
-  const traded = rows.filter((r) => r.changePct !== null);
+  // Movers describe the last session, so only securities that traded in it
+  // qualify. Ranking every listing by "change since it last traded" put a
+  // 2006 price at the top of the gainers with +308%.
+  const session = latestSessionDate(rows);
+  const traded = tradedInLatestSession(rows).filter((r) => r.changePct !== null);
   const gainers = traded
     .filter((r) => r.changePct! > 0)
     .sort((a, b) => b.changePct! - a.changePct!)
@@ -40,8 +59,9 @@ export default async function HomePage() {
     .sort((a, b) => a.changePct! - b.changePct!)
     .slice(0, 6);
   // Untraded listings score 0 across the board; ranking them as "top picks"
-  // would just surface whatever sorts first alphabetically.
-  const topPicks = rows
+  // would just surface whatever sorts first alphabetically. A long-dormant
+  // listing is excluded for the same reason its indicators are meaningless.
+  const topPicks = pricedRecently(rows, TOP_PICK_MAX_AGE_DAYS)
     .filter((r) => r.lastPrice !== null && r.score !== 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
@@ -207,11 +227,15 @@ export default async function HomePage() {
         </Section>
       )}
 
-      <Section title="Өсөлттэй" action={{ href: "/discover", label: "Зах зээл" }}>
+      <Section
+        title="Өсөлттэй"
+        note={session}
+        action={{ href: "/discover", label: "Зах зээл" }}
+      >
         <MoverList rows={gainers} />
       </Section>
 
-      <Section title="Уналттай">
+      <Section title="Уналттай" note={session}>
         <MoverList rows={losers} />
       </Section>
 
@@ -242,17 +266,23 @@ export default async function HomePage() {
 
 function Section({
   title,
+  note,
   action,
   children,
 }: {
   title: string;
+  /** Which session the figures belong to, when that isn't obvious. */
+  note?: string | null;
   action?: { href: string; label: string };
   children: React.ReactNode;
 }) {
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-app-text text-sm">{title}</h2>
+        <h2 className="font-semibold text-app-text text-sm">
+          {title}
+          {note && <span className="text-app-muted font-normal ml-1.5">· {note}</span>}
+        </h2>
         {action && (
           <Link href={action.href} className="text-xs text-brand font-medium">
             {action.label}

@@ -41,6 +41,17 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
     return result;
   }, [rows, query, signalFilter, sortKey, sortDir]);
 
+  // Computed here rather than imported from lib/data: that module reaches
+  // into MongoDB, and this component ships to the browser.
+  const session = useMemo(
+    () =>
+      rows.reduce<string | null>(
+        (latest, r) => (r.lastDate && (!latest || r.lastDate > latest) ? r.lastDate : latest),
+        null,
+      ),
+    [rows],
+  );
+
   const counts = useMemo(
     () => ({
       BUY: rows.filter((r) => r.signal === "BUY").length,
@@ -115,6 +126,13 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
               <div className="text-xs">
                 <Pct value={row.changePct} suffix="" />
               </div>
+              {/* A listing that hasn't traded for months still has a price;
+                  without its date it reads as today's. */}
+              {row.lastDate && row.lastDate !== session && (
+                <div className="text-[10px] text-app-muted leading-none mt-0.5">
+                  {row.lastDate}
+                </div>
+              )}
             </div>
           </Link>
         ))}

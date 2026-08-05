@@ -2,6 +2,7 @@ import type { Db } from "mongodb";
 import { computeRecommendation } from "@/lib/recommendation";
 import { syncPricesForCompany } from "@/lib/sync";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
+import { daysBetween, sessionChangePct } from "@/lib/priceChange";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 
 const INDICATOR_WINDOW_DAYS = 400;
@@ -175,10 +176,7 @@ function buildRow(
   const recommendation = computeRecommendation(prices, financials, marketMedianPe);
   const last = prices.at(-1) ?? null;
   const prev = prices.length > 1 ? prices[prices.length - 2] : null;
-  const changePct =
-    last && prev && prev.close > 0
-      ? ((last.close - prev.close) / prev.close) * 100
-      : null;
+  const changePct = sessionChangePct(last, prev);
 
   return {
     symbol: security.symbol,
@@ -266,7 +264,7 @@ const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
  * sync — e.g. the sparkline calendar-window fallback below. A stored
  * snapshot from an older version is treated as stale regardless of age.
  */
-const DASHBOARD_SCHEMA_VERSION = 2;
+const DASHBOARD_SCHEMA_VERSION = 3;
 
 interface MarketSnapshot {
   key: string;
@@ -358,6 +356,48 @@ export async function applyLiveQuotes(
           : row.sparkline,
     };
   });
+}
+
+/**
+ * The most recent session any row carries — the market's "today".
+ *
+ * Rows are dated by when the security last traded, and on MSE that is a very
+ * uneven thing: of 423 listings only about 50 change hands on a given day,
+ * while some have not traded since 2006. The newest date across all rows is
+ * therefore the last session the market held.
+ */
+export function latestSessionDate(rows: DashboardRow[]): string | null {
+  let latest: string | null = null;
+  for (const row of rows) {
+    if (row.lastDate && (!latest || row.lastDate > latest)) latest = row.lastDate;
+  }
+  return latest;
+}
+
+/**
+ * Rows that actually traded in the latest session.
+ *
+ * Gainers and losers are statements about that session, so a security whose
+ * newest price is months old belongs to neither list however far it moved on
+ * the day it last traded.
+ */
+export function tradedInLatestSession(rows: DashboardRow[]): DashboardRow[] {
+  const session = latestSessionDate(rows);
+  if (!session) return [];
+  return rows.filter((r) => r.lastDate === session);
+}
+
+/**
+ * Rows priced within `days` of the latest session. Indicators computed from a
+ * series that stops years ago describe a market that no longer exists, so a
+ * ranking by score has to bound how stale its inputs may be.
+ */
+export function pricedRecently(rows: DashboardRow[], days: number): DashboardRow[] {
+  const session = latestSessionDate(rows);
+  if (!session) return [];
+  return rows.filter(
+    (r) => r.lastDate !== null && daysBetween(r.lastDate, session) <= days,
+  );
 }
 
 /** Rebuild the snapshot immediately (called after a sync ingests new prices). */

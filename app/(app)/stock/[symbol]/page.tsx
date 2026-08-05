@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getStockDetailFresh } from "@/lib/data";
+import { sessionChangePct } from "@/lib/priceChange";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getSettings } from "@/lib/settings";
 import { fetchLiveQuotes, fetchMarketOpen, sessionEnd } from "@/lib/marketinfo/quotes";
@@ -91,10 +92,7 @@ export default async function StockDetailPage({
 
   const last = priceHistory.at(-1) ?? null;
   const prev = priceHistory.length > 1 ? priceHistory[priceHistory.length - 2] : null;
-  const changePct =
-    last && prev && prev.close > 0
-      ? ((last.close - prev.close) / prev.close) * 100
-      : null;
+  const changePct = sessionChangePct(last, prev);
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-4">

@@ -9,6 +9,7 @@ import type {
 } from "@/lib/types";
 import { STARTING_CASH_BALANCE } from "@/lib/types";
 import { fetchLiveQuotes } from "@/lib/marketinfo/quotes";
+import { priorClose } from "@/lib/priceChange";
 
 export class PortfolioError extends Error {}
 
@@ -175,9 +176,11 @@ export async function getPortfolioSummary(
     totalCostBasis += costBasis;
     // Against the previous session's close, so "today" means today whether
     // the price is a running one or the last published close.
-    const priorClose = livePrices.has(h.companyCode) ? last?.close : prev?.close;
-    if (currentPrice !== null && priorClose != null) {
-      todayGain += (currentPrice - priorClose) * h.quantity;
+    const base = livePrices.has(h.companyCode)
+      ? (last?.close ?? null)
+      : priorClose(last, prev);
+    if (currentPrice !== null && base !== null) {
+      todayGain += (currentPrice - base) * h.quantity;
     }
     return {
       companyCode: h.companyCode,
@@ -387,10 +390,10 @@ export async function getWatchlist(
     };
     const live = livePrices.get(item.companyCode) ?? null;
     const currentPrice = live ?? last?.close ?? null;
-    const priorClose = live !== null ? last?.close : prev?.close;
+    const base = live !== null ? (last?.close ?? null) : priorClose(last, prev);
     const changePct =
-      currentPrice !== null && priorClose != null && priorClose > 0
-        ? ((currentPrice - priorClose) / priorClose) * 100
+      currentPrice !== null && base !== null && base > 0
+        ? ((currentPrice - base) / base) * 100
         : null;
     return {
       ...item,

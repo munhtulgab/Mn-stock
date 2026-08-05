@@ -4,6 +4,7 @@ import { getDb } from "@/lib/mongodb";
 import { getSettings } from "@/lib/settings";
 import { syncPricesForCompany } from "@/lib/sync";
 import { fetchLiveQuotes, fetchMarketOpen, sessionEnd } from "@/lib/marketinfo/quotes";
+import { priorClose, sessionChangePct } from "@/lib/priceChange";
 import type { PricePoint, Security } from "@/lib/types";
 
 /**
@@ -121,11 +122,8 @@ export async function GET(
   return NextResponse.json({
     symbol: security.symbol,
     price: last?.close ?? null,
-    changePct:
-      last && prev && prev.close > 0
-        ? ((last.close - prev.close) / prev.close) * 100
-        : null,
-    previousClose: prev?.close ?? null,
+    changePct: sessionChangePct(last, prev),
+    previousClose: priorClose(last, prev),
     volume: last?.volume ?? null,
     date: last?.date ?? null,
     at: null,
