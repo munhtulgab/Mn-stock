@@ -5,7 +5,7 @@ import NotificationBell from "@/components/NotificationBell";
 import InstallPwaButton from "@/components/InstallPwaButton";
 import LogoutButton from "@/components/LogoutButton";
 import ProfileForm from "@/components/ProfileForm";
-import { GearIcon, ChevronRightIcon } from "@/components/icons";
+import { GearIcon, ChevronRightIcon, ReceiptIcon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +33,17 @@ export default async function ProfilePage() {
         >
           <span className="flex items-center gap-3 text-sm text-app-text">
             <GearIcon /> Тохиргоо
+          </span>
+          <span className="text-app-muted">
+            <ChevronRightIcon />
+          </span>
+        </Link>
+        <Link
+          href="/orders"
+          className="w-full flex items-center justify-between px-4 py-3.5"
+        >
+          <span className="flex items-center gap-3 text-sm text-app-text">
+            <ReceiptIcon /> Захиалгын түүх
           </span>
           <span className="text-app-muted">
             <ChevronRightIcon />

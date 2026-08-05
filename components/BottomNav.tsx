@@ -7,7 +7,7 @@ const ITEMS = [
   { href: "/", label: "Нүүр", icon: PieIcon },
   { href: "/discover", label: "Зах зээл", icon: TrendIcon },
   { href: "/portfolio", label: "Багц", icon: CertificateIcon },
-  { href: "/orders", label: "Захиалга", icon: ReceiptIcon },
+  { href: "/news", label: "Мэдээ", icon: NewsIcon },
   { href: "/profile", label: "Профайл", icon: PersonIcon },
 ];
 
@@ -37,7 +37,11 @@ export default function BottomNav() {
           } else if (href === "/discover") {
             active = pathname.startsWith("/discover") || pathname.startsWith("/stock");
           } else if (href === "/profile") {
-            active = pathname.startsWith("/profile") || pathname === "/settings";
+            // Order history and settings both hang off the profile tab.
+            active =
+              pathname.startsWith("/profile") ||
+              pathname === "/settings" ||
+              pathname.startsWith("/orders");
           } else {
             active = pathname.startsWith(href);
           }
@@ -104,11 +108,12 @@ function CertificateIcon() {
   );
 }
 
-function ReceiptIcon() {
+function NewsIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" className="shrink-0">
-      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" {...STROKE} />
-      <path d="M9.5 8h5M9.5 12h5" {...STROKE} />
+      <path d="M4 5.5h13v13a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18.5v-13Z" {...STROKE} />
+      <path d="M17 9h2.5A1.5 1.5 0 0 1 21 10.5v8a1.5 1.5 0 0 1-1.5 1.5H17" {...STROKE} />
+      <path d="M7 9h7M7 12.5h7M7 16h4" {...STROKE} />
     </svg>
   );
 }

@@ -14,6 +14,11 @@ export default async function OrdersPage() {
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-4">
+      {/* Reached from the profile rather than the tab bar now, so it carries
+          its own way back. */}
+      <Link href="/profile" className="text-sm text-app-muted">
+        ← Профайл
+      </Link>
       <h1 className="text-xl font-bold text-app-text">Захиалгын түүх</h1>
 
       {transactions.length === 0 ? (

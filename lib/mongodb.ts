@@ -70,6 +70,7 @@ export async function ensureIndexes(): Promise<void> {
     db.collection("newsSnapshots").createIndex({ key: 1 }, { unique: true }),
     db.collection("marketInfoSnapshots").createIndex({ key: 1 }, { unique: true }),
     db.collection("facebookSnapshots").createIndex({ key: 1 }, { unique: true }),
+    db.collection("marketNewsSnapshots").createIndex({ key: 1 }, { unique: true }),
     db.collection("syncState").createIndex({ key: 1 }, { unique: true }),
     db
       .collection("pushSubscriptions")
