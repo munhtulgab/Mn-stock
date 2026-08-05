@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SignalBadge from "./SignalBadge";
 import { RefreshIcon, SparkIcon } from "./icons";
 import type { AiSignal } from "@/lib/types";
@@ -77,11 +77,7 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
         </button>
       )}
 
-      {state.status === "loading" && (
-        <div className="w-full rounded-2xl bg-app-elevated py-4 text-center text-base font-semibold text-app-muted">
-          Тооцоолж байна...
-        </div>
-      )}
+      {state.status === "loading" && <Loader />}
 
       {state.status === "not_configured" && (
         <p className="text-xs text-app-muted">
@@ -194,6 +190,76 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A run takes twenty to forty seconds: the company's page is re-fetched from
+ * the exchange, its news is gathered, and every configured model is asked.
+ * A single line of text for that long reads as a hang, so this shows the
+ * clock running and the shape of the answer that is coming.
+ *
+ * The bar is deliberately indeterminate. Nothing here knows how far along a
+ * model is, and a bar that pretends to would be making it up.
+ */
+function Loader() {
+  const [seconds, setSeconds] = useState(0);
+
+  // Counted rather than measured against a start time read during render:
+  // reading the clock while rendering is not idempotent.
+  useEffect(() => {
+    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2.5">
+        <span className="animate-spin text-brand">
+          <SpinnerIcon size={18} />
+        </span>
+        <span className="text-sm font-semibold text-app-text">
+          AI дүн шинжилгээ хийж байна…
+        </span>
+        <span className="ml-auto text-xs tabular-nums text-app-muted">
+          {seconds}с
+        </span>
+      </div>
+
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-app-elevated">
+        <div className="ai-progress h-full w-1/3 rounded-full bg-brand" />
+      </div>
+
+      <p className="text-[11px] text-app-muted">
+        Ханш, санхүүгийн тайлан, мэдээг цуглуулаад тохируулсан загвар бүрээс
+        дүгнэлт авч байна. Ихэвчлэн 20-40 секунд үргэлжилнэ.
+      </p>
+
+      <div className="space-y-2 pt-1">
+        <div className="h-6 w-40 animate-pulse rounded-full bg-app-elevated" />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-12 animate-pulse rounded-xl bg-app-elevated" />
+          ))}
+        </div>
+        <div className="h-3 w-full animate-pulse rounded bg-app-elevated" />
+        <div className="h-3 w-4/5 animate-pulse rounded bg-app-elevated" />
+      </div>
+    </div>
+  );
+}
+
+function SpinnerIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
+      <path
+        d="M21 12a9 9 0 0 0-9-9"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

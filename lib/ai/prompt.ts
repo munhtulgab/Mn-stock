@@ -1,3 +1,4 @@
+import { ulaanbaatarDateTime, ulaanbaatarDay } from "@/lib/day";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 import type { CompanyNewsItem } from "@/lib/mse/news";
 import type { NewsSourceExtract } from "@/lib/mse/newsSources";
@@ -23,6 +24,20 @@ export function buildUserMessage(input: AnalystInput): string {
   const dailyLimitUp = last ? last.close * 1.15 : null;
   const dailyLimitDown = last ? last.close * 0.85 : null;
 
+  // How sparsely this security actually trades. MSE lists 400-odd companies
+  // and about fifty change hands on a given day, so "the last 30 candles" can
+  // span two years — a model reading them as consecutive days would call a
+  // trend out of prices months apart.
+  const today = ulaanbaatarDay(new Date());
+  const daysSinceLastTrade = last
+    ? Math.round(
+        (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${last.date}T00:00:00Z`)) /
+          86_400_000,
+      )
+    : null;
+  const ninetyDaysAgo = ulaanbaatarDay(new Date(Date.now() - 90 * 86_400_000));
+  const sessionsLast90Days = prices.filter((p) => p.date >= ninetyDaysAgo).length;
+
   const recentCandles = prices.slice(-30).map((p) => ({
     date: p.date,
     open: p.open,
@@ -33,7 +48,7 @@ export function buildUserMessage(input: AnalystInput): string {
   }));
 
   const payload = {
-    now: new Date().toISOString(),
+    now_ulaanbaatar: ulaanbaatarDateTime(new Date()),
     security: {
       symbol: security.symbol,
       name: security.name,
@@ -44,6 +59,14 @@ export function buildUserMessage(input: AnalystInput): string {
       up: dailyLimitUp,
       down: dailyLimitDown,
       note: "MSE-д нэг өдөрт ханш өмнөх хаалтын үнээс ±15%-иас хэтэрч хэлбэлзэх боломжгүй.",
+    },
+    trading_activity: {
+      last_trade_date: last?.date ?? null,
+      days_since_last_trade: daysSinceLastTrade,
+      sessions_in_last_90_calendar_days: sessionsLast90Days,
+      candles_span_from: recentCandles[0]?.date ?? null,
+      candles_span_to: recentCandles.at(-1)?.date ?? null,
+      note: "Доорх лаанууд нь арилжаа болсон өдрүүд бөгөөд дараалсан өдрүүд БИШ байж болно. Огноог нь харгалзан үзэж, хоорондоо хол зайтай лаануудаас трэнд гаргахаас зайлсхий.",
     },
     technical_indicators: {
       sma20: recommendation.indicators.sma20,

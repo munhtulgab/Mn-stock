@@ -14,7 +14,7 @@ import {
   generateMultiProviderSignal,
 } from "@/lib/ai/multiAnalyst";
 import { humanizeProviderError } from "@/lib/ai/errorMessages";
-import type { AiSignal } from "@/lib/types";
+import type { AiSignal, Security } from "@/lib/types";
 
 /**
  * Re-runs error humanization over a stored document's provider errors.
@@ -31,7 +31,13 @@ function refreshProviderErrors(doc: AiSignal): AiSignal {
   };
 }
 
-export const maxDuration = 60;
+/**
+ * A run is a chain of third parties: the exchange for a fresh price, the
+ * newsroom, then every configured model. Sixty seconds was enough for the
+ * models alone and the whole thing died at the ceiling when the news took a
+ * while, so the run is given room to finish rather than half-finish.
+ */
+export const maxDuration = 180;
 
 const CACHE_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -43,21 +49,28 @@ export async function GET(
   const force = req.nextUrl.searchParams.get("force") === "1";
   const db = await getDb();
 
-  const detail = await getStockDetailFresh(db, symbol);
-  if (!detail) {
+  // The stored answer is looked for first. Everything below it — a live
+  // price sync, the newsroom, the models — is the expensive part, and a
+  // cached hit used to pay for all of it before finding out it was a hit.
+  const security = await db
+    .collection<Security>("securities")
+    .findOne({ symbol: symbol.toUpperCase() });
+  if (!security) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   if (!force) {
     const cached = await db
       .collection<AiSignal>("aiSignals")
-      .findOne(
-        { companyCode: detail.security.companyCode },
-        { sort: { createdAt: -1 } },
-      );
+      .findOne({ companyCode: security.companyCode }, { sort: { createdAt: -1 } });
     if (cached && Date.now() - cached.createdAt.getTime() < CACHE_MS) {
       return NextResponse.json(refreshProviderErrors(cached));
     }
+  }
+
+  const detail = await getStockDetailFresh(db, symbol);
+  if (!detail) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const settings = await getSettings(db);

@@ -87,6 +87,29 @@ body {
 }
 
 /*
+ * The AI panel's progress bar. Indeterminate on purpose: a run is a handful
+ * of third-party calls whose progress nothing here can see.
+ */
+@keyframes ai-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(410%);
+  }
+}
+
+.ai-progress {
+  animation: ai-progress 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-progress {
+    animation-duration: 3.2s;
+  }
+}
+
+/*
  * Toasts rise from the bottom bar rather than appearing outright, so the eye
  * is drawn to the movement instead of having to notice a new rectangle.
  */

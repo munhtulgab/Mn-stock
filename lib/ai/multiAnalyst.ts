@@ -7,6 +7,7 @@ import { callGroq } from "@/lib/ai/providers/groq";
 import { callOpenRouter } from "@/lib/ai/providers/openrouter";
 import type { ProviderResult } from "@/lib/ai/providers/types";
 import type { ParsedAiSignal } from "@/lib/ai/schema";
+import { buildConsensus, validateSignal } from "@/lib/ai/consensus";
 import type { Signal } from "@/lib/types";
 import { humanizeProviderError } from "@/lib/ai/errorMessages";
 
@@ -45,72 +46,6 @@ export interface MultiProviderSignal {
   providers: ProviderSummary[];
 }
 
-function average(values: number[]): number {
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
-
-function pickMajoritySignal(results: ProviderResult[]): Signal {
-  const counts: Record<Signal, number> = { BUY: 0, SELL: 0, HOLD: 0 };
-  const confidenceSum: Record<Signal, number> = { BUY: 0, SELL: 0, HOLD: 0 };
-  for (const r of results) {
-    if (!r.parsed) continue;
-    counts[r.parsed.signal]++;
-    confidenceSum[r.parsed.signal] += r.parsed.signal_confidence;
-  }
-  let best: Signal = "HOLD";
-  for (const s of ["BUY", "SELL", "HOLD"] as Signal[]) {
-    if (
-      counts[s] > counts[best] ||
-      (counts[s] === counts[best] && confidenceSum[s] > confidenceSum[best])
-    ) {
-      best = s;
-    }
-  }
-  return best;
-}
-
-function buildConsensus(
-  results: ProviderResult[],
-  currentPrice: number | null,
-): { consensus: ParsedAiSignal; agreement: number } {
-  const successful = results.filter(
-    (r): r is ProviderResult & { parsed: ParsedAiSignal } => r.ok && !!r.parsed,
-  );
-  const majority = pickMajoritySignal(successful);
-  const agreeing = successful.filter((r) => r.parsed.signal === majority);
-  const agreement = agreeing.length / successful.length;
-
-  // Representative provider for the qualitative fields: whichever agreeing
-  // result has the highest confidence.
-  const representative = [...agreeing].sort(
-    (a, b) => b.parsed.signal_confidence - a.parsed.signal_confidence,
-  )[0];
-
-  const consensus: ParsedAiSignal = {
-    ...representative.parsed,
-    signal: majority,
-    signal_confidence: Math.round(
-      average(agreeing.map((r) => r.parsed.signal_confidence)),
-    ),
-    price_data: {
-      current_price: currentPrice ?? representative.parsed.price_data.current_price,
-      target_price_1: average(
-        agreeing.map((r) => r.parsed.price_data.target_price_1),
-      ),
-      target_price_2: average(
-        agreeing.map((r) => r.parsed.price_data.target_price_2),
-      ),
-      stop_loss: average(agreeing.map((r) => r.parsed.price_data.stop_loss)),
-    },
-    analysis_summary: {
-      ...representative.parsed.analysis_summary,
-      overall_logic: `${agreeing.length}/${successful.length} үйлчилгээ ${majority} дохио өгсөн (тохиролцоо ${Math.round((agreeing.length / successful.length) * 100)}%). ${representative.parsed.analysis_summary.overall_logic}`,
-    },
-  };
-
-  return { consensus, agreement };
-}
-
 export async function generateMultiProviderSignal(
   settings: AppSettings,
   input: AnalystInput,
@@ -132,14 +67,26 @@ export async function generateMultiProviderSignal(
   if (groqKey) calls.push(callGroq(groqKey, userMessage));
   if (openrouterKey) calls.push(callOpenRouter(openrouterKey, userMessage));
 
-  const results = await Promise.all(calls);
-  const successful = results.filter((r) => r.ok && r.parsed);
+  const currentPrice = input.prices.at(-1)?.close ?? null;
 
+  // Every answer is checked against the price before it is allowed to vote:
+  // a model that calls BUY and names a target below today's close has
+  // contradicted itself, and averaging that in would carry the contradiction
+  // into what the reader is shown.
+  const results = (await Promise.all(calls)).map((r): ProviderResult => {
+    if (!r.ok || !r.parsed) return r;
+    const check = validateSignal(r.parsed, input.security.symbol, currentPrice);
+    if (!check.ok) {
+      return { ...r, ok: false, parsed: undefined, error: check.reason };
+    }
+    return { ...r, parsed: check.value };
+  });
+
+  const successful = results.filter((r) => r.ok && r.parsed);
   if (successful.length === 0) {
     throw new AllProvidersFailedError(results);
   }
 
-  const currentPrice = input.prices.at(-1)?.close ?? null;
   const { consensus, agreement } = buildConsensus(results, currentPrice);
 
   return {
