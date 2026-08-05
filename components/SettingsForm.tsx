@@ -372,7 +372,7 @@ export default function SettingsForm({
                     </span>
                     <span className="text-[11px] text-app-muted">
                       {result.status === "ok"
-                        ? `${result.chars.toLocaleString("mn-MN")} тэмдэгт · ${result.headlines} гарчиг${result.via === "feed" ? " · RSS feed" : result.via === "payload" ? " · JS payload" : ""}`
+                        ? `${result.chars.toLocaleString("mn-MN")} тэмдэгт · ${result.headlines} гарчиг${result.via === "feed" ? " · RSS feed" : result.via === "payload" ? " · JS payload" : ""}${result.reason ? ` · ${result.reason}` : ""}`
                         : result.reason}
                     </span>
                   </div>

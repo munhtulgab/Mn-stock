@@ -153,6 +153,14 @@ const MIN_DATED_HEADLINE_CHARS = 12;
  */
 const SHELL_TEXT_CHARS = 1_500;
 
+/**
+ * Where a site keeps its articles when the address given was the bare root.
+ * A dashboard-style home page (marketinfo.mn is one) renders its figures
+ * through widgets and leaves nothing to read, while the news section is
+ * ordinary server-rendered HTML — Google has those article pages indexed.
+ */
+const CONTENT_PATHS = ["/news", "/mn/news"];
+
 function fail(
   url: string,
   status: NewsSourceStatus,
@@ -389,6 +397,49 @@ async function findFeed(
 }
 
 /**
+ * Reads a site's news section when the address configured was its root and
+ * that root turned out to be an empty shell. Only ever a fallback, and the
+ * address that actually produced the text is reported back.
+ */
+async function tryContentPaths(
+  url: string,
+  extraCerts: string[],
+): Promise<NewsSourceResult | null> {
+  let origin: string;
+  let path: string;
+  try {
+    const parsed = new URL(url);
+    origin = parsed.origin;
+    path = parsed.pathname;
+  } catch {
+    return null;
+  }
+  if (path !== "/" && path !== "") return null;
+
+  for (const candidate of CONTENT_PATHS) {
+    const target = `${origin}${candidate}`;
+    const res = await loadPage(target, extraCerts).catch(() => null);
+    if (!res || res.status < 200 || res.status >= 300) continue;
+
+    const $ = cheerio.load(res.body);
+    $("script, style, noscript, svg").remove();
+    const text = $("body").text().replace(/\s+/g, " ").trim();
+    if (text.length < MIN_TEXT_CHARS) continue;
+
+    return {
+      url,
+      status: "ok",
+      text,
+      chars: text.length,
+      headlines: extractHeadlines($, res.finalUrl || target),
+      via: "html",
+      reason: `Үндсэн хуудас хоосон тул ${candidate} хэсгээс уншлаа.`,
+    };
+  }
+  return null;
+}
+
+/**
  * Fetch a user-configured news page and return its visible text plus the
  * headlines it links to. Arbitrary news sites share no structure, so the
  * text goes to the LLM verbatim and it judges relevance itself.
@@ -490,6 +541,8 @@ async function extractOne(
   }
 
   if (text.length < MIN_TEXT_CHARS) {
+    const section = await tryContentPaths(url, extraCerts);
+    if (section) return section;
     return fail(
       url,
       "empty",
