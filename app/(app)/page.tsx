@@ -141,14 +141,15 @@ export default async function HomePage() {
                 )}
                 <span className="truncate">{idx.label}</span>
               </div>
-              {/* flex, not block: an inline <svg> would sit on a text baseline
-                  and leave more room under the chart than above it. */}
-              <div className="flex justify-center -mx-0.5">
+              {/* Full width of the card, so the trend line is inset the same
+                  amount on both sides as the figures under it. */}
+              <div className="w-full">
                 <Sparkline
                   data={idx.sparkline}
                   positive={(idx.changePct ?? 0) >= 0}
                   width={92}
                   height={26}
+                  fill
                 />
               </div>
               <div className="flex items-baseline justify-between gap-1 w-full text-[11px] leading-none">
@@ -199,12 +200,12 @@ export default async function HomePage() {
 
       {watchlist.length > 0 && (
         <Section title="Хяналтын жагсаалт">
-          <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
+          <div className="grid grid-cols-2 gap-3">
             {watchlist.map((w) => (
               <Link
                 key={w.symbol}
                 href={`/stock/${w.symbol}`}
-                className="shrink-0 w-60 rounded-2xl border border-app-border bg-app-card px-4 py-3 active:bg-app-elevated"
+                className="rounded-2xl border border-app-border bg-app-card px-4 py-3 active:bg-app-elevated"
               >
                 <div className="flex items-center gap-3">
                   <StockAvatar symbol={w.symbol} size={40} />
@@ -307,12 +308,14 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
     return <Empty>Арилжааны мэдээлэл алга.</Empty>;
   }
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4">
+    // A grid rather than a scroller: a row that ran off the edge hid half of
+    // what it listed behind a sideways swipe nobody was told about.
+    <div className="grid grid-cols-2 gap-3">
       {rows.map((r) => (
         <Link
           key={r.symbol}
           href={`/stock/${r.symbol}`}
-          className="shrink-0 w-44 rounded-2xl border border-app-border bg-app-card p-3"
+          className="rounded-2xl border border-app-border bg-app-card p-3"
         >
           <div className="flex items-center gap-1.5">
             <StockAvatar symbol={r.symbol} size={18} />
@@ -325,12 +328,13 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
               </div>
             </div>
           </div>
-          <div className="flex justify-center my-1.5">
+          <div className="my-1.5">
             <Sparkline
               data={r.sparkline}
               positive={(r.changePct ?? 0) >= 0}
               width={104}
               height={28}
+              fill
             />
           </div>
           <div className="flex items-baseline justify-between gap-2">

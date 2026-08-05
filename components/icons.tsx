@@ -333,12 +333,3 @@ export function BookmarkIcon({ size = 18, filled }: IconProps & { filled?: boole
     </svg>
   );
 }
-
-export function CalendarIcon({ size = 18 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect x="4" y="6" width="16" height="14" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M4 10.5h16M9 4v4M15 4v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}

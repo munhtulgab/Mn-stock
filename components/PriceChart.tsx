@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarIcon } from "./icons";
 import {
   Line,
   LineChart,
@@ -34,6 +33,13 @@ const RANGES: { label: string; days: number | null }[] = [
  */
 const MAX_PLOTTED = 600;
 
+/**
+ * Width of the price scale, and of the matching margin on the other side.
+ * Wide enough for a short tick label — "100мя" — and no wider, since every
+ * pixel of it is spent twice.
+ */
+const Y_GUTTER = 40;
+
 function thin(points: ChartPoint[]): ChartPoint[] {
   if (points.length <= MAX_PLOTTED) return points;
   const step = Math.ceil(points.length / MAX_PLOTTED);
@@ -44,7 +50,29 @@ function thin(points: ChartPoint[]): ChartPoint[] {
   return kept;
 }
 
-export default function PriceChart({ data }: { data: ChartPoint[] }) {
+/**
+ * Y ticks in short form. A close of 100,000₮ spelled out needs a 60px gutter
+ * on the left while the right edge sits against the card, which leaves the
+ * drawing looking shoved sideways; "100мя" needs less than half of that.
+ */
+function shortNumber(value: number): string {
+  if (Math.abs(value) >= 1_000_000) return `${round(value / 1_000_000)}сая`;
+  if (Math.abs(value) >= 1_000) return `${round(value / 1_000)}мя`;
+  return round(value);
+}
+
+function round(value: number): string {
+  return value.toFixed(Math.abs(value) < 10 && value % 1 !== 0 ? 1 : 0);
+}
+
+export default function PriceChart({
+  data,
+  title,
+}: {
+  data: ChartPoint[];
+  /** Rendered on the same line as the range chips. */
+  title: string;
+}) {
   const [rangeIndex, setRangeIndex] = useState(0);
   const range = RANGES[rangeIndex];
 
@@ -60,30 +88,30 @@ export default function PriceChart({ data }: { data: ChartPoint[] }) {
 
   return (
     <div>
-      <div className="flex items-center gap-1.5 mb-3">
-        {/* One marker for the group: repeating it on all four chips would
-            add four glyphs and no information. */}
-        <span className="text-app-muted shrink-0 mr-0.5">
-          <CalendarIcon size={14} />
-        </span>
-        {RANGES.map((r, i) => (
-          <button
-            key={r.label}
-            onClick={() => setRangeIndex(i)}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-              i === rangeIndex
-                ? "bg-brand text-black"
-                : "bg-app-bg text-app-muted border border-app-border"
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
+      {/* Title and ranges share one line, each flush with a side of the card,
+          so the row is inset exactly as much as the chart below it. */}
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h2 className="text-sm font-semibold text-app-text truncate">{title}</h2>
+        <div className="flex items-center gap-1 shrink-0">
+          {RANGES.map((r, i) => (
+            <button
+              key={r.label}
+              onClick={() => setRangeIndex(i)}
+              className={`rounded-full px-1.5 py-1 text-[10px] font-medium transition-colors ${
+                i === rangeIndex
+                  ? "bg-brand text-black"
+                  : "bg-app-bg text-app-muted border border-app-border"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={plotted} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+          <LineChart data={plotted} margin={{ top: 8, right: Y_GUTTER, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="2 4" stroke="#252932" />
             <XAxis
               dataKey="date"
@@ -92,10 +120,16 @@ export default function PriceChart({ data }: { data: ChartPoint[] }) {
               axisLine={{ stroke: "#252932" }}
               tickLine={{ stroke: "#252932" }}
             />
+            {/* The price scale's gutter is matched by an equal margin on the
+                right, so the drawing sits square in its card rather than
+                shoved against one edge. Keeping the gutter narrow is what
+                makes that affordable — hence the short tick labels. */}
             <YAxis
               tick={{ fontSize: 10, fill: "#8b90a0" }}
               domain={["auto", "auto"]}
-              width={60}
+              width={Y_GUTTER}
+              tickMargin={4}
+              tickFormatter={shortNumber}
               axisLine={{ stroke: "#252932" }}
               tickLine={{ stroke: "#252932" }}
             />
@@ -108,6 +142,11 @@ export default function PriceChart({ data }: { data: ChartPoint[] }) {
               }}
               labelStyle={{ color: "#ffffff", fontWeight: 600 }}
               itemStyle={{ color: "#00d16c" }}
+              /* Moving averages carry the full float they were divided into;
+                 a tooltip reading 336.03049999999996 is noise, not precision. */
+              formatter={(value) =>
+                typeof value === "number" ? value.toFixed(2) : String(value)
+              }
             />
             <Line
               type="monotone"

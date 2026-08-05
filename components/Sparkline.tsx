@@ -8,6 +8,7 @@ export default function Sparkline({
   positive,
   width = 56,
   height = 24,
+  fill = false,
 }: {
   /**
    * Optional/possibly-missing: rows served from a snapshot cached before this
@@ -18,13 +19,25 @@ export default function Sparkline({
   positive: boolean;
   width?: number;
   height?: number;
+  /**
+   * Stretch to whatever the card gives it, rather than sitting at a fixed
+   * size with uneven air on either side. The line keeps its weight while it
+   * stretches — see the paths below.
+   */
+  fill?: boolean;
 }) {
   const values = (data ?? []).filter(
     (v): v is number => v !== null && Number.isFinite(v),
   );
 
   if (values.length < 2) {
-    return <div style={{ width, height }} className="shrink-0" aria-hidden />;
+    return (
+      <div
+        style={{ width: fill ? "100%" : width, height }}
+        className={fill ? "" : "shrink-0"}
+        aria-hidden
+      />
+    );
   }
 
   const min = Math.min(...values);
@@ -46,10 +59,13 @@ export default function Sparkline({
 
   return (
     <svg
-      width={width}
+      width={fill ? "100%" : width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className="shrink-0"
+      /* Stretched horizontally when it fills a card, so the line has to keep
+         its own weight — otherwise a steep segment thickens with the box. */
+      preserveAspectRatio={fill ? "none" : undefined}
+      className={fill ? "block w-full" : "shrink-0"}
       aria-hidden
     >
       <defs>
@@ -66,6 +82,7 @@ export default function Sparkline({
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
+        vectorEffect={fill ? "non-scaling-stroke" : undefined}
       />
     </svg>
   );

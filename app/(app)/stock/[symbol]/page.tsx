@@ -163,8 +163,7 @@ export default async function StockDetailPage({
 
       {priceHistory.length > 0 && (
         <div className="rounded-2xl border border-app-border bg-app-card p-4">
-          <h2 className="text-sm font-semibold text-app-text mb-3">Ханшийн график</h2>
-          <PriceChart data={chartData} />
+          <PriceChart data={chartData} title="Ханшийн график" />
         </div>
       )}
 
