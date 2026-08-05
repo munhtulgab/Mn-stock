@@ -4,6 +4,7 @@ import { getDb } from "@/lib/mongodb";
 import { fetchCompanyNews, type CompanyNewsItem } from "@/lib/mse/news";
 import {
   companyMatchTerms,
+  distinctiveNameWords,
   fetchNewsSources,
   matchHeadlines,
 } from "@/lib/mse/newsSources";
@@ -16,11 +17,13 @@ export const maxDuration = 60;
 const CACHE_MS = 60 * 60 * 1000;
 
 /**
- * Bump when the stored shape changes, so entries written by an older build
- * are rebuilt rather than served — headlines gained a date field, and cached
- * rows without one sorted below every exchange notice.
+ * Bump when the stored shape changes or the matching does, so entries
+ * written by an older build are rebuilt rather than served. Headlines gained
+ * a date field (v2), and then began matching on an item's body rather than
+ * its title alone (v3) — a cached row from before that is missing every
+ * story that names the company anywhere but the headline.
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 interface NewsSnapshot {
   key: string;
@@ -35,7 +38,18 @@ async function build(
   security: Security,
 ): Promise<Pick<NewsSnapshot, "mse" | "external">> {
   const settings = await getSettings(db);
-  const terms = companyMatchTerms(security.symbol, security.name);
+
+  // Whether the company's first name-word identifies it on its own can only
+  // be judged against the whole market, so the other listings are needed.
+  const names = await db
+    .collection<Security>("securities")
+    .find({}, { projection: { _id: 0, name: 1 } })
+    .toArray();
+  const terms = companyMatchTerms(
+    security.symbol,
+    security.name,
+    distinctiveNameWords(names.map((n) => n.name)),
+  );
 
   // The MSE notices are the authoritative company feed; the configured news
   // sites are a bonus, so one failing must not empty the other.

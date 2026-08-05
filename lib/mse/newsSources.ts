@@ -36,6 +36,12 @@ export interface NewsHeadline {
   title: string;
   url: string;
   /**
+   * The item's body or standfirst, kept for matching rather than display.
+   * A company is named in a headline far less often than in the story
+   * itself, so matching titles alone drops most of what mentions it.
+   */
+  summary?: string;
+  /**
    * Publication date as YYYY-MM-DD where the source states one. Feeds and
    * JSON APIs do; a headline scraped from an anchor usually does not, so
    * consumers that sort by date must tolerate it being absent.
@@ -290,6 +296,8 @@ async function fetchFacebook(
       title: p.text.slice(0, 200),
       url: p.url ?? url,
       date: p.date,
+      // The whole post, so a company named halfway down it still matches.
+      summary: p.text,
     })),
   };
 }
@@ -380,7 +388,12 @@ function fromFeed(
     status: "ok",
     text,
     chars: text.length,
-    headlines: items.map((i) => ({ title: i.title, url: i.url, date: i.date })),
+    headlines: items.map((i) => ({
+      title: i.title,
+      url: i.url,
+      date: i.date,
+      summary: i.summary,
+    })),
     via: "feed",
   };
 }
@@ -436,7 +449,12 @@ async function fetchMarketInfo(url: string): Promise<NewsSourceResult> {
       status: "ok",
       text,
       chars: text.length,
-      headlines: items.map((i) => ({ title: i.title, url: i.url, date: i.date })),
+      headlines: items.map((i) => ({
+        title: i.title,
+        url: i.url,
+        date: i.date,
+        summary: i.intro,
+      })),
       via: "api",
       reason: "marketinfo.mn-ийн JSON API-аас уншлаа.",
     };
@@ -649,17 +667,53 @@ export function usableExtracts(results: NewsSourceResult[]): NewsSourceExtract[]
     .map(({ url, text }) => ({ url, text }));
 }
 
-/**
- * Search terms for a company: its ticker plus the trading name with the
- * legal-form suffix dropped, so "Бодь Даатгал ХК" also matches headlines
- * that write it as "Бодь Даатгал".
- */
-export function companyMatchTerms(symbol: string, name: string): string[] {
-  const bare = name
+/** The trading name without its legal form or quote marks. */
+function bareName(name: string): string {
+  return name
     .replace(/\s*(ХК|ХХК|АА|ТӨХК|ТӨААТҮГ)\s*$/i, "")
     .replace(/["“”'']/g, "")
     .trim();
-  return [symbol, bare, name].filter((t) => t.length >= 3);
+}
+
+/** Short words carry no identity: "Их", "Сүү", "Ард" name half the market. */
+const MIN_DISTINCTIVE_CHARS = 5;
+
+/**
+ * First words that belong to exactly one listed company.
+ *
+ * Writers rarely give a company its registered name in full — a post says
+ * "Инновэйшн ХК", not "Инновэйшн инвестмент ХК" — so the leading word is
+ * worth matching on. Only when it is unique, though: 19 listings begin with
+ * "Монгол" and 12 with "Дархан", and matching those would file every
+ * mention of the country under a dozen unrelated companies.
+ */
+export function distinctiveNameWords(names: string[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const name of names) {
+    const first = bareName(name).split(/\s+/)[0]?.toLowerCase() ?? "";
+    if (first.length < MIN_DISTINCTIVE_CHARS) continue;
+    counts.set(first, (counts.get(first) ?? 0) + 1);
+  }
+  return new Set([...counts].filter(([, n]) => n === 1).map(([word]) => word));
+}
+
+/**
+ * Search terms for a company: its ticker, the trading name with the legal
+ * form dropped so "Бодь Даатгал ХК" also matches "Бодь Даатгал", and — when
+ * it identifies this company alone — the name's first word.
+ */
+export function companyMatchTerms(
+  symbol: string,
+  name: string,
+  distinctiveWords?: Set<string>,
+): string[] {
+  const bare = bareName(name);
+  const first = bare.split(/\s+/)[0] ?? "";
+  const terms = [symbol, bare, name];
+  if (first && first !== bare && distinctiveWords?.has(first.toLowerCase())) {
+    terms.push(first);
+  }
+  return terms.filter((t) => t.length >= 3);
 }
 
 /** Headlines that name the company, deduplicated across all sources. */
@@ -675,10 +729,14 @@ export function matchHeadlines(
     if (result.status !== "ok") continue;
     const source = hostOf(result.url) ?? result.url;
     for (const headline of result.headlines) {
-      const haystack = headline.title.toLowerCase();
+      const haystack = `${headline.title} ${headline.summary ?? ""}`.toLowerCase();
       if (!needles.some((n) => haystack.includes(n))) continue;
-      if (seen.has(headline.url)) continue;
-      seen.add(headline.url);
+      // Keyed by title as well as address: a Facebook page's posts share the
+      // page's URL when no permalink is present, and keying on the URL alone
+      // let one post stand for the whole page.
+      const key = `${headline.url}|${headline.title}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       matches.push({ ...headline, source });
     }
   }
