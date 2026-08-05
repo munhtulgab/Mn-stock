@@ -1,7 +1,7 @@
 import type { Db } from "mongodb";
 import { computeRecommendation } from "@/lib/recommendation";
 import { syncPricesForCompany } from "@/lib/sync";
-import { fetchLiveQuotes } from "@/lib/marketinfo/quotes";
+import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 
 const INDICATOR_WINDOW_DAYS = 400;
@@ -195,7 +195,43 @@ function buildRow(
   };
 }
 
-export async function computeDashboardRows(db: Db): Promise<DashboardRow[]> {
+/**
+ * Adds the running price to a company's series as today's point.
+ *
+ * Indicators computed from stored closes alone describe the market as it
+ * stood at the last published session, so a stock that fell 15% this
+ * morning still carried yesterday's АВАХ. The signal has to see the price
+ * the screen is showing.
+ */
+function withLivePoint(
+  prices: PricePoint[],
+  live: LiveQuote | undefined,
+  companyCode: number,
+): PricePoint[] {
+  const date = live?.at?.slice(0, 10);
+  if (!live || live.price === null || !date) return prices;
+
+  const point: PricePoint = {
+    companyCode,
+    date,
+    close: live.price,
+    open: live.open ?? undefined,
+    high: live.high ?? undefined,
+    low: live.low ?? undefined,
+    volume: live.volume ?? undefined,
+    previousClose: live.previousClose ?? undefined,
+  } as PricePoint;
+
+  const lastStored = prices.at(-1);
+  if (lastStored?.date === date) return [...prices.slice(0, -1), point];
+  if (!lastStored || lastStored.date < date) return [...prices, point];
+  return prices;
+}
+
+export async function computeDashboardRows(
+  db: Db,
+  options: { live?: Map<number, LiveQuote> } = {},
+): Promise<DashboardRow[]> {
   const [securities, financialsByCompany, pricesByCompany] = await Promise.all([
     db
       .collection<Security>("securities")
@@ -211,7 +247,11 @@ export async function computeDashboardRows(db: Db): Promise<DashboardRow[]> {
   return securities.map((security) =>
     buildRow(
       security,
-      pricesByCompany.get(security.companyCode) ?? [],
+      withLivePoint(
+        pricesByCompany.get(security.companyCode) ?? [],
+        options.live?.get(security.companyCode),
+        security.companyCode,
+      ),
       financialsByCompany.get(security.companyCode) ?? null,
       marketMedianPe,
     ),
@@ -252,7 +292,8 @@ export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
   }
 
   try {
-    const rows = await computeDashboardRows(db);
+    const live = await fetchLiveQuotes().catch(() => new Map());
+    const rows = await computeDashboardRows(db, { live });
     await snapshots.updateOne(
       { key: SNAPSHOT_KEY },
       {
@@ -321,7 +362,8 @@ export async function applyLiveQuotes(
 
 /** Rebuild the snapshot immediately (called after a sync ingests new prices). */
 export async function refreshDashboardSnapshot(db: Db): Promise<number> {
-  const rows = await computeDashboardRows(db);
+  const live = await fetchLiveQuotes().catch(() => new Map());
+  const rows = await computeDashboardRows(db, { live });
   await db.collection<MarketSnapshot>("marketSnapshots").updateOne(
     { key: SNAPSHOT_KEY },
     {
@@ -354,7 +396,12 @@ export async function getStockDetail(
 
   const marketMedianPe = getMarketMedianPe(financialsByCompany);
   const financials = financialsByCompany.get(security.companyCode) ?? null;
-  const recommendation = computeRecommendation(prices, financials, marketMedianPe);
+  const live = await fetchLiveQuotes().catch(() => new Map());
+  const recommendation = computeRecommendation(
+    withLivePoint(prices, live.get(security.companyCode), security.companyCode),
+    financials,
+    marketMedianPe,
+  );
 
   return {
     security,
