@@ -9,6 +9,7 @@ import Num, { Pct } from "@/components/Num";
 import PriceChart, { type ChartPoint } from "@/components/PriceChart";
 import AiSignalPanel from "@/components/AiSignalPanel";
 import CompanyNews from "@/components/CompanyNews";
+import MarketInfoPanel from "@/components/MarketInfoPanel";
 import TradeModal from "@/components/TradeModal";
 import WatchlistButton from "@/components/WatchlistButton";
 
@@ -178,6 +179,8 @@ export default async function StockDetailPage({
           )}
         </div>
       </div>
+
+      <MarketInfoPanel symbol={security.symbol} />
 
       <CompanyNews symbol={security.symbol} />
 
