@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getStockDetailFresh } from "@/lib/data";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getSettings } from "@/lib/settings";
-import { fetchLiveQuotes, fetchMarketOpen } from "@/lib/marketinfo/quotes";
+import { fetchLiveQuotes, fetchMarketOpen, sessionEnd } from "@/lib/marketinfo/quotes";
 import SignalBadge from "@/components/SignalBadge";
 import PriceChart, { type ChartPoint } from "@/components/PriceChart";
 import AiSignalPanel from "@/components/AiSignalPanel";
@@ -65,6 +65,7 @@ export default async function StockDetailPage({
     fetchMarketOpen().catch(() => null),
   ]);
   const live = liveQuotes.get(security.companyCode) ?? null;
+  const closedAt = sessionEnd(liveQuotes);
   const holding = portfolio.holdings.find((h) => h.symbol === security.symbol);
   const inWatchlist = watchlist.some((w) => w.symbol === security.symbol);
 
@@ -126,7 +127,10 @@ export default async function StockDetailPage({
                     lastTrade: live.lastTrade,
                     changePct: live.changePct,
                     date: live.at?.slice(0, 10) ?? last?.date ?? null,
-                    at: live.at?.slice(11, 16) ?? null,
+                    at:
+                      marketOpen === true
+                        ? (live.at?.slice(11, 16) ?? null)
+                        : (closedAt ?? live.at?.slice(11, 16) ?? null),
                     isLive: marketOpen === true,
                     marketOpen,
                   }

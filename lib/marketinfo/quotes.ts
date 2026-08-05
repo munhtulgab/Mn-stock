@@ -144,6 +144,34 @@ export function parseQuotes(payload: unknown): Map<number, LiveQuote> {
 }
 
 /**
+ * When the session's data stopped moving, across the whole market.
+ *
+ * Each row's `mdEntryTime` is when *that* security last updated, so QPAY
+ * reads 12:57 and SUU 12:59 for the same closed session — labelling a
+ * closing price with it makes every stock look like it closed at a
+ * different moment. The market-wide latest entry is the session's end:
+ * today it is 12:59:53, against a first entry of 10:00:03.
+ *
+ * Rounded up to the minute, so that 12:59:53 reads as the 13:00 close
+ * rather than a minute short of it.
+ */
+export function sessionEnd(quotes: Map<number, LiveQuote>): string | null {
+  let latest: string | null = null;
+  for (const quote of quotes.values()) {
+    if (quote.at && (!latest || quote.at > latest)) latest = quote.at;
+  }
+  if (!latest) return null;
+
+  const [hh, mm, ss] = latest.slice(11, 19).split(":").map(Number);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return latest.slice(11, 16);
+  const minutes = hh * 60 + mm + (ss > 0 ? 1 : 0);
+  const rounded = minutes % (24 * 60);
+  return `${String(Math.floor(rounded / 60)).padStart(2, "0")}:${String(
+    rounded % 60,
+  ).padStart(2, "0")}`;
+}
+
+/**
  * Whether the exchange is in session, as the exchange itself reports it.
  * Guessing from the clock would be wrong on holidays and half-days.
  */
