@@ -19,9 +19,21 @@ interface ExternalItem {
 interface Item {
   title: string;
   url: string;
-  /** YYYY-MM-DD, or "" when the source states no date. */
+  /** Local `YYYY-MM-DD[THH:MM:SS]`, or "" when the source states none. */
   date: string;
   source: string;
+}
+
+/**
+ * Renders a timestamp without going through Date. The sources state
+ * Ulaanbaatar local time, and parsing would re-interpret it in whatever
+ * zone the reader's device is set to.
+ */
+function formatWhen(date: string): string {
+  if (!date) return "";
+  const day = date.slice(0, 10);
+  const time = date.slice(11, 16);
+  return time ? `${day} ${time}` : day;
 }
 
 type State =
@@ -43,13 +55,13 @@ function merge(mse: MseItem[], external: ExternalItem[]): Item[] {
     ...mse.map((m) => ({
       title: m.title,
       url: m.url,
-      date: (m.date ?? "").slice(0, 10),
+      date: m.date ?? "",
       source: "МХБ",
     })),
     ...external.map((e) => ({
       title: e.title,
       url: e.url,
-      date: (e.date ?? "").slice(0, 10),
+      date: e.date ?? "",
       source: e.source,
     })),
   ];
@@ -140,7 +152,7 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
                 </div>
                 <div className="text-[11px] text-app-muted mt-0.5">
                   {item.source}
-                  {item.date && ` · ${item.date}`}
+                  {item.date && ` · ${formatWhen(item.date)}`}
                 </div>
               </a>
             </li>

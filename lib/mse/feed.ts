@@ -13,7 +13,7 @@ import * as cheerio from "cheerio";
 export interface FeedItem {
   title: string;
   url: string;
-  /** ISO date when the feed gives a parseable one, else "". */
+  /** Local `YYYY-MM-DD[THH:MM:SS]`, or "" when the feed states none. */
   date: string;
   summary: string;
 }
@@ -62,10 +62,43 @@ function plain(html: string): string {
   return cheerio.load(`<div>${html}</div>`)("div").text().replace(/\s+/g, " ").trim();
 }
 
-function toIsoDate(raw: string): string {
+/** Mongolia runs at UTC+8 year round; the exchange has no daylight saving. */
+const ULAANBAATAR_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * Publication time as `YYYY-MM-DDTHH:MM:SS`, in Ulaanbaatar time.
+ *
+ * Feeds date their items in RFC-822 with an explicit zone, while the
+ * exchange and marketinfo state a bare local timestamp. Left mixed, a story
+ * published at 07:00 local would sort as 23:00 the previous day and display
+ * the wrong hour, so anything carrying a zone is shifted into local time and
+ * anything without one is taken as already local.
+ */
+export function toLocalTimestamp(raw: string): string {
   if (!raw) return "";
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+  const trimmed = raw.trim();
+  const hasTime = /\d{1,2}:\d{2}/.test(trimmed);
+  const hasZone = /(Z|GMT|UTC|[+-]\d{2}:?\d{2})\s*$/i.test(trimmed);
+
+  if (!hasTime) {
+    const dateOnly = trimmed.match(/\d{4}-\d{2}-\d{2}/);
+    if (dateOnly) return dateOnly[0];
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    // Already-local forms like "2026-07-30 09:44:00" that Date won't take.
+    const local = trimmed.match(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?/);
+    return local ? local[0].replace(" ", "T") : "";
+  }
+  if (!hasZone) {
+    // Parsed as UTC by Date, but the source meant local: keep its own digits.
+    const local = trimmed.match(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?/);
+    if (local) return local[0].replace(" ", "T");
+  }
+  return new Date(parsed.getTime() + ULAANBAATAR_OFFSET_MS)
+    .toISOString()
+    .slice(0, 19);
 }
 
 export function parseFeed(xml: string, baseUrl: string): FeedItem[] {
@@ -82,7 +115,7 @@ export function parseFeed(xml: string, baseUrl: string): FeedItem[] {
         textOf(node, "link") || node.children("guid").first().text(),
         baseUrl,
       ),
-      date: toIsoDate(textOf(node, "pubDate") || textOf(node, "date")),
+      date: toLocalTimestamp(textOf(node, "pubDate") || textOf(node, "date")),
       summary: plain(textOf(node, "description")).slice(0, 600),
     });
   });
@@ -96,7 +129,7 @@ export function parseFeed(xml: string, baseUrl: string): FeedItem[] {
       items.push({
         title,
         url: absolute(node.children("link").first().attr("href") ?? "", baseUrl),
-        date: toIsoDate(textOf(node, "updated") || textOf(node, "published")),
+        date: toLocalTimestamp(textOf(node, "updated") || textOf(node, "published")),
         summary: plain(textOf(node, "summary") || textOf(node, "content")).slice(0, 600),
       });
     });
@@ -117,7 +150,7 @@ function absolute(href: string, baseUrl: string): string {
 export function feedToText(items: FeedItem[]): string {
   return items
     .map((i) =>
-      [i.date && `[${i.date}]`, i.title, i.summary && `— ${i.summary}`]
+      [i.date && `[${i.date.slice(0, 10)}]`, i.title, i.summary && `— ${i.summary}`]
         .filter(Boolean)
         .join(" "),
     )

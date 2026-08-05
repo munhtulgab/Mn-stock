@@ -24,6 +24,7 @@ export interface MarketInfoNewsItem {
   title: string;
   /** Standfirst paragraph, which carries most of the sentiment signal. */
   intro: string;
+  /** Local `YYYY-MM-DDTHH:MM:SS` as the API states it. */
   date: string;
   url: string;
   source: string;
@@ -57,7 +58,7 @@ function toItem(raw: ApiNewsItem): MarketInfoNewsItem | null {
     id: raw.id,
     title,
     intro: raw.intro?.replace(/\s+/g, " ").trim() ?? "",
-    date: raw.createdDate?.slice(0, 10) ?? "",
+    date: raw.createdDate?.slice(0, 19) ?? "",
     // A reprint keeps its original link; anything else lives on the site.
     url: raw.isExternal && raw.url ? raw.url : `${ARTICLE_BASE}/${raw.id}`,
     source: raw.source ?? "marketinfo.mn",
@@ -90,7 +91,7 @@ export async function fetchMarketInfoNews(
 export function newsToText(items: MarketInfoNewsItem[]): string {
   return items
     .map((i) =>
-      [i.date && `[${i.date}]`, i.title, i.intro && `— ${i.intro}`]
+      [i.date && `[${i.date.slice(0, 10)}]`, i.title, i.intro && `— ${i.intro}`]
         .filter(Boolean)
         .join(" "),
     )

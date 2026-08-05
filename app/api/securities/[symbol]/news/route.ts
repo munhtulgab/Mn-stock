@@ -15,8 +15,16 @@ export const maxDuration = 60;
 /** MSE publishes company notices a few times a month at most. */
 const CACHE_MS = 60 * 60 * 1000;
 
+/**
+ * Bump when the stored shape changes, so entries written by an older build
+ * are rebuilt rather than served — headlines gained a date field, and cached
+ * rows without one sorted below every exchange notice.
+ */
+const SCHEMA_VERSION = 2;
+
 interface NewsSnapshot {
   key: string;
+  schemaVersion?: number;
   mse: CompanyNewsItem[];
   external: { title: string; url: string; source: string; date?: string }[];
   computedAt: Date;
@@ -74,7 +82,11 @@ export async function GET(
   const snapshots = db.collection<NewsSnapshot>("newsSnapshots");
   const key = `news:${security.companyCode}`;
   const cached = await snapshots.findOne({ key });
-  if (cached && Date.now() - cached.computedAt.getTime() < CACHE_MS) {
+  if (
+    cached &&
+    cached.schemaVersion === SCHEMA_VERSION &&
+    Date.now() - cached.computedAt.getTime() < CACHE_MS
+  ) {
     return NextResponse.json({ mse: cached.mse, external: cached.external });
   }
 
@@ -82,7 +94,7 @@ export async function GET(
     const fresh = await build(db, security);
     await snapshots.updateOne(
       { key },
-      { $set: { key, ...fresh, computedAt: new Date() } },
+      { $set: { key, ...fresh, computedAt: new Date(), schemaVersion: SCHEMA_VERSION } },
       { upsert: true },
     );
     return NextResponse.json(fresh);

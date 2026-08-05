@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { fetchMseHtml } from "./client";
+import { toLocalTimestamp } from "./feed";
 
 export interface CompanyNewsItem {
   title: string;
@@ -32,7 +33,7 @@ export async function fetchCompanyNews(
       if (cells.length < 3) return;
       const link = $(cells[1]).find("a").first();
       const title = link.text().trim();
-      const date = $(cells[2]).text().trim();
+      const date = toLocalTimestamp($(cells[2]).text().trim());
       const url = link.attr("href") || "";
       if (!title) return;
       items.push({ title, date, url });
