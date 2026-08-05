@@ -17,11 +17,6 @@ interface Quote {
   marketOpen?: boolean | null;
 }
 
-/** Mongolia is UTC+8 year round. */
-function todayInUlaanbaatar(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
 /** Fast enough to feel current, slow enough not to hammer a third party. */
 const POLL_MS = 30_000;
 
@@ -88,24 +83,21 @@ export default function LivePrice({
         </div>
       )}
       <div className="text-[10px] text-app-muted mt-0.5 flex items-center justify-end gap-1">
-        {quote.isLive ? (
-          <>
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-app-positive opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-app-positive" />
-            </span>
-            <span className="text-app-positive font-medium">Шууд</span>
-            {quote.at && <span>· {quote.at}</span>}
-          </>
-        ) : (
-          quote.date && (
-            <span>
-              {quote.date === todayInUlaanbaatar()
-                ? "Өнөөдрийн хаалт"
-                : `${quote.date}-ний хаалт`}
-              {quote.at && ` · ${quote.at}`}
-            </span>
-          )
+        {quote.isLive && (
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-app-positive opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-app-positive" />
+          </span>
+        )}
+        {quote.isLive && <span className="text-app-positive font-medium">Шууд</span>}
+        {/* Always the full stamp: "12:57" alone leaves which day it was to
+            guesswork, and outside a session that is the whole question. */}
+        {quote.date && (
+          <span>
+            {quote.isLive ? "· " : ""}
+            {quote.date}
+            {quote.at && ` ${quote.at}`}
+          </span>
         )}
       </div>
     </div>

@@ -27,6 +27,8 @@ export interface StockDetail {
   security: Security;
   financials: Financials | null;
   priceHistory: PricePoint[];
+  /** Every stored close, oldest first, for the chart's longer ranges. */
+  fullHistory: { date: string; close: number }[];
   recommendation: Recommendation;
   marketMedianPe: number | null;
 }
@@ -60,6 +62,22 @@ function getMarketMedianPe(financialsByCompany: Map<number, Financials>): number
   return values.length % 2 === 0
     ? (values[mid - 1] + values[mid]) / 2
     : values[mid];
+}
+
+/**
+ * Date and close for a company's whole stored history. Projected down to
+ * two fields because the chart needs nothing else and a heavily traded
+ * name carries thousands of rows.
+ */
+async function getFullPriceSeries(
+  db: Db,
+  companyCode: number,
+): Promise<{ date: string; close: number }[]> {
+  return db
+    .collection<PricePoint>("prices")
+    .find({ companyCode }, { projection: { _id: 0, date: 1, close: 1 } })
+    .sort({ date: 1 })
+    .toArray() as unknown as Promise<{ date: string; close: number }[]>;
 }
 
 async function getRecentPrices(
@@ -328,8 +346,9 @@ export async function getStockDetail(
     .findOne({ symbol: symbol.toUpperCase() });
   if (!security) return null;
 
-  const [prices, financialsByCompany] = await Promise.all([
+  const [prices, fullHistory, financialsByCompany] = await Promise.all([
     getRecentPrices(db, security.companyCode),
+    getFullPriceSeries(db, security.companyCode),
     getLatestFinancialsByCompany(db),
   ]);
 
@@ -341,6 +360,7 @@ export async function getStockDetail(
     security,
     financials,
     priceHistory: prices,
+    fullHistory,
     recommendation,
     marketMedianPe,
   };

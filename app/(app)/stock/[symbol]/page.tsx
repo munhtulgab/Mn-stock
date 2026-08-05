@@ -50,7 +50,7 @@ export default async function StockDetailPage({
   ]);
   if (!detail) notFound();
 
-  const { security, financials, priceHistory, recommendation, marketMedianPe } =
+  const { security, financials, priceHistory, fullHistory, recommendation, marketMedianPe } =
     detail;
 
   // Resolved during render, not after: leaving it to the client meant the
@@ -68,16 +68,25 @@ export default async function StockDetailPage({
   const holding = portfolio.holdings.find((h) => h.symbol === security.symbol);
   const inWatchlist = watchlist.some((w) => w.symbol === security.symbol);
 
-  const closes = priceHistory.map((p) => p.close);
-  const chartData: ChartPoint[] = priceHistory.slice(-180).map((p) => {
-    const idx = priceHistory.indexOf(p);
-    return {
-      date: p.date,
-      close: p.close,
-      sma20: sma(closes, 20, idx),
-      sma50: sma(closes, 50, idx),
-    };
-  });
+  // The running price is a point on the chart like any other: without it the
+  // line stops at the previous session while the header quotes today.
+  const series = [...fullHistory];
+  const liveDate = live?.at?.slice(0, 10);
+  if (live?.price != null && liveDate) {
+    if (series.at(-1)?.date === liveDate) {
+      series[series.length - 1] = { date: liveDate, close: live.price };
+    } else if (!series.at(-1) || series.at(-1)!.date < liveDate) {
+      series.push({ date: liveDate, close: live.price });
+    }
+  }
+
+  const closes = series.map((p) => p.close);
+  const chartData: ChartPoint[] = series.map((p, idx) => ({
+    date: p.date,
+    close: p.close,
+    sma20: sma(closes, 20, idx),
+    sma50: sma(closes, 50, idx),
+  }));
 
   const last = priceHistory.at(-1) ?? null;
   const prev = priceHistory.length > 1 ? priceHistory[priceHistory.length - 2] : null;
@@ -152,9 +161,7 @@ export default async function StockDetailPage({
 
       {priceHistory.length > 0 && (
         <div className="rounded-2xl border border-app-border bg-app-card p-4">
-          <h2 className="text-sm font-semibold text-app-text mb-2">
-            Ханшийн график · сүүлийн {chartData.length} өдөр
-          </h2>
+          <h2 className="text-sm font-semibold text-app-text mb-3">Ханшийн график</h2>
           <PriceChart data={chartData} />
         </div>
       )}
