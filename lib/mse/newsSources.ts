@@ -4,6 +4,7 @@ import {
   parsePemBundle,
   type PageResponse,
 } from "@/lib/tls/extraCa";
+import { extractNextPayloadText } from "./nextPayload";
 import {
   FEED_PATHS,
   feedLinkFromHtml,
@@ -36,8 +37,8 @@ export interface NewsSourceResult extends NewsSourceExtract {
   status: NewsSourceStatus;
   chars: number;
   headlines: NewsHeadline[];
-  /** Where the content came from: the publisher's feed or the rendered page. */
-  via?: "feed" | "html";
+  /** Which route produced the content. */
+  via?: "feed" | "html" | "payload";
   /** Shown in settings when the source didn't yield anything usable. */
   reason?: string;
 }
@@ -146,6 +147,12 @@ function cleanHeadline(text: string): { title: string; dated: boolean } {
 const MIN_HEADLINE_CHARS = 25;
 const MIN_DATED_HEADLINE_CHARS = 12;
 
+/**
+ * Rendered text below this is a shell — a header and a menu — rather than an
+ * article list, and is worth comparing against a client-side payload.
+ */
+const SHELL_TEXT_CHARS = 1_500;
+
 function fail(
   url: string,
   status: NewsSourceStatus,
@@ -252,10 +259,23 @@ async function fetchFacebook(
   }
 }
 
+/**
+ * A full browser header set, not just a User-Agent. Bot filters score the
+ * whole request: lemonpress.mn answers a bare two-header fetch with 403 from
+ * a datacentre address while serving the same page to a browser.
+ */
 const BROWSER_HEADERS = {
   "User-Agent": USER_AGENT,
-  Accept: "text/html,application/xhtml+xml",
-  "Accept-Language": "mn,en;q=0.8",
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "mn-MN,mn;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
 };
 
 /**
@@ -336,13 +356,13 @@ function fromFeed(
  * checked publish the hint even when they do serve a feed.
  */
 async function findFeed(
-  $: cheerio.CheerioAPI,
+  $: cheerio.CheerioAPI | null,
   url: string,
   pageUrl: string,
   extraCerts: string[],
 ): Promise<NewsSourceResult | null> {
   const candidates: string[] = [];
-  const advertised = feedLinkFromHtml($, pageUrl);
+  const advertised = $ ? feedLinkFromHtml($, pageUrl) : null;
   if (advertised) candidates.push(advertised);
   for (const path of FEED_PATHS) {
     try {
@@ -389,66 +409,102 @@ async function extractOne(
     );
   }
 
+  // The page fetch and the feed hunt are separate chances at the same source.
+  // A homepage that bot-blocks or renders client-side says nothing about
+  // whether the publisher also serves a feed — lemonpress.mn answers 403 on
+  // the page and 200 on /rss.xml — so a failure here is held, not returned.
+  let page: Awaited<ReturnType<typeof loadPage>> | null = null;
+  let failure: NewsSourceResult | null = null;
+
   try {
     const res = await loadPage(url, extraCerts);
-
     if (isLoginUrl(res.finalUrl)) {
       return fail(url, "login_required", "Нэвтрэх хуудас руу шилжүүлсэн байна.");
     }
-    const html = res.body;
-
-    if (res.status < 200 || res.status >= 300) {
-      if (bodyShowsTlsFailure(html)) return fail(url, "tls_error", TLS_MESSAGE);
-      return fail(
+    if (res.status >= 200 && res.status < 300) {
+      page = res;
+    } else if (bodyShowsTlsFailure(res.body)) {
+      failure = fail(url, "tls_error", TLS_MESSAGE);
+    } else {
+      failure = fail(
         url,
         "http_error",
         `Сайт ${res.status} хариу буцаалаа${res.status === 403 || res.status === 429 ? " (бот хамгаалалт байж магадгүй)" : ""}.`,
       );
     }
-
-    // The address itself may already be a feed, if that's what was configured.
-    if (looksLikeFeed(html, res.contentType)) {
-      const direct = fromFeed(url, html, res.finalUrl || url);
-      if (direct) return direct;
-    }
-
-    const $ = cheerio.load(html);
-
-    // Prefer the publisher's own feed over the rendered page: same articles,
-    // with dates and summaries and none of the nav furniture.
-    const feed = await findFeed($, url, res.finalUrl || url, extraCerts);
-    if (feed) return feed;
-
-    $("script, style, noscript, svg").remove();
-    const text = $("body").text().replace(/\s+/g, " ").trim();
-
-    if (text.length < MIN_TEXT_CHARS) {
-      return fail(
-        url,
-        "empty",
-        "Хуудсаас текст олдсонгүй — агуулгаа JavaScript-ээр ачаалладаг байж магадгүй.",
-      );
-    }
-
-    return {
-      url,
-      status: "ok",
-      text,
-      chars: text.length,
-      headlines: extractHeadlines($, res.finalUrl || url),
-    };
   } catch (err) {
     console.error(`news source fetch failed for ${url}`, err);
-    if (err instanceof Error && err.name === "TimeoutError") {
-      return fail(
-        url,
-        "timeout",
-        `Хугацаа хэтэрлээ (${TIMEOUT_MS / 1000}s дотор хариу ирсэнгүй).`,
-      );
-    }
-    if (isTlsFailure(err)) return fail(url, "tls_error", TLS_MESSAGE);
-    return fail(url, "error", (err as Error).message);
+    failure =
+      err instanceof Error && err.name === "TimeoutError"
+        ? fail(
+            url,
+            "timeout",
+            `Хугацаа хэтэрлээ (${TIMEOUT_MS / 1000}s дотор хариу ирсэнгүй).`,
+          )
+        : isTlsFailure(err)
+          ? fail(url, "tls_error", TLS_MESSAGE)
+          : fail(url, "error", (err as Error).message);
   }
+
+  // The address itself may already be a feed, if that's what was configured.
+  if (page && looksLikeFeed(page.body, page.contentType)) {
+    const direct = fromFeed(url, page.body, page.finalUrl || url);
+    if (direct) return direct;
+  }
+
+  const $ = page ? cheerio.load(page.body) : null;
+
+  // Prefer the publisher's own feed over the rendered page: same articles,
+  // with dates and summaries and none of the nav furniture. Runs even when
+  // the page itself never loaded.
+  const feed = await findFeed($, url, page?.finalUrl || url, extraCerts);
+  if (feed) return feed;
+
+  if (!page || !$) {
+    return failure ?? fail(url, "error", "Агуулга татаж чадсангүй.");
+  }
+
+  $("script, style, noscript, svg").remove();
+  const text = $("body").text().replace(/\s+/g, " ").trim();
+
+  // A client-rendered page leaves a nav-only shell in the markup and ships
+  // its copy in the RSC payload instead. Judge by how thin the rendered text
+  // is, not merely by whether it is empty: invest.tdbs.mn renders 487
+  // characters of menu over some 58,000 characters of payload.
+  if (text.length < SHELL_TEXT_CHARS) {
+    const payloadText = extractNextPayloadText(page.body);
+    if (
+      payloadText.length >= MIN_TEXT_CHARS &&
+      payloadText.length > text.length * 2
+    ) {
+      return {
+        url,
+        status: "ok",
+        text: payloadText,
+        chars: payloadText.length,
+        // The payload carries prose, not title/link pairs worth trusting.
+        headlines: extractHeadlines($, page.finalUrl || url),
+        via: "payload",
+      };
+    }
+  }
+
+  if (text.length < MIN_TEXT_CHARS) {
+    return fail(
+      url,
+      "empty",
+      "Хуудсаас текст олдсонгүй — агуулгаа JavaScript-ээр ачаалладаг ба RSS feed нь ч олдсонгүй.",
+    );
+  }
+
+  return {
+    url,
+    status: "ok",
+    text,
+    chars: text.length,
+    headlines: extractHeadlines($, page.finalUrl || url),
+    via: "html",
+  };
 }
 
 /** Every configured source with its outcome, failures included. */

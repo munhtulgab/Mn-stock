@@ -38,7 +38,7 @@ interface SourceCheckResult {
   chars: number;
   reason: string | null;
   headlines: number;
-  via: "feed" | "html" | null;
+  via: "feed" | "html" | "payload" | null;
 }
 
 const SOURCE_STATUS_LABELS: Record<SourceCheckResult["status"], string> = {
@@ -372,7 +372,7 @@ export default function SettingsForm({
                     </span>
                     <span className="text-[11px] text-app-muted">
                       {result.status === "ok"
-                        ? `${result.chars.toLocaleString("mn-MN")} тэмдэгт · ${result.headlines} гарчиг${result.via === "feed" ? " · RSS feed" : ""}`
+                        ? `${result.chars.toLocaleString("mn-MN")} тэмдэгт · ${result.headlines} гарчиг${result.via === "feed" ? " · RSS feed" : result.via === "payload" ? " · JS payload" : ""}`
                         : result.reason}
                     </span>
                   </div>
