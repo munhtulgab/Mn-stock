@@ -5,6 +5,7 @@ import { getPortfolioSummary, getTransactions } from "@/lib/portfolio";
 import StockAvatar from "@/components/StockAvatar";
 import TransactionList from "@/components/TransactionList";
 import Num, { Pct } from "@/components/Num";
+import PageHeader from "@/components/PageHeader";
 
 /**
  * Enough to see this week's activity without turning the portfolio into a
@@ -24,7 +25,7 @@ export default async function PortfolioPage() {
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-6">
-      <h1 className="text-xl font-bold text-app-text">Багц</h1>
+      <PageHeader title="Багц" />
 
       <div className="rounded-3xl bg-app-card border border-app-border p-5">
         <div className="flex items-center justify-between mb-4">

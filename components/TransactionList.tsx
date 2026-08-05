@@ -1,6 +1,7 @@
 import StockAvatar from "./StockAvatar";
 import Num from "./Num";
 import type { Transaction } from "@/lib/types";
+import { ulaanbaatarDateTime } from "@/lib/day";
 
 /**
  * Filled orders, newest first. Shared so the summary under the portfolio's
@@ -30,7 +31,7 @@ export default function TransactionList({
               </span>
             </div>
             <div className="text-xs text-app-muted">
-              {new Date(t.createdAt).toLocaleString("mn-MN")}
+              {ulaanbaatarDateTime(t.createdAt)}
             </div>
           </div>
           <div className="text-right shrink-0">

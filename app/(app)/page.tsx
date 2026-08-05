@@ -10,13 +10,13 @@ import {
 } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
-import { getUnreadCount } from "@/lib/notifications";
 import { getMarketIndices } from "@/lib/indices";
 import { getSettings } from "@/lib/settings";
 import StockAvatar from "@/components/StockAvatar";
 import SignalBadge from "@/components/SignalBadge";
 import Sparkline from "@/components/Sparkline";
 import Num, { Pct } from "@/components/Num";
+import PageHeader from "@/components/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +32,10 @@ export default async function HomePage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
   const settings = await getSettings(db);
-  const [storedRows, portfolio, watchlist, unread, indices] = await Promise.all([
+  const [storedRows, portfolio, watchlist, indices] = await Promise.all([
     getDashboardRows(db),
     getPortfolioSummary(db, user!._id!),
     getWatchlist(db, user!._id!),
-    getUnreadCount(db, user!),
     getMarketIndices(db),
   ]);
   const rows = await applyLiveQuotes(storedRows, {
@@ -68,49 +67,7 @@ export default async function HomePage() {
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-app-muted text-sm">Сайн байна уу,</p>
-          <h1 className="text-xl font-bold text-app-text">{displayName} 👋</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/discover"
-            aria-label="Хайх"
-            className="w-10 h-10 rounded-full bg-app-card border border-app-border flex items-center justify-center text-app-muted active:scale-95 transition-transform"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-              <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </Link>
-          <Link
-            href="/notifications"
-            aria-label={`Мэдэгдэл${unread > 0 ? ` (${unread} шинэ)` : ""}`}
-            className="relative w-10 h-10 rounded-full bg-app-card border border-app-border flex items-center justify-center text-app-muted active:scale-95 transition-transform"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7Z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M13.7 19a2 2 0 0 1-3.4 0"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-            </svg>
-            {unread > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1 rounded-full bg-brand text-black text-[10px] font-bold flex items-center justify-center">
-                {unread > 99 ? "99+" : unread}
-              </span>
-            )}
-          </Link>
-        </div>
-      </div>
+      <PageHeader eyebrow="Сайн байна уу," title={`${displayName} 👋`} />
 
       {/* One column on a phone, two from a laptop up — and the same source
           order in both, so nothing has to be read in a different sequence

@@ -2,7 +2,7 @@ import type { Db } from "mongodb";
 import { getSettings } from "@/lib/settings";
 import { fetchNewsSources, type NewsHeadline } from "@/lib/mse/newsSources";
 import { fetchExchangeNews } from "@/lib/mse/exchangeNews";
-import { todayAndYesterday } from "@/lib/day";
+import { todayAndYesterday, ulaanbaatarDaysAgo } from "@/lib/day";
 import type { Security } from "@/lib/types";
 
 /**
@@ -191,9 +191,7 @@ export async function refreshMarketNews(
   /** Scheduled run: spend Facebook credits for fresh posts. */
   options: { force?: boolean } = {},
 ): Promise<number> {
-  const cutoff = new Date(Date.now() - WINDOW_DAYS * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const cutoff = ulaanbaatarDaysAgo(WINDOW_DAYS);
 
   const settings = await getSettings(db);
   const listed = await db

@@ -32,6 +32,23 @@ export function ulaanbaatarTime(date: Date): string {
   return TIME_FORMAT.format(date);
 }
 
+/**
+ * `YYYY-MM-DD HH:MM` in Ulaanbaatar, for a stamp on something the app itself
+ * recorded — an order, an analyst run. Written from the exchange's clock and
+ * not the reader's: a filled order is an event on a Mongolian trading day,
+ * and a phone in another zone would date it to the wrong session.
+ */
+export function ulaanbaatarDateTime(date: Date | string): string {
+  const at = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(at.getTime())) return "";
+  return `${ulaanbaatarDay(at)} ${ulaanbaatarTime(at)}`;
+}
+
+/** The Ulaanbaatar day `days` before today, as `YYYY-MM-DD`. */
+export function ulaanbaatarDaysAgo(days: number): string {
+  return ulaanbaatarDay(new Date(Date.now() - days * 86_400_000));
+}
+
 const MONTHS = [
   "1 сарын",
   "2 сарын",

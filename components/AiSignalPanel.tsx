@@ -4,6 +4,7 @@ import { useState } from "react";
 import SignalBadge from "./SignalBadge";
 import { RefreshIcon, SparkIcon } from "./icons";
 import type { AiSignal } from "@/lib/types";
+import { ulaanbaatarDateTime } from "@/lib/day";
 
 type State =
   | { status: "idle" }
@@ -122,7 +123,7 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
               Санал нэгдэл: <span className="text-app-text font-medium">{Math.round(state.data.agreement * 100)}%</span> ({state.data.providersUsed} эх сурвалж)
             </span>
             <span className="text-app-muted">
-              {new Date(state.data.createdAt).toLocaleString("mn-MN")}
+              {ulaanbaatarDateTime(state.data.createdAt)}
             </span>
           </div>
 

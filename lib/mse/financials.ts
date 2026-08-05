@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { fetchMseHtml } from "./client";
 import type { Financials } from "@/lib/types";
+import { ulaanbaatarDay } from "@/lib/day";
 
 type NumericFinancialField = Exclude<
   keyof Financials,
@@ -46,7 +47,7 @@ export async function fetchLatestFinancials(
 
   const heading = block.find("h5").first().text().trim();
   const periodMatch = heading.match(/(\d{4})\s*Он\s*(\d)\s*Улирал/);
-  const year = periodMatch ? Number(periodMatch[1]) : new Date().getFullYear();
+  const year = periodMatch ? Number(periodMatch[1]) : Number(ulaanbaatarDay(new Date()).slice(0, 4));
   const quarter = periodMatch ? Number(periodMatch[2]) : 0;
 
   const result: Omit<Financials, "fetchedAt"> = {

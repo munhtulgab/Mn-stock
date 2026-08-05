@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ulaanbaatarDaysAgo } from "@/lib/day";
 import {
   Line,
   LineChart,
@@ -78,9 +79,7 @@ export default function PriceChart({
 
   const plotted = useMemo(() => {
     if (range.days === null) return thin(data);
-    const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - range.days);
-    const from = cutoff.toISOString().slice(0, 10);
+    const from = ulaanbaatarDaysAgo(range.days);
     const windowed = data.filter((p) => p.date >= from);
     // A thinly traded name can have no prints inside a short window.
     return thin(windowed.length >= 2 ? windowed : data.slice(-30));

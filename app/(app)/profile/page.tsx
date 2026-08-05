@@ -6,6 +6,7 @@ import InstallPwaButton from "@/components/InstallPwaButton";
 import LogoutButton from "@/components/LogoutButton";
 import ProfileForm from "@/components/ProfileForm";
 import { GearIcon, ChevronRightIcon } from "@/components/icons";
+import PageHeader from "@/components/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-6 lg:max-w-2xl">
-      <h1 className="text-xl font-bold text-app-text">Профайл</h1>
+      <PageHeader title="Профайл" />
 
       <ProfileForm
         username={user?.username || ""}
