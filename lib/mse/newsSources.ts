@@ -277,7 +277,9 @@ async function loadPage(
     const body = await res.text();
     // An egress proxy reports the upstream chain failure as its own 5xx, so
     // the retry has to trigger on that shape too, not just a thrown error.
-    if (!res.ok && bodyShowsTlsFailure(body) && extraCerts.length > 0) {
+    // Retry whenever the chain is the problem: the missing certificate is
+    // usually recoverable from the site itself, no operator input needed.
+    if (!res.ok && bodyShowsTlsFailure(body)) {
       return {
         ...(await fetchWithExtraCa(url, {
           extraCerts,
@@ -295,7 +297,7 @@ async function loadPage(
       contentType: res.headers.get("content-type") ?? undefined,
     };
   } catch (err) {
-    if (isTlsFailure(err) && extraCerts.length > 0) {
+    if (isTlsFailure(err)) {
       return {
         ...(await fetchWithExtraCa(url, {
           extraCerts,

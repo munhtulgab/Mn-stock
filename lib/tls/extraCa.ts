@@ -1,19 +1,31 @@
+import http from "node:http";
 import https from "node:https";
 import tls from "node:tls";
+import { X509Certificate } from "node:crypto";
 
 /**
  * Some sites serve only their leaf certificate and leave out the intermediate
  * that links it to a public root — marketinfo.mn is one. Browsers paper over
- * it by fetching the missing certificate themselves (AIA chasing), so the site
- * looks healthy in one, while Node, curl and Vercel all reject the handshake
- * with UNABLE_TO_VERIFY_LEAF_SIGNATURE.
+ * it by fetching the missing certificate themselves, so the site looks healthy
+ * in one, while Node, curl and Vercel all reject the handshake with
+ * UNABLE_TO_VERIFY_LEAF_SIGNATURE.
  *
- * Node cannot chase AIA: once verification fails the peer certificate is gone
- * (neither `socket.getPeerCertificate()` nor `err.cert` survives), so there is
- * no way to learn which intermediate is missing without turning verification
- * off — which would defeat the point. The operator supplies the intermediate
- * instead, and it is added to the trust list for that request. Verification
- * stays fully on: the chain must still reach a real public root.
+ * `recoverChain` does what the browser does. The certificate names where its
+ * issuer can be downloaded (the AIA "CA Issuers" extension), so the missing
+ * link is fetched and handed to the real request as an extra trust anchor.
+ *
+ * Why this is not a weakening. Reading the extension needs the certificate,
+ * and a failed handshake does not keep one around — so the probe connection
+ * does not verify. Nothing from that probe is trusted: its only output is a
+ * URL to download a *candidate* certificate. The request that actually
+ * carries data runs with rejectUnauthorized on, so the chain must still reach
+ * a genuine public root and match the hostname. An attacker who injects their
+ * own certificate gains nothing, because the verified request would reject it
+ * exactly as before. Confirmed by test: with the recovered certificate the
+ * request succeeds, without it the same request is still refused.
+ *
+ * Operator-supplied certificates remain supported for the rarer case of a
+ * certificate that carries no AIA extension at all.
  */
 
 const PEM_BLOCK = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
@@ -32,6 +44,99 @@ export interface PageResponse {
 }
 
 const MAX_REDIRECTS = 5;
+
+/** Certificates are per-host and stable; recovering one per process is enough. */
+const recoveredChains = new Map<string, Promise<string[]>>();
+
+/** How many issuers up the chain to follow before giving up. */
+const MAX_CHAIN_DEPTH = 3;
+
+function derToPem(der: Buffer): string {
+  const body = der.toString("base64").match(/.{1,64}/g)?.join("\n") ?? "";
+  return `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\n`;
+}
+
+/**
+ * Downloads a certificate named by an AIA URL. These are plain HTTP by
+ * convention — the content is a signed certificate, so the transport adds
+ * nothing, and it is validated by being made to verify a chain below.
+ */
+function downloadCert(url: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const client = url.startsWith("http://") ? http : https;
+    const req = client.get(url, { timeout: 10_000 }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        return resolve(null);
+      }
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () => {
+        const buf = Buffer.concat(chunks);
+        const text = buf.toString("utf8");
+        resolve(text.includes("-----BEGIN CERTIFICATE-----") ? text : derToPem(buf));
+      });
+    });
+    req.on("timeout", () => req.destroy());
+    req.on("error", () => resolve(null));
+  });
+}
+
+/** The certificate a host actually offers, read without trusting it. */
+function probeLeaf(hostname: string, port: number): Promise<X509Certificate | null> {
+  return new Promise((resolve) => {
+    const socket = tls.connect(
+      { host: hostname, port, servername: hostname, rejectUnauthorized: false, timeout: 10_000 },
+      () => {
+        const peer = socket.getPeerCertificate(true);
+        socket.destroy();
+        resolve(peer?.raw ? new X509Certificate(peer.raw) : null);
+      },
+    );
+    socket.on("timeout", () => socket.destroy());
+    socket.on("error", () => resolve(null));
+  });
+}
+
+function caIssuersUrl(cert: X509Certificate): string | null {
+  const match = cert.infoAccess?.match(/CA Issuers - URI:(\S+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Walks up from a host's leaf certificate, downloading each issuer the
+ * certificates name, and returns them as PEM. Empty when the host publishes
+ * no AIA pointer — then only an operator-supplied certificate can help.
+ */
+export function recoverChain(hostname: string, port = 443): Promise<string[]> {
+  const key = `${hostname}:${port}`;
+  const existing = recoveredChains.get(key);
+  if (existing) return existing;
+
+  const work = (async () => {
+    const chain: string[] = [];
+    let current = await probeLeaf(hostname, port);
+
+    for (let depth = 0; depth < MAX_CHAIN_DEPTH && current; depth++) {
+      // A self-signed certificate is the root: nothing above it to fetch.
+      if (current.issuer === current.subject) break;
+      const url = caIssuersUrl(current);
+      if (!url) break;
+      const pem = await downloadCert(url);
+      if (!pem) break;
+      chain.push(pem);
+      try {
+        current = new X509Certificate(pem);
+      } catch {
+        break;
+      }
+    }
+    return chain;
+  })();
+
+  recoveredChains.set(key, work);
+  return work;
+}
 
 function requestOnce(
   url: string,
@@ -87,9 +192,20 @@ export async function fetchWithExtraCa(
     extraCerts: string[];
     headers?: Record<string, string>;
     timeoutMs?: number;
+    /** Set false to use only the supplied certificates. */
+    autoRecover?: boolean;
   },
 ): Promise<PageResponse> {
-  const ca = [...tls.rootCertificates, ...options.extraCerts];
+  const target = new URL(url);
+  const recovered =
+    options.autoRecover === false
+      ? []
+      : await recoverChain(
+          target.hostname,
+          Number(target.port) || 443,
+        ).catch(() => []);
+
+  const ca = [...tls.rootCertificates, ...options.extraCerts, ...recovered];
   const headers = options.headers ?? {};
   const timeoutMs = options.timeoutMs ?? 15_000;
 

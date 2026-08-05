@@ -446,18 +446,17 @@ export default function SettingsForm({
             </span>
           </div>
           <p className="text-[11px] text-app-muted">
-            Зарим сайт (жишээ нь <code>marketinfo.mn</code>) SSL гинжнийхээ
-            завсрын гэрчилгээг илгээдэггүй тул &quot;SSL сертификат&quot; алдаа
-            өгдөг. Дутуу гэрчилгээг энд PEM хэлбэрээр буулгавал холболт сэргэнэ.
-            Гэрчилгээ нь нууц мэдээлэл биш бөгөөд шалгалт унтардаггүй — зөвхөн
-            дутуу холбоос нөхөгдөнө.
+            Зарим сайт SSL гинжнийхээ завсрын гэрчилгээг илгээдэггүй. Апп
+            үүнийг хөтчийн адил <b>автоматаар нөхдөг</b> тул ихэнх тохиолдолд
+            энд юу ч оруулах шаардлагагүй. Зөвхөн сертификат дээрээ гаргагчийн
+            хаягаа заагаагүй ховор тохиолдолд л гараар нэмнэ.
           </p>
           <p className="text-[11px] text-app-muted">
-            Авах команд:{" "}
+            Шаардлагатай бол:{" "}
             <code className="break-all">
-              openssl s_client -showcerts -connect marketinfo.mn:443
+              openssl s_client -showcerts -connect ХОСТ:443
             </code>{" "}
-            — гарсан хоёр дахь <code>BEGIN CERTIFICATE</code> блокийг хуулна.
+            командын хоёр дахь <code>BEGIN CERTIFICATE</code> блокийг хуулна.
             Устгахын тулд <code>-</code> бичээд хадгална.
           </p>
           <textarea

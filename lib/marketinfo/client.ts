@@ -147,10 +147,9 @@ async function getText(
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     return { status: res.status, body: await res.text() };
-  } catch (err) {
-    // marketinfo.mn omits its intermediate certificate, so the operator-
-    // supplied one is the only way through. Nothing to retry without it.
-    if (extraCerts.length === 0) throw err;
+  } catch {
+    // marketinfo.mn omits its intermediate certificate; the retry recovers it
+    // from the site's own AIA pointer, falling back to a supplied one.
     const res = await fetchWithExtraCa(url, {
       extraCerts,
       headers,
