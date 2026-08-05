@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { sendPushToAll } from "@/lib/push";
+import { recordNotification } from "@/lib/notifications";
 
 /**
  * Sends a push to every registered device, on demand.
@@ -34,10 +35,18 @@ export async function POST() {
     hour: "2-digit",
     minute: "2-digit",
   });
+  const title = "MSE: туршилтын мэдэгдэл";
+  const body = `Мэдэгдэл ажиллаж байна (${stamp}).`;
+
+  // The phone banner and the in-app feed are two separate deliveries, and a
+  // test that only exercises one leaves the other unproven — which is exactly
+  // how a push could arrive while the Мэдэгдэл page stayed empty.
+  await recordNotification(db, { title, body, url: "/notifications", kind: "system" });
+
   const result = await sendPushToAll(db, {
-    title: "MSE: туршилтын мэдэгдэл",
-    body: `Мэдэгдэл ажиллаж байна (${stamp}).`,
-    url: "/profile",
+    title,
+    body,
+    url: "/notifications",
     tag: "mse-test",
   });
 
