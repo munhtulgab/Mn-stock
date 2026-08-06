@@ -46,8 +46,8 @@ async function handle(req: NextRequest) {
   }
 
   try {
-    const count = await refreshMarketNews(db, { force: scheduled });
-    return NextResponse.json({ ok: true, count, scheduled });
+    const { total, added } = await refreshMarketNews(db, { force: scheduled });
+    return NextResponse.json({ ok: total > 0, total, added, scheduled });
   } catch (err) {
     console.error("market news refresh failed", err);
     return NextResponse.json(

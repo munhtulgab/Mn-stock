@@ -34,19 +34,25 @@ export default function NewsRefresher({
       setBusy(true);
       try {
         const res = await fetch("/api/news/refresh", { method: "POST" });
-        const data: { count?: number } = await res.json().catch(() => ({}));
-        if (data.count) {
-          router.refresh();
-          if (manual) {
-            toast({
-              variant: "success",
-              title: "Мэдээ шинэчлэгдлээ",
-              body: `${data.count} мэдээ`,
-            });
-          }
-        } else if (manual) {
-          toast({ variant: "error", title: "Шинэчилж чадсангүй" });
+        const data: { ok?: boolean; added?: number } = await res
+          .json()
+          .catch(() => ({}));
+        if (!data.ok) {
+          if (manual) toast({ variant: "error", title: "Шинэчилж чадсангүй" });
+          return;
         }
+
+        router.refresh();
+        if (!manual) return;
+        // What arrived, not what is held: the feed keeps the same eighty
+        // stories either way, and a reader who pressed refresh is asking
+        // whether anything happened since they last looked.
+        const added = data.added ?? 0;
+        toast({
+          variant: "success",
+          title: added > 0 ? `${added} шинэ мэдээ` : "Шинэ мэдээ алга",
+          body: added > 0 ? undefined : "Мэдээний урсгал хамгийн сүүлийн байдлаар.",
+        });
       } catch {
         if (manual) toast({ variant: "error", title: "Сүлжээний алдаа гарлаа" });
       } finally {

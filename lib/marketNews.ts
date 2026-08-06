@@ -209,16 +209,28 @@ export async function getMarketNews(db: Db): Promise<MarketNews> {
   };
 }
 
+export interface RefreshResult {
+  /** Stories the feed now holds. */
+  total: number;
+  /** Of those, ones it did not hold before this run. */
+  added: number;
+}
+
 /**
  * Rebuilds the feed: the exchange's own newsroom plus every configured site.
  * Slow by nature, so it runs from the refresh endpoint and the daily sync
  * rather than from a page render.
+ *
+ * Reports what arrived as well as what is held. "80 мэдээ" is the cap on how
+ * many the feed keeps, the same number every run once the window is full,
+ * and telling a reader who asked for a refresh that there are eighty stories
+ * answers a question they did not ask.
  */
 export async function refreshMarketNews(
   db: Db,
   /** Scheduled run: spend Facebook credits for fresh posts. */
   options: { force?: boolean } = {},
-): Promise<number> {
+): Promise<RefreshResult> {
   const cutoff = ulaanbaatarDaysAgo(WINDOW_DAYS);
 
   const cached = await db
@@ -274,9 +286,10 @@ export async function refreshMarketNews(
     .slice(0, MAX_ITEMS);
 
   // A run that produced nothing is not an answer worth storing.
-  if (items.length === 0) return 0;
+  if (items.length === 0) return { total: 0, added: 0 };
 
   const stamped = stampArrivals(cached, items);
+  const added = newStories(cached, items).length;
   await announce(db, cached, items);
 
   await db.collection<MarketNewsSnapshot>("marketNewsSnapshots").updateOne(
@@ -291,7 +304,7 @@ export async function refreshMarketNews(
     },
     { upsert: true },
   );
-  return items.length;
+  return { total: items.length, added };
 }
 
 /**
@@ -383,6 +396,23 @@ function stampArrivals(
   }));
 }
 
+/**
+ * Stories this run brought in.
+ *
+ * Matched on the same key the feed dedupes by, so the same story arriving
+ * from a second publisher is not counted twice. A first build has nothing to
+ * compare against and brings in nothing: thirty days of headlines are the
+ * archive, not an update.
+ */
+function newStories(
+  previous: MarketNewsSnapshot | null,
+  items: MarketNewsItem[],
+): MarketNewsItem[] {
+  if (!previous || previous.items.length === 0) return [];
+  const known = new Set(previous.items.map(storyKey));
+  return items.filter((item) => !known.has(storyKey(item)));
+}
+
 /** Headlines to name in one push before it becomes a list nobody reads. */
 const ANNOUNCE_LIMIT = 5;
 
@@ -399,10 +429,7 @@ async function announce(
   previous: MarketNewsSnapshot | null,
   items: MarketNewsItem[],
 ): Promise<void> {
-  if (!previous || previous.items.length === 0) return;
-
-  const known = new Set(previous.items.map(storyKey));
-  const fresh = items.filter((item) => !known.has(storyKey(item)));
+  const fresh = newStories(previous, items);
   if (fresh.length === 0) return;
 
   await recordNotifications(

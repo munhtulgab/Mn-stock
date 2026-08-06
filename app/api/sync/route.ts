@@ -62,7 +62,7 @@ async function handle(req: NextRequest) {
     // run owns those; this one reuses whatever it stored.
     let newsCount = 0;
     try {
-      newsCount = await refreshMarketNews(db);
+      newsCount = (await refreshMarketNews(db)).added;
     } catch (err) {
       console.error("market news refresh failed", err);
     }
