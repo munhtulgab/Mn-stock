@@ -246,7 +246,9 @@ export default async function StockDetailPage({
       <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-1 bg-linear-to-t from-app-bg via-app-bg to-transparent lg:mx-auto lg:max-w-md">
         <TradeModal
           symbol={security.symbol}
-          currentPrice={last?.close ?? null}
+          currentPrice={live?.price ?? last?.close ?? null}
+          bid={live?.bid ?? null}
+          ask={live?.ask ?? null}
           cashBalance={portfolio.cashBalance}
           ownedQuantity={holding?.quantity ?? 0}
         />

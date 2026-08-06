@@ -1,6 +1,7 @@
 import type { Db } from "mongodb";
 import type {
   Holding,
+  OrderSide,
   Portfolio,
   Security,
   PricePoint,
@@ -235,9 +236,27 @@ async function resolveSecurity(db: Db, symbol: string): Promise<Security> {
  * The price an order fills at. Uses the running price when the exchange is
  * quoting one, so a trade executes at the figure the screen was showing.
  */
-async function getCurrentPrice(db: Db, companyCode: number): Promise<number> {
-  const live = (await livePricesFor([companyCode])).get(companyCode);
-  if (live != null) return live;
+/**
+ * What an order of this side would actually fill at.
+ *
+ * A market buy takes the lowest price anyone is offering to sell at, and a
+ * market sell hits the highest price anyone is bidding — that is what the
+ * order book is. Falling back to the last price treats both sides as if
+ * they traded at the mid, which is not what the exchange would have done.
+ */
+async function getFillPrice(
+  db: Db,
+  companyCode: number,
+  side: OrderSide,
+): Promise<number> {
+  try {
+    const quote = (await fetchLiveQuotes()).get(companyCode);
+    const book = side === "BUY" ? quote?.ask : quote?.bid;
+    if (book != null && book > 0) return book;
+    if (quote?.price != null && quote.price > 0) return quote.price;
+  } catch {
+    // The stored close stands in below.
+  }
   const { last } = await getLatestTwoPrices(db, companyCode);
   if (!last) throw new PortfolioError("Ханшийн мэдээлэл олдсонгүй");
   return last.close;
@@ -256,7 +275,7 @@ export async function buyStock(
     throw new PortfolioError("Тоо ширхэг бүхэл, эерэг тоо байх ёстой");
   }
   const security = await resolveSecurity(db, symbol);
-  const price = await getCurrentPrice(db, security.companyCode);
+  const price = await getFillPrice(db, security.companyCode, "BUY");
   const total = price * quantity;
 
   await getOrCreatePortfolio(db, userId);
@@ -323,7 +342,7 @@ export async function sellStock(
     throw new PortfolioError("Тоо ширхэг бүхэл, эерэг тоо байх ёстой");
   }
   const security = await resolveSecurity(db, symbol);
-  const price = await getCurrentPrice(db, security.companyCode);
+  const price = await getFillPrice(db, security.companyCode, "SELL");
   const total = price * quantity;
 
   // Same reasoning as the purchase: the holding is checked and reduced in one

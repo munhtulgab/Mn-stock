@@ -102,6 +102,19 @@ function num(value: unknown): number | null {
   return typeof n === "number" && Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Zero is not a price on this feed, it is a blank.
+ *
+ * `closingPrice` is only set when the exchange closes the day, so during a
+ * session every row carries 0 there — all 38 of them, at the moment this was
+ * written — and a security with no order on one side carries 0 for that side
+ * of the book. Read as a number, that 0 became the price on screen.
+ */
+function positive(value: unknown): number | null {
+  const n = num(value);
+  return n !== null && n > 0 ? n : null;
+}
+
 /** "APU-O-0000" is the order-book code; the ticker is the part before it. */
 function bareSymbol(raw: string): string {
   return raw.split("-")[0].trim().toUpperCase();
@@ -119,32 +132,39 @@ function parseQuotes(payload: unknown): Map<number, LiveQuote> {
     const companyCode = num(row.companycode);
     if (companyCode === null || !row.symbol) continue;
 
-    const price = num(row.closingPrice) ?? num(row.lastTradedPrice);
-    const previousClose = num(row.previousClose);
-    // The feed states a percentage; derive one only when it doesn't.
-    const stated = num(row.changesPercent);
-    const changePct =
-      stated ??
-      (price !== null && previousClose !== null && previousClose > 0
+    // The day's close if the day is closed; otherwise what it last traded
+    // at; otherwise where it closed yesterday. A price is never nothing.
+    const price =
+      positive(row.closingPrice) ??
+      positive(row.lastTradedPrice) ??
+      positive(row.previousClose);
+    const previousClose = positive(row.previousClose);
+    const derived =
+      price !== null && previousClose !== null
         ? ((price - previousClose) / previousClose) * 100
-        : null);
+        : null;
+    // The feed states a percentage, but states 0 for a session whose close
+    // it has not set yet — which is every session while it is running.
+    const stated = num(row.changesPercent);
+    const changePct = stated !== null && stated !== 0 ? stated : (derived ?? stated);
 
     quotes.set(companyCode, {
       symbol: bareSymbol(row.symbol),
       companyCode,
       price,
-      lastTrade: num(row.lastTradedPrice),
+      lastTrade: positive(row.lastTradedPrice),
       previousClose,
       changePct,
-      open: num(row.openingPrice),
-      high: num(row.highPrice),
-      low: num(row.lowPrice),
-      vwap: num(row.vwap),
+      open: positive(row.openingPrice),
+      high: positive(row.highPrice),
+      low: positive(row.lowPrice),
+      vwap: positive(row.vwap),
       volume: num(row.volume),
       turnover: num(row.turnover),
       trades: num(row.trades),
-      bid: num(row.highestBidPrice),
-      ask: num(row.lowestOfferPrice),
+      // The book's top of each side: 0 means nobody is offering there.
+      bid: positive(row.highestBidPrice),
+      ask: positive(row.lowestOfferPrice),
       at: row.mdEntryTime ?? null,
     });
   }

@@ -8,14 +8,26 @@ import { useToast } from "./Toast";
 import { ArrowDownIcon, ArrowUpIcon, CloseIcon } from "./icons";
 import type { OrderSide } from "@/lib/types";
 
+/**
+ * An order fills against the book, not against the last price: buying takes
+ * the lowest price anyone is offering, selling hits the highest anyone is
+ * bidding. Both sides are shown, and the one this order would fill at is the
+ * one the total is worked out from — the server prices it the same way.
+ */
 export default function TradeModal({
   symbol,
   currentPrice,
+  bid,
+  ask,
   cashBalance,
   ownedQuantity,
 }: {
   symbol: string;
   currentPrice: number | null;
+  /** Highest buy order standing in the book, null when there is none. */
+  bid: number | null;
+  /** Lowest sell order standing in the book. */
+  ask: number | null;
   cashBalance: number;
   ownedQuantity: number;
 }) {
@@ -27,7 +39,9 @@ export default function TradeModal({
   const [error, setError] = useState<string | null>(null);
 
   const qty = Number(quantity) || 0;
-  const total = currentPrice ? qty * currentPrice : 0;
+  const fillPrice =
+    (open === "BUY" ? (ask ?? currentPrice) : (bid ?? currentPrice)) ?? null;
+  const total = fillPrice ? qty * fillPrice : 0;
 
   function close() {
     setOpen(null);
@@ -55,7 +69,7 @@ export default function TradeModal({
       toast({
         variant: "success",
         title: filled === "BUY" ? "Худалдан авалт хийгдлээ" : "Зарлаа",
-        body: `${symbol} · ${qty} ширхэг · ${(body.price ?? currentPrice ?? 0).toLocaleString("mn-MN")}₮`,
+        body: `${symbol} · ${qty} ширхэг · ${(body.price ?? fillPrice ?? 0).toLocaleString("mn-MN")}₮`,
         action: { label: "Багц", onClick: () => router.push("/portfolio") },
       });
       router.refresh();
@@ -99,11 +113,35 @@ export default function TradeModal({
                 </button>
               </div>
 
-              <div className="text-sm text-app-muted">
-                Ханш:{" "}
-                <span className="text-app-text">
-                  {currentPrice ? <Num value={currentPrice} digits={2} suffix="₮" /> : "—"}
-                </span>
+              <div className="rounded-2xl bg-app-bg p-3 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-app-muted">
+                    {open === "BUY" ? "Захиалгын сангийн зарах" : "Захиалгын сангийн авах"}
+                  </span>
+                  <span className="text-app-text font-semibold">
+                    {fillPrice ? <Num value={fillPrice} digits={2} suffix="₮" /> : "—"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-app-muted">
+                  <span>
+                    Авах{" "}
+                    <span className="text-app-positive font-medium">
+                      {bid ? <Num value={bid} digits={2} /> : "—"}
+                    </span>
+                  </span>
+                  <span>
+                    Зарах{" "}
+                    <span className="text-app-negative font-medium">
+                      {ask ? <Num value={ask} digits={2} /> : "—"}
+                    </span>
+                  </span>
+                  <span>
+                    Сүүлийн{" "}
+                    <span className="text-app-text">
+                      {currentPrice ? <Num value={currentPrice} digits={2} /> : "—"}
+                    </span>
+                  </span>
+                </div>
               </div>
 
               {open === "BUY" ? (
