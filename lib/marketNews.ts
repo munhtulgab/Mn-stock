@@ -5,7 +5,7 @@ import { fetchExchangeNews } from "@/lib/mse/exchangeNews";
 import { todayAndYesterday, ulaanbaatarDaysAgo } from "@/lib/day";
 import { recordNotifications } from "@/lib/notifications";
 import { sendPushToAll } from "@/lib/push";
-import type { Security } from "@/lib/types";
+import type { Security, User } from "@/lib/types";
 
 /**
  * The market's news, rather than one company's.
@@ -26,6 +26,14 @@ export interface MarketNewsItem {
   source: string;
   /** Local `YYYY-MM-DD[THH:MM:SS]`. */
   date: string;
+  /**
+   * When the feed first carried this story, as an ISO instant.
+   *
+   * Not the same thing as `date`: a publisher's date is the day it says the
+   * story is from, which for a site that backfills can be a week before we
+   * ever saw it. What counts as new to a reader is when it turned up here.
+   */
+  addedAt?: string;
 }
 
 const WINDOW_DAYS = 30;
@@ -105,7 +113,7 @@ const CACHE_KEY = "market";
 const CACHE_MS = 30 * 60 * 1000;
 
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 interface MarketNewsSnapshot {
   key: string;
@@ -141,7 +149,7 @@ function collect(
         continue;
       }
       // The same story syndicated twice is one story.
-      const key = `${headline.url}|${headline.title.slice(0, 80)}`;
+      const key = storyKey({ ...headline, source, date: headline.date });
       if (seen.has(key)) continue;
       seen.add(key);
       items.push({
@@ -248,6 +256,7 @@ export async function refreshMarketNews(
   // A run that produced nothing is not an answer worth storing.
   if (items.length === 0) return 0;
 
+  const stamped = stampArrivals(cached, items);
   await announce(db, cached, items);
 
   await db.collection<MarketNewsSnapshot>("marketNewsSnapshots").updateOne(
@@ -255,7 +264,7 @@ export async function refreshMarketNews(
     {
       $set: {
         key: CACHE_KEY,
-        items,
+        items: stamped,
         computedAt: new Date(),
         schemaVersion: SCHEMA_VERSION,
       },
@@ -263,6 +272,36 @@ export async function refreshMarketNews(
     { upsert: true },
   );
   return items.length;
+}
+
+/**
+ * What makes two rows the same story: the link, plus enough of the headline
+ * that a site reusing one URL for a live blog is not mistaken for a repeat.
+ */
+function storyKey(item: MarketNewsItem): string {
+  return `${item.url}|${item.title.slice(0, 80)}`;
+}
+
+/**
+ * Carries each story's arrival time across a rebuild.
+ *
+ * A story keeps the instant it first appeared; one that was not in the
+ * previous feed is arriving now. The very first build stamps everything at
+ * once, which is correct and harmless: nobody has a last-visit to compare it
+ * against yet.
+ */
+function stampArrivals(
+  previous: MarketNewsSnapshot | null,
+  items: MarketNewsItem[],
+): MarketNewsItem[] {
+  const known = new Map(
+    (previous?.items ?? []).map((item) => [storyKey(item), item.addedAt]),
+  );
+  const now = new Date().toISOString();
+  return items.map((item) => ({
+    ...item,
+    addedAt: known.get(storyKey(item)) ?? now,
+  }));
 }
 
 /** Headlines to name in one push before it becomes a list nobody reads. */
@@ -283,12 +322,8 @@ async function announce(
 ): Promise<void> {
   if (!previous || previous.items.length === 0) return;
 
-  const known = new Set(
-    previous.items.map((i) => `${i.url}|${i.title.slice(0, 80)}`),
-  );
-  const fresh = items.filter(
-    (i) => !known.has(`${i.url}|${i.title.slice(0, 80)}`),
-  );
+  const known = new Set(previous.items.map(storyKey));
+  const fresh = items.filter((item) => !known.has(storyKey(item)));
   if (fresh.length === 0) return;
 
   await recordNotifications(
@@ -317,4 +352,31 @@ async function announce(
     console.error("news push failed", err);
     return null;
   });
+}
+
+/**
+ * How many stories have arrived since the reader last opened the page.
+ *
+ * The page used to head itself "80 мэдээ", which was the cap on how many the
+ * feed keeps rather than anything that had happened — the same number every
+ * day once the window was full. What a reader wants to know is what is new
+ * since they last looked.
+ *
+ * A reader who has never opened the page has nothing new: thirty days of
+ * headlines are the archive, not an update.
+ */
+export function countNewSince(
+  items: MarketNewsItem[],
+  seenAt: Date | undefined,
+): number {
+  if (!seenAt) return 0;
+  const since = seenAt.toISOString();
+  return items.filter((item) => item.addedAt && item.addedAt > since).length;
+}
+
+/** Records that the reader has now seen the feed as it stands. */
+export async function markNewsSeen(db: Db, userId: string): Promise<void> {
+  await db
+    .collection<User>("users")
+    .updateOne({ _id: userId } as never, { $set: { newsSeenAt: new Date() } });
 }

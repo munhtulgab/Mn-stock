@@ -1,13 +1,22 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { getMarketNews, type MarketNewsItem } from "@/lib/marketNews";
+import { getCurrentUser } from "@/lib/auth";
+import {
+  countNewSince,
+  getMarketNews,
+  markNewsSeen,
+  type MarketNewsItem,
+} from "@/lib/marketNews";
 import NewsRefresher from "@/components/NewsRefresher";
 import NewsList from "@/components/NewsList";
 import MarketReviewCard from "@/components/MarketReviewCard";
 import TradeReportCard from "@/components/TradeReportCard";
+import ReviewTabs, { type ReviewTab } from "@/components/ReviewTabs";
 import { getMarketReviews } from "@/lib/marketReview";
-import { getTradeReports } from "@/lib/tradeReports";
-import { dayHeading } from "@/lib/day";
+import { getTradeReports, type TradeReport } from "@/lib/tradeReports";
+import type { MarketReview } from "@/lib/marketReview";
+import { dayHeading, dayPossessive } from "@/lib/day";
 
 export const dynamic = "force-dynamic";
 
@@ -20,16 +29,75 @@ function groupByDay(items: MarketNewsItem[]): [string, MarketNewsItem[]][] {
   return [...groups.entries()];
 }
 
+/**
+ * One period's tab: the figures worked out from stored closes, and under
+ * them the exchange's own report for the same period where it publishes one.
+ */
+function reviewTab(
+  label: string,
+  title: string,
+  review: MarketReview | null,
+  report: TradeReport | null,
+): ReviewTab | null {
+  if (!review && !report) return null;
+  return {
+    label,
+    content: (
+      // Side by side only when there are two of them: the month has no report
+      // of the exchange's own, and one card in a two-column grid is a card
+      // beside a hole.
+      <div
+        className={`space-y-4 lg:space-y-0 lg:grid lg:gap-4 lg:items-start ${
+          review && report ? "lg:grid-cols-2" : "lg:grid-cols-1"
+        }`}
+      >
+        {review && <MarketReviewCard title={title} review={review} />}
+        {report && <TradeReportCard report={report} />}
+      </div>
+    ),
+  };
+}
+
 export default async function NewsPage() {
   const db = await getDb();
-  const [{ items, today, yesterday, stale }, reviews] = await Promise.all([
+  const [user, { items, today, yesterday, stale }, reviews] = await Promise.all([
+    getCurrentUser(db),
     getMarketNews(db),
     getMarketReviews(db),
   ]);
-  // Needs the feed, so it cannot join the pair above: the reports it reads
+  // Needs the feed, so it cannot join the group above: the reports it reads
   // are two of the headlines already in it.
   const reports = await getTradeReports(db, items);
   const days = groupByDay(items);
+  const fresh = countNewSince(items, user?.newsSeenAt);
+
+  // Marked after the page has been sent, so what the reader is looking at is
+  // still counted as new — the next visit is what resets it.
+  if (user?._id) {
+    const id = user._id;
+    after(() =>
+      markNewsSeen(db, id).catch((err) =>
+        console.error("marking the news feed seen failed", err),
+      ),
+    );
+  }
+
+  // The last session leads, because it is the one that has just changed.
+  const dayLabel = reviews.day
+    ? dayHeading(reviews.day.to, today, yesterday)
+    : "Өдрийн";
+  const tabs = [
+    reviewTab(
+      dayLabel,
+      `${
+        reviews.day ? dayPossessive(reviews.day.to, today, yesterday) : "Өдрийн"
+      } зах зээлийн тойм`,
+      reviews.day,
+      reports.daily,
+    ),
+    reviewTab("7 хоног", "7 хоногийн зах зээлийн тойм", reviews.week, reports.weekly),
+    reviewTab("Өнгөрсөн сар", "Өнгөрсөн сарын зах зээлийн тойм", reviews.month, null),
+  ].filter((tab): tab is ReviewTab => tab !== null);
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-5">
@@ -38,37 +106,15 @@ export default async function NewsPage() {
           <h1 className="text-xl font-bold text-app-text">Зах зээлийн мэдээ</h1>
           <p className="text-xs text-app-muted mt-0.5">
             Сүүлийн 30 хоног
-            {items.length > 0 && ` · ${items.length} мэдээ`}
+            {fresh > 0 && ` · ${fresh} шинэ мэдээ`}
           </p>
         </div>
         <NewsRefresher stale={stale} empty={items.length === 0} />
       </div>
 
-      {/* The period reviews lead: what the week and the month did is the
-          thing a reader wants before the day's headlines, and neither is
-          published by the exchange in a form that could be linked to. */}
-      {(reviews.week || reviews.month) && (
-        <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
-          {reviews.week && (
-            <MarketReviewCard title="7 хоногийн зах зээлийн тойм" review={reviews.week} />
-          )}
-          {reviews.month && (
-            <MarketReviewCard
-              title="Өнгөрсөн сарын зах зээлийн тойм"
-              review={reviews.month}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Then the exchange's own reports, whose figures are the day's and the
-          week's rather than a period's arithmetic. */}
-      {(reports.daily || reports.weekly) && (
-        <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
-          {reports.daily && <TradeReportCard report={reports.daily} />}
-          {reports.weekly && <TradeReportCard report={reports.weekly} />}
-        </div>
-      )}
+      {/* The reviews lead: what the session, the week and the month did is
+          the thing a reader wants before the day's headlines. */}
+      {tabs.length > 0 && <ReviewTabs tabs={tabs} />}
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-muted space-y-2">

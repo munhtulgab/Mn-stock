@@ -3,12 +3,12 @@ import { fetchIndexSeries, INDEX_KEYS } from "@/lib/mse/indices";
 import type { PricePoint, Security } from "@/lib/types";
 
 /**
- * What the market did over a week and over a month.
+ * What the market did over the last session, over a week and over a month.
  *
- * The exchange publishes a weekly trading review as an article and nothing
- * monthly at all, so both are worked out here from the closes the app
- * already stores — which also means they are the same figures the rest of
- * the app shows, rather than a second opinion about the same days.
+ * The exchange publishes a daily and a weekly trading report as articles and
+ * nothing monthly at all, so all three are worked out here from the closes
+ * the app already stores — which also means they are the same figures the
+ * rest of the app shows, rather than a second opinion about the same days.
  *
  * A period's change for a security is measured from the last close before it
  * opened, so a week that began on a Monday is measured from Friday's close
@@ -47,6 +47,8 @@ export interface MarketReview {
 }
 
 export interface MarketReviews {
+  /** The last session on its own, measured against the one before it. */
+  day: MarketReview | null;
   week: MarketReview | null;
   month: MarketReview | null;
 }
@@ -59,7 +61,7 @@ const TOP = 3;
 const SNAPSHOT_KEY = "marketReviews";
 const CACHE_MS = 30 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 interface ReviewSnapshot {
   key: string;
@@ -104,13 +106,18 @@ function buildReview(
     const last = inside.at(-1)!.close;
     if (!(base > 0) || !(last > 0) || base === last) continue;
 
+    // A move that rounds to +0.00% is not one of the period's biggest movers,
+    // however few securities traded.
+    const changePct = ((last - base) / base) * 100;
+    if (Math.abs(changePct) < 0.005) continue;
+
     const security = names.get(companyCode);
     movers.push({
       symbol: security?.symbol ?? String(companyCode),
       name: security?.name ?? "",
       from: base,
       to: last,
-      changePct: ((last - base) / base) * 100,
+      changePct,
     });
   }
 
@@ -178,7 +185,7 @@ export async function getMarketReviews(db: Db): Promise<MarketReviews> {
     return reviews;
   } catch (err) {
     console.error("market review failed", err);
-    return cached?.reviews ?? { week: null, month: null };
+    return cached?.reviews ?? { day: null, week: null, month: null };
   }
 }
 
@@ -191,7 +198,7 @@ export async function computeMarketReviews(db: Db): Promise<MarketReviews> {
     .sort({ date: -1 })
     .limit(1)
     .toArray();
-  if (!newest) return { week: null, month: null };
+  if (!newest) return { day: null, week: null, month: null };
 
   const to = newest.date;
   const window = daysBefore(to, MONTH_DAYS + 20);
@@ -221,15 +228,18 @@ export async function computeMarketReviews(db: Db): Promise<MarketReviews> {
 
   const weekFrom = daysBefore(to, WEEK_DAYS - 1);
   const monthFrom = daysBefore(to, MONTH_DAYS - 1);
-  // One read of the index histories for both windows: asking twice is two
-  // chances for an index to drop out, and the two cards then disagree about
-  // which indices exist.
+  // One read of the index histories for all three windows: asking again is
+  // another chance for an index to drop out, and the cards then disagree
+  // about which indices exist.
   const series = await fetchIndexSeries().catch((err) => {
     console.error("index series unavailable for the review", err);
     return {} as IndexSeries;
   });
 
   return {
+    // The last session on its own: measured from the close before it, which
+    // is what makes it the day's change rather than the day's level.
+    day: buildReview(byCompany, names, to, to, indexMoves(series, to)),
     week: buildReview(byCompany, names, weekFrom, to, indexMoves(series, weekFrom)),
     month: buildReview(byCompany, names, monthFrom, to, indexMoves(series, monthFrom)),
   };

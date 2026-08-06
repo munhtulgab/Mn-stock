@@ -137,6 +137,8 @@ export interface User {
   avatar?: string;
   /** Everything created after this is unread for the user. */
   notificationsReadAt?: Date;
+  /** When the user last opened the news page; stories newer than it are new. */
+  newsSeenAt?: Date;
 }
 
 export interface AppNotification {

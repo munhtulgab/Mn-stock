@@ -23,7 +23,10 @@ export default function MarketReviewCard({
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-sm font-semibold text-app-text">{title}</h2>
         <span className="text-[11px] text-app-muted tabular-nums whitespace-nowrap">
-          {review.from} – {review.to}
+          {/* A single session is one date, not a range from itself to itself. */}
+          {review.from === review.to
+            ? review.to
+            : `${review.from} – ${review.to}`}
         </span>
       </div>
 
