@@ -4,7 +4,9 @@ import { getMarketNews, type MarketNewsItem } from "@/lib/marketNews";
 import NewsRefresher from "@/components/NewsRefresher";
 import NewsList from "@/components/NewsList";
 import MarketReviewCard from "@/components/MarketReviewCard";
+import TradeReportCard from "@/components/TradeReportCard";
 import { getMarketReviews } from "@/lib/marketReview";
+import { getTradeReports } from "@/lib/tradeReports";
 import { dayHeading } from "@/lib/day";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +26,9 @@ export default async function NewsPage() {
     getMarketNews(db),
     getMarketReviews(db),
   ]);
+  // Needs the feed, so it cannot join the pair above: the reports it reads
+  // are two of the headlines already in it.
+  const reports = await getTradeReports(db, items);
   const days = groupByDay(items);
 
   return (
@@ -53,6 +58,15 @@ export default async function NewsPage() {
               review={reviews.month}
             />
           )}
+        </div>
+      )}
+
+      {/* Then the exchange's own reports, whose figures are the day's and the
+          week's rather than a period's arithmetic. */}
+      {(reports.daily || reports.weekly) && (
+        <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
+          {reports.daily && <TradeReportCard report={reports.daily} />}
+          {reports.weekly && <TradeReportCard report={reports.weekly} />}
         </div>
       )}
 

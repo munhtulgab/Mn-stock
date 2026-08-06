@@ -107,11 +107,17 @@ export async function callMseAction<T>(
   parameter: string,
   matches: (value: unknown) => value is T,
 ): Promise<T | null> {
-  const attempt = async (id: string) => {
-    const text = await post(action, parameter, id).catch(() => null);
-    return text ? parseActionPayload(text, matches) : null;
-  };
+  return callWithActionId((id) =>
+    post(action, parameter, id)
+      .then((text) => (text ? parseActionPayload(text, matches) : null))
+      .catch(() => null),
+  );
+}
 
+/** Runs `attempt`, rediscovering the action id once if the pinned one is stale. */
+async function callWithActionId<T>(
+  attempt: (actionId: string) => Promise<T | null>,
+): Promise<T | null> {
   const first = await attempt(currentActionId ?? PINNED_ACTION_ID);
   if (first) return first;
 
@@ -119,4 +125,65 @@ export async function callMseAction<T>(
   if (!discovered) return null;
   currentActionId = discovered;
   return attempt(discovered);
+}
+
+/**
+ * The same call, but keeping the rows a reply is made of.
+ *
+ * Most of the site's data arrives as one JSON row, which {@link callMseAction}
+ * is enough for. An article does not: its body is long enough that the payload
+ * carries it as a separate text row and leaves `"$2"` in its place, so reading
+ * the article means holding on to both rows and putting them back together.
+ * The text row states its own length in bytes rather than being terminated,
+ * because the body contains newlines of its own.
+ */
+export interface ActionPayload {
+  /** The first row that satisfied `matches`. */
+  value: unknown;
+  /** Text rows by their reference id — `"$2"` is `text.get("2")`. */
+  text: Map<string, string>;
+}
+
+const TEXT_ROW = /(?:^|\n)(\d+):T([0-9a-f]+),/;
+
+function parseTextRows(payload: string): {
+  text: Map<string, string>;
+  /** The payload with every text row lifted out, leaving the JSON rows. */
+  rest: string;
+} {
+  const text = new Map<string, string>();
+  let rest = "";
+  let remaining = payload;
+
+  for (;;) {
+    const match = TEXT_ROW.exec(remaining);
+    if (!match) break;
+    const bodyStart = match.index + match[0].length;
+    rest += remaining.slice(0, match.index);
+    // The declared length counts UTF-8 bytes, and this is Cyrillic: counting
+    // characters instead lands a third of the way short of the row's end.
+    const bytes = Buffer.from(remaining.slice(bodyStart), "utf8");
+    const body = bytes.subarray(0, parseInt(match[2], 16)).toString("utf8");
+    text.set(match[1], body);
+    // The row's own newline goes back in front of what follows it: the rows
+    // that are left are read a line at a time, and joining two of them into
+    // one line makes both unreadable.
+    remaining = "\n" + remaining.slice(bodyStart + body.length);
+  }
+
+  return { text, rest: rest + remaining };
+}
+
+export async function callMseActionWithText(
+  action: string,
+  parameter: string,
+  matches: (value: unknown) => boolean,
+): Promise<ActionPayload | null> {
+  return callWithActionId(async (id) => {
+    const payload = await post(action, parameter, id).catch(() => null);
+    if (!payload) return null;
+    const { text, rest } = parseTextRows(payload);
+    const value = parseActionPayload(rest, (v): v is unknown => matches(v));
+    return value === null ? null : { value, text };
+  });
 }
