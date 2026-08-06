@@ -95,22 +95,27 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
     await historyCollection.bulkWrite(ops, { ordered: false });
   }
 
-  if (isFirstRun || changes.length === 0) {
+  // A first classification is not a change. The sync prices a few companies
+  // per run and takes days to work through four hundred listings, so every
+  // one of them reaches this point as NEW at some point — and announcing
+  // those would hand the reader four hundred alerts saying the app had
+  // finished thinking about a company for the first time. They are kept in
+  // the history above, which is what makes the *next* move announceable.
+  const moved = changes.filter((c) => c.from !== "NEW");
+
+  if (isFirstRun || moved.length === 0) {
     return { changes, notified: false, smsSent: 0 };
   }
 
-  // Every change is written to the in-app feed. The setting below decides
-  // what is worth interrupting someone with — a push, an SMS — not what is
-  // worth recording: a signal that moved to ХҮЛЭЭХ is still something the
-  // reader went looking for and did not find.
+  // Every move is written to the in-app feed. The setting below decides what
+  // is worth interrupting someone with — a push, an SMS — not what is worth
+  // recording: a signal that moved to ХҮЛЭЭХ is still something the reader
+  // went looking for and did not find.
   await recordNotifications(
     db,
-    changes.map((c) => ({
+    moved.map((c) => ({
       title: `${c.symbol}: ${SIGNAL_LABELS[c.to]} дохио`,
-      body:
-        c.from === "NEW"
-          ? `${c.name} — шинэ дохио`
-          : `${c.name} — ${SIGNAL_LABELS[c.from]} байснаа ${SIGNAL_LABELS[c.to]} боллоо`,
+      body: `${c.name} — ${SIGNAL_LABELS[c.from as Signal]} байснаа ${SIGNAL_LABELS[c.to]} боллоо`,
       url: `/stock/${c.symbol}`,
       kind: "signal" as const,
       symbol: c.symbol,
@@ -121,7 +126,7 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
 
   // Operators pick which transitions are worth interrupting people for.
   const { notifications } = await getSettings(db);
-  const alerting = changes.filter((c) => notifications.signals.includes(c.to));
+  const alerting = moved.filter((c) => notifications.signals.includes(c.to));
   if (alerting.length === 0) {
     return { changes, notified: false, smsSent: 0 };
   }

@@ -259,19 +259,47 @@ async function getAllDividends(db: Db): Promise<Record<string, Dividend[]>> {
   }
 }
 
+/** One year's line, whether or not anything was declared for it. */
+export interface DividendYear {
+  year: number;
+  /** Tugriks per share, or null where the exchange announced nothing. */
+  amount: number | null;
+  /** Against the current price. */
+  yieldPct: number | null;
+}
+
+/** How many years the card shows, this one included. */
+const YEARS_SHOWN = 3;
+
 /**
- * One company's declarations, newest first, with the yield each would give
- * at today's price.
+ * The last three years for one company, in order, with the yield each would
+ * give at today's price.
+ *
+ * Every year gets a line whether or not it has a figure. A company that paid
+ * in 2025 and not in 2024 said something by not paying, and a card that
+ * simply omits the year leaves the reader unable to tell that from a year
+ * this app failed to read.
  */
 export async function getDividendsFor(
   db: Db,
   companyCode: number,
   price: number | null,
-): Promise<Dividend[]> {
+  /** Today in Ulaanbaatar; passed in so nothing here reads the clock. */
+  today: string,
+): Promise<DividendYear[]> {
   const all = await getAllDividends(db);
-  const list = all[String(companyCode)] ?? [];
-  return list.map((dividend) => ({
-    ...dividend,
-    yieldPct: price && price > 0 ? (dividend.amount / price) * 100 : null,
-  }));
+  const declared = new Map(
+    (all[String(companyCode)] ?? []).map((d) => [d.year, d.amount]),
+  );
+
+  const thisYear = Number(today.slice(0, 4));
+  return Array.from({ length: YEARS_SHOWN }, (_, i) => {
+    const year = thisYear - i;
+    const amount = declared.get(year) ?? null;
+    return {
+      year,
+      amount,
+      yieldPct: amount !== null && price && price > 0 ? (amount / price) * 100 : null,
+    };
+  });
 }

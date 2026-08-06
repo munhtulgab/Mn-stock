@@ -17,6 +17,7 @@ import TradeModal from "@/components/TradeModal";
 import WatchlistButton from "@/components/WatchlistButton";
 import MetricInfo, { type MetricTerm } from "@/components/MetricInfo";
 import { getDividendsFor } from "@/lib/dividends";
+import { ulaanbaatarDay } from "@/lib/day";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,10 @@ export default async function StockDetailPage({
       db,
       security.companyCode,
       liveQuotes.get(security.companyCode)?.price ?? priceHistory.at(-1)?.close ?? null,
+      // The clock is read here, once, rather than inside a component: which
+      // three years the card shows depends on today, and a render that reads
+      // the time is not the same render twice.
+      ulaanbaatarDay(new Date()),
     ).catch(() => []),
   ]);
   const live = liveQuotes.get(security.companyCode) ?? null;

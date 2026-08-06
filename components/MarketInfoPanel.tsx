@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Num, { Pct } from "./Num";
-import type { Dividend as ExchangeDividend } from "@/lib/dividends";
+import type { DividendYear } from "@/lib/dividends";
 
 interface Profile {
   isin: string | null;
@@ -18,11 +18,6 @@ interface PeriodChange {
   label: string;
   changePercent: number;
   date: string;
-}
-interface Dividend {
-  year: number;
-  amount: number;
-  yieldPct: number | null;
 }
 interface BigOwner {
   name: string;
@@ -40,7 +35,6 @@ interface Data {
   sourceUrl: string;
   profile: Profile;
   changes: PeriodChange[];
-  dividends: Dividend[];
   bigOwners: BigOwner[];
   concentration: Slice[];
   domesticForeign: Slice[];
@@ -70,11 +64,11 @@ export default function MarketInfoPanel({
   weekHigh52: number | null;
   weekLow52: number | null;
   /**
-   * What the exchange has announced this company will pay per share. Read on
-   * the server from its own notices, so unlike everything else in this panel
-   * it is there before the page has asked anybody anything.
+   * The last three years' payouts per share, read on the server from the
+   * exchange's own notices — so unlike everything else in this panel it is
+   * there before the page has asked anybody anything.
    */
-  dividends: ExchangeDividend[];
+  dividends: DividendYear[];
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [loadedFor, setLoadedFor] = useState(symbol);
@@ -119,7 +113,7 @@ export default function MarketInfoPanel({
       <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-4">
         <h2 className="text-sm font-semibold text-app-text">Зах зээлийн үзүүлэлт</h2>
         {range}
-        <Dividends declared={declared} />
+        <Dividends years={declared} />
       </div>
     );
   }
@@ -129,14 +123,13 @@ export default function MarketInfoPanel({
       <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-4">
         <h2 className="text-sm font-semibold text-app-text">Зах зээлийн үзүүлэлт</h2>
         {range}
-        <Dividends declared={declared} />
+        <Dividends years={declared} />
         <div className="h-16 rounded bg-app-bg animate-pulse" />
       </div>
     );
   }
 
-  const { profile, changes, dividends, bigOwners, concentration, domesticForeign } =
-    state.data;
+  const { profile, changes, bigOwners, concentration, domesticForeign } = state.data;
 
   return (
     <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-4">
@@ -185,7 +178,7 @@ export default function MarketInfoPanel({
         </div>
       )}
 
-      <Dividends declared={declared} fallback={dividends} />
+      <Dividends years={declared} />
 
       {(bigOwners.length > 0 || concentration.length > 0) && (
         <div>
@@ -223,32 +216,33 @@ export default function MarketInfoPanel({
 /**
  * What the company pays per share, by the year the profit was earned.
  *
- * The exchange's own notices lead; marketinfo's list is only reached for a
- * company whose declarations are older than the notice archive.
+ * Every one of the last three years gets a line, dash included. A year with
+ * no figure is itself worth knowing — a company that paid last year and not
+ * this one has said something — and an omitted row cannot be told apart from
+ * a year the app failed to read.
  */
-function Dividends({
-  declared,
-  fallback = [],
-}: {
-  declared: ExchangeDividend[];
-  fallback?: Dividend[];
-}) {
-  const rows = declared.length > 0 ? declared : fallback;
-  if (rows.length === 0) return null;
+function Dividends({ years }: { years: DividendYear[] }) {
+  if (years.length === 0) return null;
 
   return (
     <div>
       <div className="text-xs font-medium text-app-text mb-2">Ногдол ашиг</div>
       <ul className="space-y-1">
-        {rows.slice(0, 4).map((d, i) => (
-          <li key={`${d.year}-${i}`} className="flex justify-between gap-2 text-xs">
+        {years.map((d) => (
+          <li key={d.year} className="flex justify-between gap-2 text-xs">
             <span className="text-app-muted">{d.year} он</span>
-            <span className="shrink-0 text-app-text tabular-nums">
-              <Num value={d.amount} digits={2} suffix="₮" />
-              {d.yieldPct !== null && (
-                <span className="text-app-muted">
-                  {" · өгөөж "}
-                  {d.yieldPct.toFixed(2)}%
+            <span className="shrink-0 tabular-nums">
+              {d.amount === null ? (
+                <span className="text-app-muted">—</span>
+              ) : (
+                <span className="text-app-text">
+                  <Num value={d.amount} digits={2} suffix="₮" />
+                  {d.yieldPct !== null && (
+                    <span className="text-app-muted">
+                      {" · өгөөж "}
+                      {d.yieldPct.toFixed(2)}%
+                    </span>
+                  )}
                 </span>
               )}
             </span>
