@@ -15,6 +15,8 @@ import MarketInfoPanel from "@/components/MarketInfoPanel";
 import LivePrice from "@/components/LivePrice";
 import TradeModal from "@/components/TradeModal";
 import WatchlistButton from "@/components/WatchlistButton";
+import MetricInfo, { type MetricTerm } from "@/components/MetricInfo";
+import { getDividendsFor } from "@/lib/dividends";
 
 export const dynamic = "force-dynamic";
 
@@ -66,10 +68,17 @@ export default async function StockDetailPage({
 
   // Resolved during render, not after: leaving it to the client meant the
   // page painted the stored close and visibly corrected itself a moment later.
-  const [portfolio, watchlist, marketOpen] = await Promise.all([
+  const [portfolio, watchlist, marketOpen, dividends] = await Promise.all([
     getPortfolioSummary(db, user!._id!),
     getWatchlist(db, user!._id!),
     fetchMarketOpen().catch(() => null),
+    // Read from the exchange's own notices rather than a third party, so a
+    // company that pays has its figure whether or not marketinfo knows it.
+    getDividendsFor(
+      db,
+      security.companyCode,
+      liveQuotes.get(security.companyCode)?.price ?? priceHistory.at(-1)?.close ?? null,
+    ).catch(() => []),
   ]);
   const live = liveQuotes.get(security.companyCode) ?? null;
   const closedAt = sessionEnd(liveQuotes);
@@ -219,15 +228,20 @@ export default async function StockDetailPage({
           </h2>
           {financials ? (
             <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
-              <Metric label="P/E" value={fmt(financials.pe, 2)} />
+              <Metric label="P/E" value={fmt(financials.pe, 2)} info="pe" />
               <Metric
                 label="Захын дундаж P/E"
                 value={marketMedianPe === null ? "—" : fmt(marketMedianPe, 2)}
+                info="marketPe"
               />
-              <Metric label="EPS" value={money(financials.eps)} />
-              <Metric label="ROE %" value={fmt(financials.roe)} />
-              <Metric label="ROA %" value={fmt(financials.roa)} />
-              <Metric label="Цэвэр ашиг" value={money(financials.netProfit, 0)} />
+              <Metric label="EPS" value={money(financials.eps)} info="eps" />
+              <Metric label="ROE %" value={fmt(financials.roe)} info="roe" />
+              <Metric label="ROA %" value={fmt(financials.roa)} info="roa" />
+              <Metric
+                label="Цэвэр ашиг"
+                value={money(financials.netProfit, 0)}
+                info="netProfit"
+              />
             </dl>
           ) : (
             <p className="text-xs text-app-muted">Мэдээлэл олдсонгүй.</p>
@@ -238,6 +252,7 @@ export default async function StockDetailPage({
             symbol={security.symbol}
             weekHigh52={recommendation.indicators.weekHigh52}
             weekLow52={recommendation.indicators.weekLow52}
+            dividends={dividends}
           />
         </div>
       </div>
@@ -274,10 +289,26 @@ export default async function StockDetailPage({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+/**
+ * `info` puts an "i" beside the label that opens what the figure means. The
+ * financial ratios carry one because they are the figures on this page that
+ * assume you already know what a P/E is.
+ */
+function Metric({
+  label,
+  value,
+  info,
+}: {
+  label: string;
+  value: string;
+  info?: MetricTerm;
+}) {
   return (
     <>
-      <dt className="text-app-muted">{label}</dt>
+      <dt className="text-app-muted">
+        {label}
+        {info && <MetricInfo term={info} />}
+      </dt>
       <dd className="text-right tabular-nums text-app-text">{value}</dd>
     </>
   );

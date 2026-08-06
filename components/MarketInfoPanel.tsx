@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Num, { Pct } from "./Num";
+import type { Dividend as ExchangeDividend } from "@/lib/dividends";
 
 interface Profile {
   isin: string | null;
@@ -63,10 +64,17 @@ export default function MarketInfoPanel({
   symbol,
   weekHigh52,
   weekLow52,
+  dividends: declared,
 }: {
   symbol: string;
   weekHigh52: number | null;
   weekLow52: number | null;
+  /**
+   * What the exchange has announced this company will pay per share. Read on
+   * the server from its own notices, so unlike everything else in this panel
+   * it is there before the page has asked anybody anything.
+   */
+  dividends: ExchangeDividend[];
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [loadedFor, setLoadedFor] = useState(symbol);
@@ -104,21 +112,24 @@ export default function MarketInfoPanel({
     </dl>
   );
 
-  // The extremes stand on their own when the third party has nothing.
+  // The extremes and the declarations stand on their own when the third
+  // party has nothing, which for a good half of the market is the case.
   if (state.kind === "none") {
     return (
-      <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-3">
+      <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-4">
         <h2 className="text-sm font-semibold text-app-text">Зах зээлийн үзүүлэлт</h2>
         {range}
+        <Dividends declared={declared} />
       </div>
     );
   }
 
   if (state.kind === "loading") {
     return (
-      <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-3">
+      <div className="rounded-2xl border border-app-border bg-app-card p-4 space-y-4">
         <h2 className="text-sm font-semibold text-app-text">Зах зээлийн үзүүлэлт</h2>
         {range}
+        <Dividends declared={declared} />
         <div className="h-16 rounded bg-app-bg animate-pulse" />
       </div>
     );
@@ -174,24 +185,7 @@ export default function MarketInfoPanel({
         </div>
       )}
 
-      {dividends.length > 0 && (
-        <div>
-          <div className="text-xs font-medium text-app-text mb-2">Ноогдол ашиг</div>
-          <ul className="space-y-1">
-            {dividends.slice(0, 4).map((d, i) => (
-              <li key={`${d.year}-${i}`} className="flex justify-between text-xs">
-                <span className="text-app-muted">{d.year}</span>
-                <span className="text-app-text tabular-nums">
-                  <Num value={d.amount} digits={2} suffix="₮" />
-                  {d.yieldPct !== null && (
-                    <span className="text-app-muted"> · өгөөж {d.yieldPct}%</span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <Dividends declared={declared} fallback={dividends} />
 
       {(bigOwners.length > 0 || concentration.length > 0) && (
         <div>
@@ -222,6 +216,45 @@ export default function MarketInfoPanel({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * What the company pays per share, by the year the profit was earned.
+ *
+ * The exchange's own notices lead; marketinfo's list is only reached for a
+ * company whose declarations are older than the notice archive.
+ */
+function Dividends({
+  declared,
+  fallback = [],
+}: {
+  declared: ExchangeDividend[];
+  fallback?: Dividend[];
+}) {
+  const rows = declared.length > 0 ? declared : fallback;
+  if (rows.length === 0) return null;
+
+  return (
+    <div>
+      <div className="text-xs font-medium text-app-text mb-2">Ногдол ашиг</div>
+      <ul className="space-y-1">
+        {rows.slice(0, 4).map((d, i) => (
+          <li key={`${d.year}-${i}`} className="flex justify-between gap-2 text-xs">
+            <span className="text-app-muted">{d.year} он</span>
+            <span className="shrink-0 text-app-text tabular-nums">
+              <Num value={d.amount} digits={2} suffix="₮" />
+              {d.yieldPct !== null && (
+                <span className="text-app-muted">
+                  {" · өгөөж "}
+                  {d.yieldPct.toFixed(2)}%
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
