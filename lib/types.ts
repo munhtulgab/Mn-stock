@@ -11,6 +11,8 @@ export interface Security {
   updatedAt: Date;
   /** Last time this company's price history was pulled from the exchange. */
   pricesSyncedAt?: Date;
+  /** The market session that pull covered, so it is not repeated for it. */
+  pricesSyncedSession?: string;
 }
 
 export interface PricePoint {

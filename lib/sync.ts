@@ -2,6 +2,7 @@ import type { Db } from "mongodb";
 import { fetchSecuritiesList } from "@/lib/mse/securities";
 import { fetchPriceHistory } from "@/lib/mse/prices";
 import { fetchLatestFinancials } from "@/lib/mse/financials";
+import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 import type { PricePoint } from "@/lib/types";
 
 export interface SyncState {
@@ -113,6 +114,41 @@ async function getSyncState(db: Db): Promise<SyncState> {
   };
 }
 
+/**
+ * Companies whose stored history stops before the price the live feed is
+ * already quoting for them. Both sides are read in one go — a per-company
+ * query for four hundred companies would cost more than the sync it is meant
+ * to save.
+ */
+async function companiesBehindTheSession(
+  db: Db,
+  active: { companyCode: number; symbol: string }[],
+): Promise<{ companyCode: number; symbol: string }[]> {
+  let live: Map<number, LiveQuote>;
+  try {
+    live = await fetchLiveQuotes({ budgetMs: 9_000 });
+  } catch (err) {
+    console.error("live quotes unavailable for the catch-up list", err);
+    return [];
+  }
+  if (live.size === 0) return [];
+
+  const latest = await db
+    .collection<PricePoint>("prices")
+    .aggregate<{ _id: number; date: string }>([
+      { $group: { _id: "$companyCode", date: { $max: "$date" } } },
+    ])
+    .toArray();
+  const storedLatest = new Map(latest.map((r) => [r._id, r.date]));
+
+  return active.filter((company) => {
+    const quoted = live.get(company.companyCode)?.at?.slice(0, 10);
+    if (!quoted) return false;
+    const stored = storedLatest.get(company.companyCode);
+    return !stored || stored < quoted;
+  });
+}
+
 export interface SyncBatchResult {
   securitiesRefreshed: boolean;
   pricesProcessed: string[];
@@ -156,6 +192,17 @@ export async function runSyncBatch(
     .toArray();
   console.log(`runSyncBatch: ${active.length} active securities found`);
 
+  // Which companies are actually behind. The exchange publishes a close for
+  // the fifty-odd securities that traded on a given day, not for all four
+  // hundred, so walking the whole list in company-code order spends most of
+  // a run re-reading histories that have not moved — and takes weeks to come
+  // back round to a company that trades every day. The live feed names the
+  // ones that have a new price; those go first.
+  const behind = await companiesBehindTheSession(db, active);
+  if (behind.length > 0) {
+    console.log(`runSyncBatch: ${behind.length} behind the latest session`);
+  }
+
   const state = await getSyncState(db);
   const pricesProcessed: string[] = [];
   const financialsProcessed: string[] = [];
@@ -168,6 +215,19 @@ export async function runSyncBatch(
   const priceDeadline = start + maxMs * 0.6;
   const financialsDeadline = start + maxMs;
 
+  // The catch-up list first, then the rotation picks up where it left off
+  // and keeps the dormant end of the exchange from going stale forever.
+  for (const company of behind) {
+    if (Date.now() >= priceDeadline) break;
+    try {
+      await syncPricesForCompany(db, company.companyCode);
+      pricesProcessed.push(company.symbol);
+    } catch (err) {
+      console.error(`price sync failed for ${company.symbol}`, err);
+    }
+  }
+  const caughtUp = new Set(pricesProcessed);
+
   let priceCursor = state.priceCursor % Math.max(active.length, 1);
   const priceStart = priceCursor;
   let firstPriceIteration = true;
@@ -179,11 +239,13 @@ export async function runSyncBatch(
     firstPriceIteration = false;
     const company = active[priceCursor];
     if (!company) break;
-    try {
-      await syncPricesForCompany(db, company.companyCode);
-      pricesProcessed.push(company.symbol);
-    } catch (err) {
-      console.error(`price sync failed for ${company.symbol}`, err);
+    if (!caughtUp.has(company.symbol)) {
+      try {
+        await syncPricesForCompany(db, company.companyCode);
+        pricesProcessed.push(company.symbol);
+      } catch (err) {
+        console.error(`price sync failed for ${company.symbol}`, err);
+      }
     }
     priceCursor = (priceCursor + 1) % active.length;
     if (priceCursor === priceStart) {

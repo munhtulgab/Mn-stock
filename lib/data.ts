@@ -302,7 +302,7 @@ export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
   }
 
   try {
-    const live = await fetchLiveQuotes().catch(() => new Map());
+    const live = await fetchLiveQuotes({ budgetMs: 9_000 }).catch(() => new Map());
     const rows = await computeDashboardRows(db, { live });
     await snapshots.updateOne(
       { key: SNAPSHOT_KEY },
@@ -414,7 +414,7 @@ export function pricedRecently(rows: DashboardRow[], days: number): DashboardRow
 
 /** Rebuild the snapshot immediately (called after a sync ingests new prices). */
 export async function refreshDashboardSnapshot(db: Db): Promise<number> {
-  const live = await fetchLiveQuotes().catch(() => new Map());
+  const live = await fetchLiveQuotes({ budgetMs: 9_000 }).catch(() => new Map());
   const rows = await computeDashboardRows(db, { live });
   await db.collection<MarketSnapshot>("marketSnapshots").updateOne(
     { key: SNAPSHOT_KEY },
@@ -434,6 +434,8 @@ export async function refreshDashboardSnapshot(db: Db): Promise<number> {
 export async function getStockDetail(
   db: Db,
   symbol: string,
+  /** Quotes the caller already has, so one render asks the feed once. */
+  liveQuotes?: Map<number, LiveQuote>,
 ): Promise<StockDetail | null> {
   const security = await db
     .collection<Security>("securities")
@@ -448,7 +450,8 @@ export async function getStockDetail(
 
   const marketMedianPe = getMarketMedianPe(financialsByCompany);
   const financials = financialsByCompany.get(security.companyCode) ?? null;
-  const live = await fetchLiveQuotes().catch(() => new Map());
+  const live =
+    liveQuotes ?? (await fetchLiveQuotes().catch(() => new Map<number, LiveQuote>()));
   const recommendation = computeRecommendation(
     withLivePoint(prices, live.get(security.companyCode), security.companyCode),
     financials,
@@ -466,52 +469,92 @@ export async function getStockDetail(
 }
 
 /**
- * How long a company's stored history is trusted before the exchange is
- * asked again. The published series only changes when a session closes, and
- * the running price the page shows comes from the live quote either way — so
- * asking on every visit bought nothing and cost the whole page a round trip
- * to mse.mn plus a rewrite of the company's entire history.
+ * The last session the market held, as far as anything here can tell.
+ *
+ * Two witnesses. The live feed knows a session has opened before any of it
+ * has been stored, and the stored rows know about sessions the feed has
+ * since forgotten; the later of the two is the day the app should be
+ * showing. Null only when neither has anything to say.
  */
+export async function latestMarketSession(
+  db: Db,
+  live?: Map<number, LiveQuote>,
+): Promise<string | null> {
+  let latest: string | null = null;
+  for (const quote of live?.values() ?? []) {
+    const day = quote.at?.slice(0, 10);
+    if (day && (!latest || day > latest)) latest = day;
+  }
+
+  const snapshot = await db
+    .collection<MarketSnapshot>("marketSnapshots")
+    .findOne({ key: SNAPSHOT_KEY }, { projection: { rows: 1 } });
+  const stored = snapshot ? latestSessionDate(snapshot.rows) : null;
+  if (stored && (!latest || stored > latest)) latest = stored;
+
+  return latest;
+}
+
+/** Only relevant when no session date can be established at all. */
 const PRICE_SYNC_TTL_MS = 30 * 60 * 1000;
 
 /**
- * Same as getStockDetail, but pulls this one company's prices from MSE first
- * when what is stored has gone stale. The background sync rotates through
- * ~400 companies on a time-boxed cursor, so a given symbol can be many
- * cycles behind; this closes that gap without making every page view pay for
- * it. Falls back to whatever was already stored if the fetch fails.
+ * Makes sure this company's stored prices cover the session the market is
+ * actually in, fetching them from the exchange if they do not.
+ *
+ * This blocks the page. It has to: the figure a company's page leads with is
+ * its price, and a page that prints Tuesday's close on Thursday and quietly
+ * corrects itself on the next visit is worse than a page that takes a moment.
+ * The background sync walks ~400 companies on a time-boxed cursor and can be
+ * days behind on any given one, so this is what closes that gap.
+ *
+ * It costs that fetch once per company per session. A company that did not
+ * trade in the session is remembered as checked, so a dormant listing is not
+ * re-fetched on every view for the sake of a close that will never exist.
  */
-export async function refreshPricesIfStale(
+export async function ensurePricesCurrent(
   db: Db,
   symbol: string,
+  marketSession: string | null,
 ): Promise<void> {
   const security = await db
     .collection<Security>("securities")
     .findOne({ symbol: symbol.toUpperCase() });
   if (!security) return;
 
-  const syncedAt = security.pricesSyncedAt?.getTime() ?? 0;
-  if (Date.now() - syncedAt <= PRICE_SYNC_TTL_MS) return;
+  if (marketSession) {
+    if (security.pricesSyncedSession === marketSession) return;
+  } else if (Date.now() - (security.pricesSyncedAt?.getTime() ?? 0) <= PRICE_SYNC_TTL_MS) {
+    return;
+  }
 
   try {
     await syncPricesForCompany(db, security.companyCode);
   } catch (err) {
     console.error(`price refresh failed for ${symbol}`, err);
   }
+
   // Stamped even when the fetch failed: a source that is down should not be
   // retried on every render of the page.
-  await db
-    .collection<Security>("securities")
-    .updateOne(
-      { companyCode: security.companyCode },
-      { $set: { pricesSyncedAt: new Date() } },
-    );
+  await db.collection<Security>("securities").updateOne(
+    { companyCode: security.companyCode },
+    {
+      $set: {
+        pricesSyncedAt: new Date(),
+        ...(marketSession ? { pricesSyncedSession: marketSession } : {}),
+      },
+    },
+  );
 }
 
+/**
+ * getStockDetail with its prices brought up to the current session first.
+ */
 export async function getStockDetailFresh(
   db: Db,
   symbol: string,
 ): Promise<StockDetail | null> {
-  await refreshPricesIfStale(db, symbol);
-  return getStockDetail(db, symbol);
+  const live = await fetchLiveQuotes().catch(() => new Map<number, LiveQuote>());
+  await ensurePricesCurrent(db, symbol, await latestMarketSession(db, live));
+  return getStockDetail(db, symbol, live);
 }

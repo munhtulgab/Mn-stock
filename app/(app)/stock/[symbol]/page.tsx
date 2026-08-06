@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { after } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
-import { getStockDetail, refreshPricesIfStale } from "@/lib/data";
+import { ensurePricesCurrent, getStockDetail, latestMarketSession } from "@/lib/data";
 import { sessionChangePct } from "@/lib/priceChange";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getSettings } from "@/lib/settings";
@@ -46,31 +45,30 @@ export default async function StockDetailPage({
 }) {
   const { symbol } = await params;
   const db = await getDb();
+  // Prices first, and before anything is rendered. The number this page
+  // leads with is the price; showing the session before last and correcting
+  // it on the next visit is not an acceptable trade for a faster paint. It
+  // costs one fetch per company per session and nothing on a repeat view.
+  const settings = await getSettings(db);
+  const liveQuotes = await fetchLiveQuotes({
+    extraCaCerts: settings.extraCaCerts,
+  }).catch(() => new Map());
+  await ensurePricesCurrent(db, symbol, await latestMarketSession(db, liveQuotes));
+
   const [detail, user] = await Promise.all([
-    getStockDetail(db, symbol),
+    getStockDetail(db, symbol, liveQuotes),
     getCurrentUser(db),
   ]);
   if (!detail) notFound();
-
-  // The exchange is asked for this company's history after the page has been
-  // sent, not before it renders. The published series only changes when a
-  // session closes and the running price comes from the live quote, so making
-  // the reader wait on that round trip bought nothing — it was twelve seconds
-  // of the thirteen this page took.
-  after(() => refreshPricesIfStale(db, symbol));
 
   const { security, financials, priceHistory, fullHistory, recommendation, marketMedianPe } =
     detail;
 
   // Resolved during render, not after: leaving it to the client meant the
   // page painted the stored close and visibly corrected itself a moment later.
-  const settings = await getSettings(db);
-  const [portfolio, watchlist, liveQuotes, marketOpen] = await Promise.all([
+  const [portfolio, watchlist, marketOpen] = await Promise.all([
     getPortfolioSummary(db, user!._id!),
     getWatchlist(db, user!._id!),
-    fetchLiveQuotes({ extraCaCerts: settings.extraCaCerts }).catch(
-      () => new Map(),
-    ),
     fetchMarketOpen().catch(() => null),
   ]);
   const live = liveQuotes.get(security.companyCode) ?? null;

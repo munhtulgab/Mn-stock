@@ -207,10 +207,24 @@ let statusCache: { at: number; open: boolean } | null = null;
 let cache: { at: number; quotes: Map<number, LiveQuote> } | null = null;
 let inFlight: Promise<Map<number, LiveQuote>> | null = null;
 
-async function load(extraCaCerts?: string): Promise<Map<number, LiveQuote>> {
+/**
+ * When the feed is unreachable, how long before it is worth another go.
+ *
+ * A failed attempt used to leave nothing behind, so the next caller paid the
+ * whole budget again — and a single page render asks more than once. With
+ * marketinfo down that turned a three-second timeout into ten seconds of
+ * page. A failure is an answer too, and worth remembering briefly.
+ */
+const FAILURE_BACKOFF_MS = 20_000;
+let failedAt = 0;
+
+async function load(
+  extraCaCerts?: string,
+  budgetMs = TOTAL_BUDGET_MS,
+): Promise<Map<number, LiveQuote>> {
   const extraCerts = extraCaCerts ? parsePemBundle(extraCaCerts) : [];
   const headers = { "User-Agent": USER_AGENT, Accept: "application/json" };
-  const deadline = Date.now() + TOTAL_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
 
   for (const endpoint of ENDPOINTS) {
     const left = deadline - Date.now();
@@ -251,16 +265,26 @@ async function load(extraCaCerts?: string): Promise<Map<number, LiveQuote>> {
  * Every security quoted in the current session, keyed by MSE company code.
  * Empty when marketinfo is unreachable — callers fall back to stored closes.
  */
+/**
+ * How long a page will wait for the running price before going with the
+ * stored close. Nine seconds is a reasonable budget for a background job
+ * walking several hosts; it is not a reasonable amount of time to hold a
+ * page that already has a price to show, dated, from the exchange itself.
+ */
+const PAGE_BUDGET_MS = 3_500;
+
 export async function fetchLiveQuotes(
-  options: { extraCaCerts?: string } = {},
+  options: { extraCaCerts?: string; budgetMs?: number } = {},
 ): Promise<Map<number, LiveQuote>> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.quotes;
   if (inFlight) return inFlight;
+  if (Date.now() - failedAt < FAILURE_BACKOFF_MS) return cache?.quotes ?? new Map();
 
-  inFlight = load(options.extraCaCerts)
+  inFlight = load(options.extraCaCerts, options.budgetMs ?? PAGE_BUDGET_MS)
     .then((quotes) => {
       // Keep the previous snapshot if this attempt came back empty.
       if (quotes.size > 0) cache = { at: Date.now(), quotes };
+      else failedAt = Date.now();
       return quotes.size > 0 ? quotes : (cache?.quotes ?? new Map());
     })
     .finally(() => {
