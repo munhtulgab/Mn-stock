@@ -243,12 +243,20 @@ export default async function StockDetailPage({
       </div>
       </div>
 
-      <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-1 bg-linear-to-t from-app-bg via-app-bg to-transparent lg:mx-auto lg:max-w-md">
+      {/* Above the tab bar, not behind it: both stick to the bottom of the
+          viewport, and the bar is drawn after this, so at the default offset
+          the buy and sell buttons spent their life underneath it. The tab bar
+          is gone from a laptop up, where this can sit at the bottom. */}
+      <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] lg:bottom-0 -mx-4 px-4 pt-3 pb-1 bg-linear-to-t from-app-bg via-app-bg to-transparent lg:mx-auto lg:max-w-md">
         <TradeModal
           symbol={security.symbol}
-          currentPrice={live?.price ?? last?.close ?? null}
-          bid={live?.bid ?? null}
-          ask={live?.ask ?? null}
+          initial={{
+            price: live?.price ?? last?.close ?? null,
+            changePct: live?.changePct ?? changePct,
+            date: live?.at?.slice(0, 10) ?? last?.date ?? null,
+            bid: live?.bid ?? null,
+            ask: live?.ask ?? null,
+          }}
           cashBalance={portfolio.cashBalance}
           ownedQuantity={holding?.quantity ?? 0}
         />

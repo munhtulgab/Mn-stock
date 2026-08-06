@@ -26,8 +26,17 @@ const TIMEOUT_MS = 12_000;
  */
 const TOTAL_BUDGET_MS = 9_000;
 
-/** Quotes move constantly; this bounds how often the upstream is asked. */
-const CACHE_MS = 30_000;
+/**
+ * How long a quote is reused before the feed is asked again.
+ *
+ * Measured against the source: marketinfo republishes about every two
+ * minutes — 10:38:57 then 10:40:58 — so most asks return what we already
+ * have. Holding an answer for thirty seconds on top of that added our own
+ * delay to theirs for no gain; five seconds keeps a burst of renders from
+ * hammering the host while putting a new figure on screen within seconds of
+ * it existing.
+ */
+const CACHE_MS = 5_000;
 
 /**
  * The site reads everything through one base URL, with exchange data under
@@ -256,6 +265,9 @@ async function load(
       try {
         const res = await fetch(endpoint, {
           headers,
+          // Never a stored copy: the whole point of this call is what
+          // changed since the last one.
+          cache: "no-store",
           signal: AbortSignal.timeout(timeout),
         });
         body = await res.text();

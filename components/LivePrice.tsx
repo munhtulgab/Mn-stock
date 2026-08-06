@@ -1,24 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Num, { Pct } from "./Num";
-
-interface Quote {
-  price: number | null;
-  /** Most recent individual trade, which can sit away from the close. */
-  lastTrade?: number | null;
-  changePct: number | null;
-  date: string | null;
-  /** Exchange entry time, "HH:MM", when the quote is live. */
-  at?: string | null;
-  /** True while the exchange reports itself in session. */
-  isLive?: boolean;
-  /** Null when the exchange's status could not be read. */
-  marketOpen?: boolean | null;
-}
-
-/** Fast enough to feel current, slow enough not to hammer a third party. */
-const POLL_MS = 30_000;
+import { useLiveQuote, type Quote } from "./useLiveQuote";
 
 /**
  * The security's price, labelled with where and when it came from.
@@ -29,7 +12,8 @@ const POLL_MS = 30_000;
  * belongs to — the exchange publishes a session only after it ends, and a
  * stale close shown unlabelled would misread the market.
  *
- * Polling pauses with the tab hidden rather than waking a phone in a pocket.
+ * The polling itself is shared with the trade buttons, which quote the two
+ * sides of the same book — see {@link useLiveQuote}.
  */
 export default function LivePrice({
   symbol,
@@ -38,32 +22,7 @@ export default function LivePrice({
   symbol: string;
   initial: Quote;
 }) {
-  const [quote, setQuote] = useState<Quote>(initial);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function refresh() {
-      if (document.visibilityState !== "visible") return;
-      try {
-        const res = await fetch(`/api/securities/${symbol}/quote`);
-        if (!res.ok) return;
-        const data: Quote = await res.json();
-        if (!cancelled && data.price !== null) setQuote(data);
-      } catch {
-        // A missed poll just leaves the previous figure in place.
-      }
-    }
-
-    refresh();
-    const timer = setInterval(refresh, POLL_MS);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [symbol]);
+  const quote = useLiveQuote(symbol, initial);
 
   return (
     <div className="text-right">

@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import Num from "./Num";
 import { useToast } from "./Toast";
 import { ArrowDownIcon, ArrowUpIcon, CloseIcon } from "./icons";
+import { useLiveQuote, type Quote } from "./useLiveQuote";
 import type { OrderSide } from "@/lib/types";
 
 /**
@@ -16,21 +17,20 @@ import type { OrderSide } from "@/lib/types";
  */
 export default function TradeModal({
   symbol,
-  currentPrice,
-  bid,
-  ask,
+  initial,
   cashBalance,
   ownedQuantity,
 }: {
   symbol: string;
-  currentPrice: number | null;
-  /** Highest buy order standing in the book, null when there is none. */
-  bid: number | null;
-  /** Lowest sell order standing in the book. */
-  ask: number | null;
+  /** Rendered figures, kept current by the shared poll. */
+  initial: Quote;
   cashBalance: number;
   ownedQuantity: number;
 }) {
+  const quote = useLiveQuote(symbol, initial);
+  const currentPrice = quote.price;
+  const bid = quote.bid ?? null;
+  const ask = quote.ask ?? null;
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState<OrderSide | null>(null);
@@ -82,20 +82,40 @@ export default function TradeModal({
 
   return (
     <>
+      {/* Each side carries the price it would fill at, so the decision does
+          not need the ticket to be opened first. */}
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => setOpen("SELL")}
           disabled={!currentPrice}
-          className="flex items-center justify-center gap-2 rounded-2xl border border-app-negative/30 bg-app-negative-bg text-app-negative font-semibold py-3.5 text-sm disabled:opacity-50"
+          className="flex flex-col items-center justify-center rounded-2xl border border-app-negative/30 bg-app-negative-bg text-app-negative font-semibold py-2.5 text-sm leading-tight disabled:opacity-50"
         >
-          <ArrowDownIcon size={16} /> Зарах
+          <span className="flex items-center gap-2">
+            <ArrowDownIcon size={16} /> Зарах
+          </span>
+          <span className="text-xs font-bold tabular-nums">
+            {bid ?? currentPrice ? (
+              <Num value={(bid ?? currentPrice)!} digits={2} suffix="₮" />
+            ) : (
+              "—"
+            )}
+          </span>
         </button>
         <button
           onClick={() => setOpen("BUY")}
           disabled={!currentPrice}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-brand text-black font-semibold py-3.5 text-sm disabled:opacity-50"
+          className="flex flex-col items-center justify-center rounded-2xl bg-brand text-black font-semibold py-2.5 text-sm leading-tight disabled:opacity-50"
         >
-          <ArrowUpIcon size={16} /> Авах
+          <span className="flex items-center gap-2">
+            <ArrowUpIcon size={16} /> Авах
+          </span>
+          <span className="text-xs font-bold tabular-nums">
+            {ask ?? currentPrice ? (
+              <Num value={(ask ?? currentPrice)!} digits={2} suffix="₮" />
+            ) : (
+              "—"
+            )}
+          </span>
         </button>
       </div>
 

@@ -58,8 +58,9 @@ export interface ExchangeMovers {
   losers: ExchangeMover[];
 }
 
-/** A minute: the board changes as trades print, but not faster than a page. */
-const CACHE_MS = 60_000;
+/** The board changes as trades print; this only stops a burst of renders
+ * from asking the exchange several times for the same second. */
+const CACHE_MS = 10_000;
 let cache: { at: number; movers: ExchangeMovers } | null = null;
 let inFlight: Promise<ExchangeMovers> | null = null;
 
