@@ -1,4 +1,4 @@
-import { ulaanbaatarDay, ulaanbaatarTime } from "@/lib/day";
+import { ulaanbaatarTime } from "@/lib/day";
 
 export interface NewsListItem {
   title: string;
@@ -54,12 +54,12 @@ export default function NewsList({ items }: { items: NewsListItem[] }) {
  * Ulaanbaatar time, and a device in another zone would shift a closing
  * report onto the previous day.
  *
- * The exchange's own listing states a day and no time — the hour is only in
- * the article itself, which is a call per headline — so where a publisher
- * gives none, the moment the feed first carried the story stands in. That is
- * a fair reading of when it appeared, but only while the two fall on the
- * same day: a story we first saw a week after it ran gets no time rather
- * than one that would be wrong by a week.
+ * Every row carries a time. Where the publisher stated one it is theirs; the
+ * exchange's listing does not, so the feed fills those in from the article
+ * itself as they arrive, and anything still without one falls back to the
+ * moment the feed first carried it. Which of the three a row is showing is
+ * not marked: all three answer the same question a reader is asking, which
+ * is how long ago this was.
  */
 function formatWhen(date: string, addedAt?: string): string {
   if (!date) return "";
@@ -69,9 +69,7 @@ function formatWhen(date: string, addedAt?: string): string {
 
   if (addedAt) {
     const seen = new Date(addedAt);
-    if (!Number.isNaN(seen.getTime()) && ulaanbaatarDay(seen) === day) {
-      return `${day} ${ulaanbaatarTime(seen)}`;
-    }
+    if (!Number.isNaN(seen.getTime())) return `${day} ${ulaanbaatarTime(seen)}`;
   }
   return day;
 }

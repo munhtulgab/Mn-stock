@@ -93,6 +93,14 @@ export interface ExchangeArticle {
   title: string;
   /** YYYY-MM-DD as stated. */
   date: string;
+  /**
+   * `YYYY-MM-DDTHH:MM` when the article states an hour.
+   *
+   * The listing gives a day and nothing more; the hour a notice went out is
+   * only on the article itself, which is why a feed built from the listing
+   * alone has rows with no time on them.
+   */
+  publishedAt?: string;
   url: string;
   body: ArticleBlock[];
 }
@@ -225,11 +233,48 @@ export async function fetchExchangeArticle(
     ? (payload.text.get(reference[1]) ?? "")
     : (article.description ?? "");
 
+  const stated = clean(article.date);
   return {
     id,
     title: clean(article.title),
-    date: clean(article.date).slice(0, 10),
+    date: stated.slice(0, 10),
+    publishedAt: articleTime(stated),
     url: `${ARTICLE_BASE}/${id}`,
     body: articleBlocks(html),
   };
+}
+
+/** `2026-08-05 17:35:06` to `2026-08-05T17:35`, or nothing if no hour is given. */
+function articleTime(stated: string): string | undefined {
+  const match = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(stated);
+  return match ? `${match[1]}T${match[2]}` : undefined;
+}
+
+/** How many articles are asked for their hour at once. */
+const TIME_LOOKUP_CONCURRENCY = 6;
+
+/**
+ * The hour each of these articles went out, for the ones that state it.
+ *
+ * There is no lighter call than the article itself — the listing simply does
+ * not carry the time — so this is only ever asked about headlines that have
+ * just arrived, and the answer is kept with the story from then on.
+ */
+export async function fetchArticleTimes(
+  ids: number[],
+): Promise<Map<number, string>> {
+  const times = new Map<number, string>();
+  const queue = [...ids];
+
+  const worker = async () => {
+    for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+      const article = await fetchExchangeArticle(id).catch(() => null);
+      if (article?.publishedAt) times.set(id, article.publishedAt);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(TIME_LOOKUP_CONCURRENCY, queue.length) }, worker),
+  );
+  return times;
 }

@@ -1,8 +1,8 @@
 import type { Db } from "mongodb";
 import { getSettings } from "@/lib/settings";
 import { fetchNewsSources, type NewsHeadline } from "@/lib/mse/newsSources";
-import { fetchExchangeNews } from "@/lib/mse/exchangeNews";
-import { todayAndYesterday, ulaanbaatarDaysAgo } from "@/lib/day";
+import { fetchArticleTimes, fetchExchangeNews } from "@/lib/mse/exchangeNews";
+import { todayAndYesterday, ulaanbaatarDaysAgo, ulaanbaatarTime } from "@/lib/day";
 import { recordNotifications } from "@/lib/notifications";
 import { sendPushToAll } from "@/lib/push";
 import type { Security, User } from "@/lib/types";
@@ -113,7 +113,7 @@ const CACHE_KEY = "market";
 const CACHE_MS = 30 * 60 * 1000;
 
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 interface MarketNewsSnapshot {
   key: string;
@@ -161,9 +161,27 @@ function collect(
     }
   }
 
-  return items
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, MAX_ITEMS);
+  return items.sort(byNewest).slice(0, MAX_ITEMS);
+}
+
+/**
+ * When a story counts as having appeared, for ordering.
+ *
+ * Its own stamp where it has one, and otherwise the moment the feed first
+ * carried it — so a row with no stated hour still falls in a sensible place
+ * among the rows that have one, instead of sinking to the foot of its day.
+ */
+function moment(item: MarketNewsItem): string {
+  if (item.date.length > 10) return item.date;
+  if (!item.addedAt) return item.date;
+  const seen = new Date(item.addedAt);
+  return Number.isNaN(seen.getTime())
+    ? item.date
+    : `${item.date.slice(0, 10)}T${ulaanbaatarTime(seen)}`;
+}
+
+function byNewest(a: MarketNewsItem, b: MarketNewsItem): number {
+  return moment(b).localeCompare(moment(a));
 }
 
 /**
@@ -237,20 +255,22 @@ export async function refreshMarketNews(
       : Promise.resolve([]),
   ]);
 
-  const items = [
+  const exchangeItems = exchange
     // Exchange notices skip the relevance test — everything the exchange
     // publishes is market news by definition.
-    ...exchange
-      .filter((n) => n.date >= cutoff)
-      .map((n) => ({
-        title: n.title,
-        url: n.url,
-        source: "mse.mn",
-        date: n.date,
-      })),
+    .filter((n) => n.date >= cutoff)
+    .map((n) => ({
+      title: n.title,
+      url: n.url,
+      source: "mse.mn",
+      date: n.date,
+    }));
+
+  const items = [
+    ...(await withStatedTimes(exchangeItems, cached)),
     ...collect(results, cutoff, symbols),
   ]
-    .sort((a, b) => b.date.localeCompare(a.date))
+    .sort(byNewest)
     .slice(0, MAX_ITEMS);
 
   // A run that produced nothing is not an answer worth storing.
@@ -272,6 +292,65 @@ export async function refreshMarketNews(
     { upsert: true },
   );
   return items.length;
+}
+
+/**
+ * How many headlines are asked for their hour in one rebuild.
+ *
+ * The listing states a day and no more; the hour is only on the article, one
+ * call each. In the steady state that is the handful published since the last
+ * rebuild, because a stated time is carried across rebuilds like the arrival
+ * stamp. The cap is a ceiling on a first build rather than a budget: the
+ * listing itself only returns thirty, six go at a time, and the whole lot
+ * costs a couple of seconds inside a rebuild that already takes forty.
+ */
+const TIME_LOOKUPS_PER_RUN = 30;
+
+/** The article id out of `https://mse.mn/news/14850`. */
+function articleId(url: string): number | null {
+  const match = /\/news\/(\d+)(?:[/?#]|$)/.exec(url);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Fills in the hour each exchange notice went out.
+ *
+ * A time already known from a previous rebuild is reused; the newest of what
+ * is left is asked for, up to the cap. Anything still without one falls back
+ * to its arrival stamp when it is displayed and sorted.
+ */
+async function withStatedTimes(
+  items: MarketNewsItem[],
+  previous: MarketNewsSnapshot | null,
+): Promise<MarketNewsItem[]> {
+  const known = new Map(
+    (previous?.items ?? [])
+      .filter((item) => item.date.length > 10)
+      .map((item) => [storyKey(item), item.date]),
+  );
+
+  const carried = items.map((item) => {
+    const before = known.get(storyKey(item));
+    return before ? { ...item, date: before } : item;
+  });
+
+  const wanted = carried
+    .filter((item) => item.date.length === 10)
+    .map((item) => articleId(item.url))
+    .filter((id): id is number => id !== null)
+    .slice(0, TIME_LOOKUPS_PER_RUN);
+  if (wanted.length === 0) return carried;
+
+  const times = await fetchArticleTimes(wanted).catch((err) => {
+    console.error("article time lookup failed", err);
+    return new Map<number, string>();
+  });
+
+  return carried.map((item) => {
+    const id = articleId(item.url);
+    const at = id === null ? undefined : times.get(id);
+    return at ? { ...item, date: at } : item;
+  });
 }
 
 /**
