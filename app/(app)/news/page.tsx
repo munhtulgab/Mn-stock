@@ -3,6 +3,8 @@ import { getDb } from "@/lib/mongodb";
 import { getMarketNews, type MarketNewsItem } from "@/lib/marketNews";
 import NewsRefresher from "@/components/NewsRefresher";
 import NewsList from "@/components/NewsList";
+import MarketReviewCard from "@/components/MarketReviewCard";
+import { getMarketReviews } from "@/lib/marketReview";
 import { dayHeading } from "@/lib/day";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +20,10 @@ function groupByDay(items: MarketNewsItem[]): [string, MarketNewsItem[]][] {
 
 export default async function NewsPage() {
   const db = await getDb();
-  const { items, today, yesterday, stale } = await getMarketNews(db);
+  const [{ items, today, yesterday, stale }, reviews] = await Promise.all([
+    getMarketNews(db),
+    getMarketReviews(db),
+  ]);
   const days = groupByDay(items);
 
   return (
@@ -33,6 +38,23 @@ export default async function NewsPage() {
         </div>
         <NewsRefresher stale={stale} empty={items.length === 0} />
       </div>
+
+      {/* The period reviews lead: what the week and the month did is the
+          thing a reader wants before the day's headlines, and neither is
+          published by the exchange in a form that could be linked to. */}
+      {(reviews.week || reviews.month) && (
+        <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
+          {reviews.week && (
+            <MarketReviewCard title="7 хоногийн зах зээлийн тойм" review={reviews.week} />
+          )}
+          {reviews.month && (
+            <MarketReviewCard
+              title="Өнгөрсөн сарын зах зээлийн тойм"
+              review={reviews.month}
+            />
+          )}
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-muted space-y-2">
