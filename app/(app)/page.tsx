@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import {
   applyLiveQuotes,
@@ -11,6 +12,8 @@ import type { ExchangeMover } from "@/lib/mse/movers";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getMarketIndices } from "@/lib/indices";
+import { checkSignalChangesIfDue } from "@/lib/signalHistory";
+import { getMarketNews, refreshMarketNews } from "@/lib/marketNews";
 import { getSettings } from "@/lib/settings";
 import StockAvatar from "@/components/StockAvatar";
 import SignalBadge from "@/components/SignalBadge";
@@ -48,6 +51,18 @@ export default async function HomePage() {
   ]);
   const { rows, session, board } = await applyLiveQuotes(storedRows, {
     extraCaCerts: settings.extraCaCerts,
+  });
+
+  // Both after the page has been sent. Signals turn during a session, not at
+  // the hour the nightly cron happens to run, and news is published all day;
+  // waiting for either would have meant hearing about it a day late, or only
+  // if somebody happened to open the news tab. Each is gated — the signal
+  // check to once a quarter of an hour, the news to its own half-hour cache
+  // — so a busy morning does not run them over and over.
+  after(async () => {
+    await checkSignalChangesIfDue(db);
+    const { stale } = await getMarketNews(db);
+    if (stale) await refreshMarketNews(db);
   });
 
   const displayName = user?.fullName || user?.username || "";

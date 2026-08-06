@@ -99,6 +99,26 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
     return { changes, notified: false, smsSent: 0 };
   }
 
+  // Every change is written to the in-app feed. The setting below decides
+  // what is worth interrupting someone with — a push, an SMS — not what is
+  // worth recording: a signal that moved to ХҮЛЭЭХ is still something the
+  // reader went looking for and did not find.
+  await recordNotifications(
+    db,
+    changes.map((c) => ({
+      title: `${c.symbol}: ${SIGNAL_LABELS[c.to]} дохио`,
+      body:
+        c.from === "NEW"
+          ? `${c.name} — шинэ дохио`
+          : `${c.name} — ${SIGNAL_LABELS[c.from]} байснаа ${SIGNAL_LABELS[c.to]} боллоо`,
+      url: `/stock/${c.symbol}`,
+      kind: "signal" as const,
+      symbol: c.symbol,
+      signal: c.to,
+      previousSignal: c.from,
+    })),
+  );
+
   // Operators pick which transitions are worth interrupting people for.
   const { notifications } = await getSettings(db);
   const alerting = changes.filter((c) => notifications.signals.includes(c.to));
@@ -115,25 +135,8 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
 
   const title = `MSE: ${alerting.length} дохио шинэчлэгдлээ`;
 
-  // The phone gets one banner — nobody wants twelve — but the in-app feed
-  // gets a row per company, because a row is something you tap, and what you
-  // want when you tap "APU: ЗАРАХ" is APU's page, not a list of everything.
-  await recordNotifications(
-    db,
-    alerting.map((c) => ({
-      title: `${c.symbol}: ${SIGNAL_LABELS[c.to]} дохио`,
-      body:
-        c.from === "NEW"
-          ? `${c.name} — шинэ дохио`
-          : `${c.name} — ${SIGNAL_LABELS[c.from]} байснаа ${SIGNAL_LABELS[c.to]} боллоо`,
-      url: `/stock/${c.symbol}`,
-      kind: "signal" as const,
-      symbol: c.symbol,
-      signal: c.to,
-      previousSignal: c.from,
-    })),
-  );
-
+  // The phone gets one banner — nobody wants twelve; the feed above has a
+  // row per company, because a row is something you tap.
   const [result, smsSent] = await Promise.all([
     notifications.pushEnabled
       ? sendPushToAll(db, {
@@ -155,4 +158,58 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
     smsSent,
     pushErrors: result.errors.length > 0 ? result.errors : undefined,
   };
+}
+
+/** How often the market is re-checked for signal changes. */
+const CHECK_INTERVAL_MS = 15 * 60 * 1000;
+
+interface SignalCheckMarker {
+  key: string;
+  checkedAt: Date;
+}
+
+/**
+ * Runs the check unless it has just run.
+ *
+ * The daily sync used to be the only caller, which meant a signal that
+ * turned during a session was reported the next time the cron fired — up to
+ * a day later, and long after the badge on screen had already changed. The
+ * home page asks for this after it has answered, so the market is re-checked
+ * whenever somebody is looking, and the marker keeps that to once a quarter
+ * of an hour however many people are.
+ */
+export async function checkSignalChangesIfDue(db: Db): Promise<boolean> {
+  const marker = db.collection<SignalCheckMarker>("signalCheckMarker");
+  // Claimed with the same condition that reads it, so two requests arriving
+  // together cannot both decide it is their turn.
+  const claimed = await marker.updateOne(
+    {
+      key: "main",
+      $or: [
+        { checkedAt: { $lt: new Date(Date.now() - CHECK_INTERVAL_MS) } },
+        { checkedAt: { $exists: false } },
+      ],
+    },
+    { $set: { key: "main", checkedAt: new Date() } },
+    { upsert: false },
+  );
+  if (claimed.matchedCount === 0) {
+    // Either it ran recently, or there is no marker yet to claim.
+    const created = await marker
+      .updateOne(
+        { key: "main" },
+        { $setOnInsert: { key: "main", checkedAt: new Date() } },
+        { upsert: true },
+      )
+      .catch(() => null);
+    if (!created?.upsertedCount) return false;
+  }
+
+  try {
+    await checkSignalChangesAndNotify(db);
+    return true;
+  } catch (err) {
+    console.error("scheduled signal check failed", err);
+    return false;
+  }
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import StockAvatar from "./StockAvatar";
 import SignalBadge from "./SignalBadge";
-import { BellIcon, ChevronRightIcon } from "./icons";
+import { BellIcon, ChevronRightIcon, NewsIcon } from "./icons";
 import type { FeedNotification } from "@/lib/notifications";
 
 /**
@@ -36,7 +36,7 @@ function Row({ n }: { n: FeedNotification }) {
           <StockAvatar symbol={n.symbol} size={38} />
         ) : (
           <div className="w-[38px] h-[38px] rounded-full bg-brand-light text-brand flex items-center justify-center">
-            <BellIcon />
+            {n.kind === "news" ? <NewsIcon /> : <BellIcon />}
           </div>
         )}
         {n.isNew && (

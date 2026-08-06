@@ -3,6 +3,8 @@ import { getSettings } from "@/lib/settings";
 import { fetchNewsSources, type NewsHeadline } from "@/lib/mse/newsSources";
 import { fetchExchangeNews } from "@/lib/mse/exchangeNews";
 import { todayAndYesterday, ulaanbaatarDaysAgo } from "@/lib/day";
+import { recordNotifications } from "@/lib/notifications";
+import { sendPushToAll } from "@/lib/push";
 import type { Security } from "@/lib/types";
 
 /**
@@ -193,6 +195,10 @@ export async function refreshMarketNews(
 ): Promise<number> {
   const cutoff = ulaanbaatarDaysAgo(WINDOW_DAYS);
 
+  const cached = await db
+    .collection<MarketNewsSnapshot>("marketNewsSnapshots")
+    .findOne({ key: CACHE_KEY });
+
   const settings = await getSettings(db);
   const listed = await db
     .collection<Security>("securities")
@@ -242,6 +248,8 @@ export async function refreshMarketNews(
   // A run that produced nothing is not an answer worth storing.
   if (items.length === 0) return 0;
 
+  await announce(db, cached, items);
+
   await db.collection<MarketNewsSnapshot>("marketNewsSnapshots").updateOne(
     { key: CACHE_KEY },
     {
@@ -255,4 +263,58 @@ export async function refreshMarketNews(
     { upsert: true },
   );
   return items.length;
+}
+
+/** Headlines to name in one push before it becomes a list nobody reads. */
+const ANNOUNCE_LIMIT = 5;
+
+/**
+ * Tells the reader what has just been published.
+ *
+ * A story is new if it was not in the feed last time this ran — matched on
+ * the same key the feed dedupes by, so the same story arriving from a second
+ * publisher is not announced twice. The very first build announces nothing:
+ * thirty days of headlines are not news to somebody opening the app.
+ */
+async function announce(
+  db: Db,
+  previous: MarketNewsSnapshot | null,
+  items: MarketNewsItem[],
+): Promise<void> {
+  if (!previous || previous.items.length === 0) return;
+
+  const known = new Set(
+    previous.items.map((i) => `${i.url}|${i.title.slice(0, 80)}`),
+  );
+  const fresh = items.filter(
+    (i) => !known.has(`${i.url}|${i.title.slice(0, 80)}`),
+  );
+  if (fresh.length === 0) return;
+
+  await recordNotifications(
+    db,
+    fresh.slice(0, ANNOUNCE_LIMIT).map((item) => ({
+      title: item.title,
+      body: `${item.source} · ${item.date.slice(0, 10)}`,
+      url: item.url,
+      kind: "news" as const,
+    })),
+  );
+
+  const { notifications } = await getSettings(db);
+  if (!notifications.pushEnabled) return;
+
+  const [first] = fresh;
+  await sendPushToAll(db, {
+    title:
+      fresh.length === 1
+        ? "Шинэ мэдээ"
+        : `${fresh.length} шинэ мэдээ`,
+    body: first.title.slice(0, 120),
+    url: "/news",
+    tag: "mse-market-news",
+  }).catch((err) => {
+    console.error("news push failed", err);
+    return null;
+  });
 }

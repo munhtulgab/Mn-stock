@@ -144,7 +144,7 @@ export interface AppNotification {
   title: string;
   body: string;
   url?: string;
-  kind: "signal" | "system";
+  kind: "signal" | "news" | "system";
   createdAt: Date;
   /**
    * Set on signal alerts, so the feed can show the company the way the rest
