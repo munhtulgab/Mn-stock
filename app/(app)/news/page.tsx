@@ -13,6 +13,7 @@ import NewsList from "@/components/NewsList";
 import MarketReviewCard from "@/components/MarketReviewCard";
 import TradeReportCard from "@/components/TradeReportCard";
 import ReviewTabs, { type ReviewTab } from "@/components/ReviewTabs";
+import ReportSlider from "@/components/ReportSlider";
 import { getMarketReviews } from "@/lib/marketReview";
 import { getTradeReports, type TradeReport } from "@/lib/tradeReports";
 import type { MarketReview } from "@/lib/marketReview";
@@ -30,29 +31,38 @@ function groupByDay(items: MarketNewsItem[]): [string, MarketNewsItem[]][] {
 }
 
 /**
- * One period's tab: the figures worked out from stored closes, and under
- * them the exchange's own report for the same period where it publishes one.
+ * One period's tab: the figures worked out from stored closes, and beside
+ * them what the exchange itself published about the same period — which is
+ * often more than one article, so that side is a slider.
  */
 function reviewTab(
   label: string,
   title: string,
   review: MarketReview | null,
-  report: TradeReport | null,
+  reports: TradeReport[],
 ): ReviewTab | null {
-  if (!review && !report) return null;
+  if (!review && reports.length === 0) return null;
   return {
     label,
     content: (
-      // Side by side only when there are two of them: the month has no report
+      // Side by side only when there are two of them: the month has nothing
       // of the exchange's own, and one card in a two-column grid is a card
-      // beside a hole.
+      // beside a hole. Stretched rather than top-aligned, so the two end
+      // level instead of one trailing off below the other.
       <div
-        className={`space-y-4 lg:space-y-0 lg:grid lg:gap-4 lg:items-start ${
-          review && report ? "lg:grid-cols-2" : "lg:grid-cols-1"
+        className={`space-y-4 lg:space-y-0 lg:grid lg:gap-4 lg:items-stretch ${
+          review && reports.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"
         }`}
       >
         {review && <MarketReviewCard title={title} review={review} />}
-        {report && <TradeReportCard report={report} />}
+        {reports.length > 0 && (
+          <ReportSlider
+            labels={reports.map((report) => report.title)}
+            slides={reports.map((report) => (
+              <TradeReportCard key={report.id} report={report} />
+            ))}
+          />
+        )}
       </div>
     ),
   };
@@ -60,14 +70,15 @@ function reviewTab(
 
 export default async function NewsPage() {
   const db = await getDb();
-  const [user, { items, today, yesterday, stale }, reviews] = await Promise.all([
+  const [user, { items, today, yesterday, stale }] = await Promise.all([
     getCurrentUser(db),
     getMarketNews(db),
-    getMarketReviews(db),
   ]);
-  // Needs the feed, so it cannot join the group above: the reports it reads
-  // are two of the headlines already in it.
+  // The reports come out of the feed — they are headlines already in it —
+  // and the weekly one then says which week the weekly review is about, so
+  // the card and the article beside it cover the same five days.
   const reports = await getTradeReports(db, items);
+  const reviews = await getMarketReviews(db, reports.weekly[0]?.date);
   const days = groupByDay(items);
   const fresh = countNewSince(items, user?.newsSeenAt);
 
@@ -96,7 +107,7 @@ export default async function NewsPage() {
       reports.daily,
     ),
     reviewTab("7 хоног", "7 хоногийн зах зээлийн тойм", reviews.week, reports.weekly),
-    reviewTab("Өнгөрсөн сар", "Өнгөрсөн сарын зах зээлийн тойм", reviews.month, null),
+    reviewTab("Өнгөрсөн сар", "Өнгөрсөн сарын зах зээлийн тойм", reviews.month, []),
   ].filter((tab): tab is ReviewTab => tab !== null);
 
   return (
@@ -124,11 +135,12 @@ export default async function NewsPage() {
           </Link>
         </div>
       ) : (
-        // Two columns of days on a wide screen; the days keep their order
-        // down the left column and then the right.
-        <div className="space-y-5 lg:space-y-0 lg:columns-2 lg:gap-5">
+        // One column at every width: two columns put a Monday beside a
+        // Thursday, and a feed that is read newest-first should be read
+        // straight down.
+        <div className="space-y-5">
         {days.map(([day, dayItems]) => (
-          <section key={day} className="lg:mb-5 lg:break-inside-avoid">
+          <section key={day}>
             <h2 className="text-xs font-semibold text-app-muted mb-2">
               {dayHeading(day, today, yesterday)}
             </h2>

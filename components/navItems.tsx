@@ -1,17 +1,18 @@
 /**
  * The app's five destinations, plus the alert feed.
  *
- * Shared by the phone's tab bar and the sidebar a wide screen gets instead,
- * so the two can never drift into disagreeing about what the app contains or
- * which section you are standing in.
+ * The feed is not one of the tabs: it is reached from the bell every page
+ * header carries, which is a place a reader already looks for it. Keeping it
+ * in the list anyway means {@link isActive} can say the home tab owns it,
+ * rather than every page having to know.
  */
 
 export interface NavItem {
   href: string;
   label: string;
   icon: () => React.ReactElement;
-  /** Sidebar only: the phone reaches this from the bell in the header. */
-  sidebarOnly?: boolean;
+  /** Reached from the bell in the header rather than from the bar. */
+  headerOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -19,7 +20,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/discover", label: "Зах зээл", icon: TrendIcon },
   { href: "/portfolio", label: "Багц", icon: CertificateIcon },
   { href: "/news", label: "Мэдээ", icon: NewsIcon },
-  { href: "/notifications", label: "Мэдэгдэл", icon: BellIcon, sidebarOnly: true },
+  { href: "/notifications", label: "Мэдэгдэл", icon: BellIcon, headerOnly: true },
   { href: "/profile", label: "Профайл", icon: PersonIcon },
 ];
 
@@ -27,14 +28,13 @@ export const NAV_ITEMS: NavItem[] = [
  * Which tab owns a page.
  *
  * Pages that are a section's second screen light that section: the order
- * history belongs to the portfolio, a company's page to the market list. The
- * alert feed is its own entry where there is room for one, and otherwise
- * belongs to the home tab, whose header carries the bell that opens it.
+ * history belongs to the portfolio, a company's page to the market list, and
+ * the alert feed to home, whose header carries the bell that opens it.
  */
-export function isActive(pathname: string, href: string, hasBell: boolean): boolean {
+export function isActive(pathname: string, href: string): boolean {
   switch (href) {
     case "/":
-      return pathname === "/" || (!hasBell && pathname.startsWith("/notifications"));
+      return pathname === "/" || pathname.startsWith("/notifications");
     case "/discover":
       return pathname.startsWith("/discover") || pathname.startsWith("/stock");
     case "/portfolio":

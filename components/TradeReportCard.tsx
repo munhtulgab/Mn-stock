@@ -14,7 +14,7 @@ export default function TradeReportCard({ report }: { report: TradeReport }) {
   const [lead, ...rest] = report.body;
 
   return (
-    <section className="rounded-2xl border border-app-border bg-app-card p-4 space-y-2">
+    <section className="rounded-2xl border border-app-border bg-app-card p-4 h-full space-y-2">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-sm font-semibold text-app-text">{report.title}</h2>
         <span className="text-[11px] text-app-muted tabular-nums whitespace-nowrap">

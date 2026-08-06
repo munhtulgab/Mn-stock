@@ -3,6 +3,7 @@ import {
   fetchExchangeArticle,
   type ArticleBlock,
 } from "@/lib/mse/exchangeNews";
+import { mondayOf, shiftDays } from "@/lib/day";
 import type { MarketNewsItem } from "@/lib/marketNews";
 
 /**
@@ -15,7 +16,12 @@ import type { MarketNewsItem } from "@/lib/marketNews";
  * which is a poor place to leave the one item on the page that answers "what
  * happened today".
  *
- * The article's body is a second call, so it is fetched once when the report
+ * A period is rarely one article: the day the trading report comes out is
+ * usually also the day the primary bond auction is reported, and both belong
+ * beside the day's figures. So each period is a small set, in the order they
+ * should be read, with the report itself first.
+ *
+ * An article's body is a second call, so it is fetched once when the article
  * first appears and kept: the exchange does not revise these.
  */
 
@@ -29,8 +35,10 @@ export interface TradeReport {
 }
 
 export interface TradeReports {
-  daily: TradeReport | null;
-  weekly: TradeReport | null;
+  /** The last session's articles, its trading report first. */
+  daily: TradeReport[];
+  /** The reviewed week's articles, the review first. */
+  weekly: TradeReport[];
 }
 
 /**
@@ -43,19 +51,22 @@ const PATTERNS = {
   weekly: /ДОЛОО\s+ХОНОГИЙН\s+АРИЛЖААНЫ\s+ТОЙМ/i,
 } as const;
 
+/** Enough for a period to have more than one side; past it, it is a feed. */
+const PER_PERIOD = 3;
+
 const SNAPSHOT_KEY = "tradeReports";
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
- * How long a page render will wait for a report it has not read before.
- * Past it the page shows the report it already had — a day-old report beats
+ * How long a page render will wait for articles it has not read before.
+ * Past it the page shows the reports it already had — a day-old report beats
  * a page that hangs on the exchange being slow.
  */
 const FETCH_BUDGET_MS = 4_000;
 
 /**
- * How long a report that could not be read is left alone.
+ * How long an article that could not be read is left alone.
  *
  * Without it, an exchange that is down costs every single page render the
  * budget above, because nothing was stored to say the attempt had been made.
@@ -76,13 +87,46 @@ function articleId(url: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
-function pick(items: MarketNewsItem[], pattern: RegExp): number | null {
-  // Items arrive newest first. Only the exchange's own copy carries the
-  // report body; a syndicated headline of the same name does not.
-  const item = items.find(
-    (candidate) => candidate.source === "mse.mn" && pattern.test(candidate.title),
-  );
-  return item ? articleId(item.url) : null;
+/** Only the exchange's own copy carries a body we can read. */
+function exchangeItems(items: MarketNewsItem[]): MarketNewsItem[] {
+  return items.filter((item) => item.source === "mse.mn");
+}
+
+function idsOf(items: MarketNewsItem[]): number[] {
+  return items
+    .map((item) => articleId(item.url))
+    .filter((id): id is number => id !== null)
+    .slice(0, PER_PERIOD);
+}
+
+/** The last session's trading report, and whatever else it was published with. */
+function selectDaily(items: MarketNewsItem[]): number[] {
+  const feed = exchangeItems(items);
+  const lead = feed.find((item) => PATTERNS.daily.test(item.title));
+  if (!lead) return [];
+  const day = lead.date.slice(0, 10);
+  return idsOf([
+    lead,
+    ...feed.filter((item) => item !== lead && item.date.slice(0, 10) === day),
+  ]);
+}
+
+/** The weekly review, and the week's other news — minus its daily reports. */
+function selectWeekly(items: MarketNewsItem[]): number[] {
+  const feed = exchangeItems(items);
+  const lead = feed.find((item) => PATTERNS.weekly.test(item.title));
+  if (!lead) return [];
+  const from = mondayOf(lead.date.slice(0, 10));
+  const to = shiftDays(from, 6);
+  return idsOf([
+    lead,
+    ...feed.filter((item) => {
+      const day = item.date.slice(0, 10);
+      // The daily reports of that week are the daily tab's business, and five
+      // of them would crowd out everything else the week held.
+      return item !== lead && day >= from && day <= to && !PATTERNS.daily.test(item.title);
+    }),
+  ]);
 }
 
 async function readArticle(id: number): Promise<TradeReport | null> {
@@ -96,7 +140,8 @@ async function readArticle(id: number): Promise<TradeReport | null> {
     }),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), FETCH_BUDGET_MS)),
   ]);
-  // A report with no body is a headline we already had.
+
+  // An article with no body is a headline we already had.
   if (!article || article.body.length === 0) {
     failedAt.set(id, Date.now());
     return null;
@@ -109,7 +154,7 @@ async function readArticle(id: number): Promise<TradeReport | null> {
  * The reports behind the headlines already in `items`.
  *
  * Costs nothing in the steady state: the ids in the feed are the ids that
- * were stored, so no call is made. When the exchange publishes a new report
+ * were stored, so no call is made. When the exchange publishes something new
  * — once a trading day — its body is read and kept.
  */
 export async function getTradeReports(
@@ -121,31 +166,37 @@ export async function getTradeReports(
   const stored: TradeReports =
     cached?.schemaVersion === SCHEMA_VERSION
       ? cached.reports
-      : { daily: null, weekly: null };
+      : { daily: [], weekly: [] };
 
-  const wanted = {
-    daily: pick(items, PATTERNS.daily),
-    weekly: pick(items, PATTERNS.weekly),
-  };
+  const held = new Map(
+    [...stored.daily, ...stored.weekly].map((report) => [report.id, report]),
+  );
+  let fetched = false;
 
-  const resolve = async (
-    kind: keyof TradeReports,
-  ): Promise<{ report: TradeReport | null; fetched: boolean }> => {
-    const id = wanted[kind];
-    const held = stored[kind];
-    if (id === null) return { report: held, fetched: false };
-    if (held?.id === id) return { report: held, fetched: false };
-
-    const fresh = await readArticle(id);
-    // Falling back to what we had: the card states its own date, so an older
+  const resolve = async (ids: number[], previous: TradeReport[]) => {
+    if (ids.length === 0) return previous;
+    const reports = await Promise.all(
+      ids.map(async (id) => {
+        const have = held.get(id);
+        if (have) return have;
+        const fresh = await readArticle(id);
+        if (fresh) fetched = true;
+        return fresh;
+      }),
+    );
+    const kept = reports.filter((report): report is TradeReport => report !== null);
+    // Falling back to what we had: a card states its own date, so an older
     // report on the page is honest in a way an empty one is not.
-    return { report: fresh ?? held, fetched: fresh !== null };
+    return kept.length > 0 ? kept : previous;
   };
 
-  const [daily, weekly] = await Promise.all([resolve("daily"), resolve("weekly")]);
-  const reports: TradeReports = { daily: daily.report, weekly: weekly.report };
+  const [daily, weekly] = await Promise.all([
+    resolve(selectDaily(items), stored.daily),
+    resolve(selectWeekly(items), stored.weekly),
+  ]);
+  const reports: TradeReports = { daily, weekly };
 
-  if (daily.fetched || weekly.fetched) {
+  if (fetched) {
     await snapshots.updateOne(
       { key: SNAPSHOT_KEY },
       {

@@ -17,10 +17,10 @@ function PendingDot() {
   );
 }
 
-/** The phone's tab bar. Wide screens get {@link SideNav} instead. */
+/** The app's tab bar, at every width. */
 export default function BottomNav() {
   const pathname = usePathname();
-  const items = NAV_ITEMS.filter((item) => !item.sidebarOnly);
+  const items = NAV_ITEMS.filter((item) => !item.headerOnly);
 
   return (
     /* Fixed, not sticky. A sticky bar is positioned against its containing
@@ -29,10 +29,10 @@ export default function BottomNav() {
        mid-screen, or cut, for as long as the transition lasts. Fixed takes
        it out of the scroll altogether; the shell pads the content by the
        height it occupies. */
-    <nav className="lg:hidden fixed inset-x-0 bottom-0 z-30 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+26px)] bg-linear-to-t from-app-bg via-app-bg to-transparent">
+    <nav className="fixed inset-x-0 bottom-0 z-30 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+26px)] bg-linear-to-t from-app-bg via-app-bg to-transparent">
       <div className="mx-auto max-w-md flex items-center justify-between gap-1 rounded-full bg-linear-to-b from-nav-surface-hi to-nav-surface p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_1px_rgba(0,0,0,0.35)]">
         {items.map(({ href, label, icon: Icon }) => {
-          const active = isActive(pathname, href, false);
+          const active = isActive(pathname, href);
           return (
             <Link
               key={href}

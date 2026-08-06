@@ -19,7 +19,7 @@ export default function MarketReviewCard({
   review: MarketReview;
 }) {
   return (
-    <section className="rounded-2xl border border-app-border bg-app-card p-4 space-y-3">
+    <section className="rounded-2xl border border-app-border bg-app-card p-4 h-full space-y-3">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-sm font-semibold text-app-text">{title}</h2>
         <span className="text-[11px] text-app-muted tabular-nums whitespace-nowrap">

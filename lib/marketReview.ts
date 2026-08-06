@@ -1,9 +1,14 @@
 import type { Db } from "mongodb";
 import { fetchIndexSeries, INDEX_KEYS } from "@/lib/mse/indices";
+import { mondayOf, previousMonth, shiftDays, ulaanbaatarDay } from "@/lib/day";
 import type { PricePoint, Security } from "@/lib/types";
 
 /**
  * What the market did over the last session, over a week and over a month.
+ *
+ * The periods are the calendar's, not a rolling count of days: the week is
+ * the one the exchange publishes its own review of, and "өнгөрсөн сар" is
+ * last month rather than the last thirty days.
  *
  * The exchange publishes a daily and a weekly trading report as articles and
  * nothing monthly at all, so all three are worked out here from the closes
@@ -53,27 +58,21 @@ export interface MarketReviews {
   month: MarketReview | null;
 }
 
-const WEEK_DAYS = 7;
-const MONTH_DAYS = 30;
 /** How many movers each side of a review names. */
 const TOP = 3;
 
 const SNAPSHOT_KEY = "marketReviews";
 const CACHE_MS = 30 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 interface ReviewSnapshot {
   key: string;
   schemaVersion?: number;
   reviews: MarketReviews;
+  /** The week these were built for; a different one is a different review. */
+  weekOf?: string;
   computedAt: Date;
-}
-
-function daysBefore(date: string, days: number): string {
-  return new Date(Date.parse(`${date}T00:00:00Z`) - days * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
 }
 
 type Close = { date: string; close: number; turnover: number };
@@ -141,41 +140,57 @@ function buildReview(
 
 type IndexSeries = Awaited<ReturnType<typeof fetchIndexSeries>>;
 
-/** Where each index stood at the start of the window, and where it stands now. */
-function indexMoves(series: IndexSeries, from: string): ReviewIndex[] {
+/** Where each index stood either side of the window. */
+function indexMoves(series: IndexSeries, from: string, to: string): ReviewIndex[] {
   return INDEX_KEYS.flatMap(({ key, label }) => {
     const points = series[key];
     if (!points || points.length === 0) return [];
+    const inside = points.filter((p) => p.date >= from && p.date <= to);
+    if (inside.length === 0) return [];
     const before = points.filter((p) => p.date < from).at(-1);
-    const inside = points.filter((p) => p.date >= from);
-    const base = before?.value ?? inside[0]?.value;
-    const last = points.at(-1)!.value;
-    if (!base || !(base > 0)) return [];
+    const base = before?.value ?? inside[0].value;
+    // The window's own last point, not the newest one there is: a month that
+    // closed in July did not end at today's level.
+    const last = inside.at(-1)!.value;
+    if (!(base > 0) || !(last > 0)) return [];
     return [
       { label, from: base, to: last, changePct: ((last - base) / base) * 100 },
     ];
   });
 }
 
-/** Reads the stored reviews, rebuilding them when they have gone stale. */
-export async function getMarketReviews(db: Db): Promise<MarketReviews> {
+/**
+ * Reads the stored reviews, rebuilding them when they have gone stale.
+ *
+ * `weekOf` is any date inside the week the weekly review should cover —
+ * in practice the date on the exchange's own weekly report, so the card and
+ * the article beside it are about the same five days. Without it the last
+ * week that has fully passed is used.
+ */
+export async function getMarketReviews(
+  db: Db,
+  weekOf?: string,
+): Promise<MarketReviews> {
   const snapshots = db.collection<ReviewSnapshot>("marketSnapshots");
   const cached = await snapshots.findOne({ key: SNAPSHOT_KEY });
+  const week = weekStart(weekOf);
   if (
     cached?.schemaVersion === SCHEMA_VERSION &&
+    cached.weekOf === week &&
     Date.now() - cached.computedAt.getTime() < CACHE_MS
   ) {
     return cached.reviews;
   }
 
   try {
-    const reviews = await computeMarketReviews(db);
+    const reviews = await computeMarketReviews(db, weekOf);
     await snapshots.updateOne(
       { key: SNAPSHOT_KEY },
       {
         $set: {
           key: SNAPSHOT_KEY,
           reviews,
+          weekOf: week,
           computedAt: new Date(),
           schemaVersion: SCHEMA_VERSION,
         },
@@ -189,9 +204,20 @@ export async function getMarketReviews(db: Db): Promise<MarketReviews> {
   }
 }
 
-export async function computeMarketReviews(db: Db): Promise<MarketReviews> {
-  // A little more than the longest window, so the month has a close before it
-  // to measure from even across a long holiday.
+/**
+ * The Monday of the week a review covers: the one holding `weekOf` when the
+ * exchange has published a review, and otherwise the last week that has
+ * fully passed — this week is still happening and is not a review yet.
+ */
+function weekStart(weekOf?: string): string {
+  const today = ulaanbaatarDay(new Date());
+  return weekOf ? mondayOf(weekOf) : shiftDays(mondayOf(today), -7);
+}
+
+export async function computeMarketReviews(
+  db: Db,
+  weekOf?: string,
+): Promise<MarketReviews> {
   const [newest] = await db
     .collection<PricePoint>("prices")
     .find({}, { projection: { _id: 0, date: 1 } })
@@ -201,7 +227,14 @@ export async function computeMarketReviews(db: Db): Promise<MarketReviews> {
   if (!newest) return { day: null, week: null, month: null };
 
   const to = newest.date;
-  const window = daysBefore(to, MONTH_DAYS + 20);
+  // Calendar periods rather than rolling windows: "өнгөрсөн сар" is July,
+  // and the week is the one the exchange reviews, not the last seven days.
+  const weekFrom = weekStart(weekOf);
+  const weekTo = shiftDays(weekFrom, 6);
+  const month = previousMonth(ulaanbaatarDay(new Date()));
+  // Far enough back that the earliest window has a close before it to be
+  // measured from, even across a long holiday.
+  const window = shiftDays(month.from, -40);
 
   const [rows, securities] = await Promise.all([
     db
@@ -226,8 +259,6 @@ export async function computeMarketReviews(db: Db): Promise<MarketReviews> {
   }
   const names = new Map(securities.map((s) => [s.companyCode, s]));
 
-  const weekFrom = daysBefore(to, WEEK_DAYS - 1);
-  const monthFrom = daysBefore(to, MONTH_DAYS - 1);
   // One read of the index histories for all three windows: asking again is
   // another chance for an index to drop out, and the cards then disagree
   // about which indices exist.
@@ -239,8 +270,20 @@ export async function computeMarketReviews(db: Db): Promise<MarketReviews> {
   return {
     // The last session on its own: measured from the close before it, which
     // is what makes it the day's change rather than the day's level.
-    day: buildReview(byCompany, names, to, to, indexMoves(series, to)),
-    week: buildReview(byCompany, names, weekFrom, to, indexMoves(series, weekFrom)),
-    month: buildReview(byCompany, names, monthFrom, to, indexMoves(series, monthFrom)),
+    day: buildReview(byCompany, names, to, to, indexMoves(series, to, to)),
+    week: buildReview(
+      byCompany,
+      names,
+      weekFrom,
+      weekTo,
+      indexMoves(series, weekFrom, weekTo),
+    ),
+    month: buildReview(
+      byCompany,
+      names,
+      month.from,
+      month.to,
+      indexMoves(series, month.from, month.to),
+    ),
   };
 }

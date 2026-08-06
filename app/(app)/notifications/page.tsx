@@ -44,9 +44,9 @@ export default async function NotificationsPage() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-5 lg:space-y-0 lg:columns-2 lg:gap-5">
+        <div className="space-y-5">
         {groups.map((group) => (
-          <section key={group.day} className="lg:mb-5 lg:break-inside-avoid">
+          <section key={group.day}>
             <h2 className="text-xs font-semibold text-app-muted mb-2">
               {group.heading}
             </h2>

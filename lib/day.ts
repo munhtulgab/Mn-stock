@@ -102,3 +102,33 @@ export function todayAndYesterday(): { today: string; yesterday: string } {
     yesterday: ulaanbaatarDay(new Date(now - 86_400_000)),
   };
 }
+
+/* -------------------------------------------------------------------------
+   Calendar arithmetic on `YYYY-MM-DD`.
+
+   Done on the digits, in UTC, because these are already Ulaanbaatar days:
+   handing them to a local Date would shift a few of them by one.
+   ------------------------------------------------------------------------- */
+
+export function shiftDays(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+/** The Monday of the week a date falls in. */
+export function mondayOf(date: string): string {
+  // getUTCDay is 0 on Sunday, which belongs to the week that started six days
+  // earlier rather than to the one about to start.
+  const weekday = (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7;
+  return shiftDays(date, -weekday);
+}
+
+/** First and last day of the calendar month before the one `date` is in. */
+export function previousMonth(date: string): { from: string; to: string } {
+  const [year, month] = date.split("-").map(Number);
+  return {
+    from: new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 10),
+    to: new Date(Date.UTC(year, month - 1, 0)).toISOString().slice(0, 10),
+  };
+}
