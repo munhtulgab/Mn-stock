@@ -159,7 +159,7 @@ export default async function StockDetailPage({
           swap with `order` rather than by writing them twice. It starts at
           768px so an iPad held upright gets it too, rather than only when it
           is turned on its side. */}
-      <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-3 md:gap-4 md:items-start">
+      <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-3 md:gap-4 md:items-stretch">
       <div className="md:order-1 md:col-span-3 rounded-2xl border border-app-border bg-app-card p-4">
         <div className="flex items-center gap-3 mb-3">
           <SignalBadge signal={recommendation.signal} />
@@ -183,8 +183,17 @@ export default async function StockDetailPage({
         </div>
       )}
 
-      {/* The three panels of figures, in the board's last third. */}
-      <div className="md:order-4 grid gap-4 sm:grid-cols-2 md:grid-cols-1">
+      {/* The three panels of figures, in the board's last third. Held to its
+          own height rather than stretched: it is what sets the row, and the
+          news beside it is cut to fit. */}
+      <div className="md:order-4 md:self-start">
+        {/* Mirrors the news heading opposite — same type, same margin — so the
+            first card here starts level with the first card there rather than
+            with the words above it, and stays level if the heading changes. */}
+        <div aria-hidden className="hidden md:block text-sm font-semibold mb-3">
+          &nbsp;
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-1">
         <div className="rounded-2xl border border-app-border bg-app-card p-4">
           <h2 className="text-sm font-semibold text-app-text mb-3">Техник үзүүлэлт</h2>
           <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
@@ -225,11 +234,12 @@ export default async function StockDetailPage({
           )}
         </div>
 
-        <MarketInfoPanel
-          symbol={security.symbol}
-          weekHigh52={recommendation.indicators.weekHigh52}
-          weekLow52={recommendation.indicators.weekLow52}
-        />
+          <MarketInfoPanel
+            symbol={security.symbol}
+            weekHigh52={recommendation.indicators.weekHigh52}
+            weekLow52={recommendation.indicators.weekLow52}
+          />
+        </div>
       </div>
 
       <div className="md:order-3 md:col-span-2">

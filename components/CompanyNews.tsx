@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import NewsList from "./NewsList";
 
 interface MseItem {
@@ -71,6 +71,9 @@ function merge(mse: MseItem[], external: ExternalItem[]): Item[] {
 export default function CompanyNews({ symbol }: { symbol: string }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [loadedFor, setLoadedFor] = useState(symbol);
+  const [expanded, setExpanded] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
 
   // Navigating between two /stock/[symbol] pages reuses this instance, so the
   // previous company's news has to be cleared as the prop changes rather than
@@ -102,13 +105,40 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
     };
   }, [symbol]);
 
+  // Is anything hidden? Answered by the observer's own first callback rather
+  // than by measuring here: a measurement taken during the effect would be of
+  // a layout the browser has not done yet, and setting state from inside an
+  // effect body is the thing that makes a render impure.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = new ResizeObserver(() =>
+      setClipped(el.scrollHeight > el.clientHeight + 1),
+    );
+    measure.observe(el);
+    return () => measure.disconnect();
+  }, [state, expanded]);
+
   // No card of its own: NewsList draws one, and nesting them boxes every
   // headline twice. A heading over the list matches the market feed.
+  //
+  // On the board the list sits beside a column of three short panels and runs
+  // a long way past the foot of them, which leaves the page lopsided. So it
+  // is cut to their height and the rest opens on a tap.
+  //
+  // The cut is the grid's own doing rather than a measured pixel count: the
+  // row is as tall as the panels opposite, this fills it, and the list is
+  // taken out of flow inside it — so the list is clipped to whatever that
+  // height turns out to be and nothing here has to know what it is.
   return (
-    <section>
-      <h2 className="text-sm font-semibold text-app-text mb-3">
-        {symbol}-тай холбоотой мэдээ
-      </h2>
+    <section className={expanded ? undefined : "md:relative md:h-full"}>
+      <div
+        ref={box}
+        className={expanded ? undefined : "md:absolute md:inset-0 md:overflow-hidden"}
+      >
+        <h2 className="text-sm font-semibold text-app-text mb-3">
+          {symbol}-тай холбоотой мэдээ
+        </h2>
 
       {state.kind === "loading" && (
         <div className="space-y-2">
@@ -130,6 +160,27 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
 
       {state.kind === "ready" && state.items.length > 0 && (
         <NewsList items={state.items} />
+      )}
+      </div>
+
+      {/* Only on the board, and only when something is actually hidden. */}
+      {clipped && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="hidden md:flex absolute inset-x-0 bottom-0 items-end justify-center pb-3 pt-10 text-xs font-semibold text-brand bg-linear-to-t from-app-bg via-app-bg to-transparent"
+        >
+          Бүх мэдээг харах
+        </button>
+      )}
+      {expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="hidden md:block w-full pt-3 text-xs font-semibold text-brand"
+        >
+          Хураах
+        </button>
       )}
     </section>
   );
