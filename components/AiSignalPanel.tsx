@@ -54,6 +54,21 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
     }
   }
 
+  // Nothing has been asked for yet, so there is nothing to put in a panel:
+  // a card drawn round a single button is a box with a lid and no contents,
+  // and a heading over it names an answer that does not exist. The button
+  // stands on its own until there is something to head.
+  if (state.status === "idle") {
+    return (
+      <button
+        onClick={() => load(false)}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand text-black text-base font-bold py-4 active:scale-[0.98] transition-transform"
+      >
+        <SparkIcon size={18} /> AI дүн шинжилгээ хийх
+      </button>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-app-border bg-app-card p-4">
       <div className="flex items-center justify-between mb-3">
@@ -67,15 +82,6 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
           </button>
         )}
       </div>
-
-      {state.status === "idle" && (
-        <button
-          onClick={() => load(false)}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand text-black text-base font-bold py-4 active:scale-[0.98] transition-transform"
-        >
-          <SparkIcon size={18} /> AI дүн шинжилгээ хийх
-        </button>
-      )}
 
       {state.status === "loading" && <Loader />}
 
