@@ -134,3 +134,24 @@ body {
     }
   }
 }
+
+/*
+ * Never let a touch device zoom the page in to read a field.
+ *
+ * iOS Safari scales the whole layout up when it focuses an input whose text
+ * is under 16px, and does not scale back out when the field is left — so one
+ * tap on a 14px box leaves the reader zoomed into a page they now have to
+ * pinch their way out of. The floor only applies where there is no pointer,
+ * so a mouse-driven screen keeps the smaller type the design asks for.
+ *
+ * The :not() clauses are there to out-specify Tailwind's own text-* classes,
+ * which would otherwise win; checkboxes and radios are left alone because
+ * their font-size is what sizes them.
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea:not([hidden]):not([disabled]),
+  select:not([hidden]):not([disabled]) {
+    font-size: max(1rem, 1em);
+  }
+}

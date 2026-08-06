@@ -122,8 +122,8 @@ export default function TradeModal({
       {open &&
         typeof document !== "undefined" &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
-            <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-app-card p-5 space-y-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl bg-app-card p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-app-text">
                   {symbol} {open === "BUY" ? "авах" : "зарах"}

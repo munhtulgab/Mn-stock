@@ -81,9 +81,12 @@ export type MetricTerm = keyof typeof METRIC_TERMS;
 /**
  * An "i" beside a label that opens the explanation.
  *
- * A centred sheet rather than a tooltip anchored to the icon: this sits in a
- * card a third of a wide screen across and the whole width of a phone, and
+ * A centred dialog rather than a tooltip anchored to the icon: this sits in
+ * a card a third of a wide screen across and the whole width of a phone, and
  * an explanation long enough to be worth reading does not fit beside either.
+ * Centred on a phone too — at the foot of the screen it is under the thumb
+ * that opened it, and the keyboard or the browser's own chrome can take half
+ * of it.
  */
 export default function MetricInfo({ term }: { term: MetricTerm }) {
   const [open, setOpen] = useState(false);
@@ -106,12 +109,12 @@ export default function MetricInfo({ term }: { term: MetricTerm }) {
           aria-modal="true"
           aria-label={title}
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         >
           <div
             // The sheet is not the backdrop; a tap inside it should not close.
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-md rounded-2xl border border-app-border bg-app-card p-5 shadow-2xl"
+            className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-app-border bg-app-card p-5 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-sm font-semibold text-app-text">{title}</h3>
