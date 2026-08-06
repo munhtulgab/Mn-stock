@@ -101,7 +101,7 @@ export default async function StockDetailPage({
   const changePct = sessionChangePct(last, prev);
 
   return (
-    <div className="px-4 pt-6 pb-4 space-y-4">
+    <div className="px-4 pt-6 pb-28 lg:pb-4 space-y-4">
       <Link href="/" className="text-sm text-app-muted">
         ← Буцах
       </Link>
@@ -243,11 +243,14 @@ export default async function StockDetailPage({
       </div>
       </div>
 
-      {/* Above the tab bar, not behind it: both stick to the bottom of the
-          viewport, and the bar is drawn after this, so at the default offset
-          the buy and sell buttons spent their life underneath it. The tab bar
-          is gone from a laptop up, where this can sit at the bottom. */}
-      <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] lg:bottom-0 -mx-4 px-4 pt-3 pb-1 bg-linear-to-t from-app-bg via-app-bg to-transparent lg:mx-auto lg:max-w-md">
+      {/* Fixed rather than sticky. A sticky element is still part of the
+          scroll: it is laid out with the content and pinned by the compositor
+          a frame later, which on a phone reads as the buttons sliding about
+          while everything else moves. Fixed takes them out of the scroll
+          entirely, so they hold still. Above the tab bar, which is drawn
+          after them and would otherwise cover them; on a laptop there is no
+          tab bar and they sit at the end of the page. */}
+      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] z-30 mx-auto max-w-md px-4 lg:static lg:z-auto lg:mt-2 lg:max-w-md lg:px-0">
         <TradeModal
           symbol={security.symbol}
           initial={{

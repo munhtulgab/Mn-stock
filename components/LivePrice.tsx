@@ -1,7 +1,36 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Num, { Pct } from "./Num";
 import { useLiveQuote, type Quote } from "./useLiveQuote";
+
+/**
+ * How long ago the exchange wrote this entry, counted here rather than
+ * fetched.
+ *
+ * The source republishes about every two minutes, so asking it every second
+ * would return the same figure sixty times over. What can honestly move
+ * every second is how old the figure is — and that is also the thing worth
+ * knowing about a price labelled "Шууд".
+ */
+function useAge(atIso: string | null | undefined): string | null {
+  // A clock rather than a stored age: the tick moves this on, and the entry
+  // it is measured against comes straight from the quote.
+  const [now, setNow] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const entry = atIso ? Date.parse(atIso) : NaN;
+  if (Number.isNaN(entry)) return null;
+  // Zero until the first tick, which is also what the server rendered.
+  const seconds = now === 0 ? 0 : Math.max(0, Math.round((now - entry) / 1000));
+  if (seconds < 60) return `${seconds}с`;
+  const minutes = Math.floor(seconds / 60);
+  return minutes < 60 ? `${minutes}м ${seconds % 60}с` : null;
+}
 
 /**
  * The security's price, labelled with where and when it came from.
@@ -23,6 +52,7 @@ export default function LivePrice({
   initial: Quote;
 }) {
   const quote = useLiveQuote(symbol, initial);
+  const age = useAge(quote.isLive ? quote.atIso : null);
 
   return (
     <div className="text-right">
@@ -51,12 +81,23 @@ export default function LivePrice({
         {quote.isLive && <span className="text-app-positive font-medium">Шууд</span>}
         {/* Always the full stamp: "12:57" alone leaves which day it was to
             guesswork, and outside a session that is the whole question. */}
-        {quote.date && (
-          <span>
-            {quote.isLive ? "· " : ""}
-            {quote.date}
-            {quote.at && ` ${quote.at}`}
+        {/* In session the day is today by definition, so the stamp is the
+            time and how long ago it was written — which ticks every second,
+            the only thing here that honestly can, since the exchange itself
+            republishes about every two minutes. Outside a session the date
+            is the whole question and is always shown. */}
+        {quote.isLive ? (
+          <span className="tabular-nums whitespace-nowrap">
+            · {quote.at}
+            {age && ` · ${age}`}
           </span>
+        ) : (
+          quote.date && (
+            <span className="whitespace-nowrap">
+              {quote.date}
+              {quote.at && ` ${quote.at}`}
+            </span>
+          )
         )}
       </div>
     </div>

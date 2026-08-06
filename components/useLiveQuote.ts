@@ -23,6 +23,8 @@ export interface Quote {
   date: string | null;
   /** Exchange entry time, "HH:MM", when the quote is live. */
   at?: string | null;
+  /** The same entry time in full, e.g. 2026-08-06T10:55:12+08:00. */
+  atIso?: string | null;
   /** True while the exchange reports itself in session. */
   isLive?: boolean;
   /** Null when the exchange's status could not be read. */
@@ -34,17 +36,36 @@ export interface Quote {
 }
 
 /**
- * The exchange's feed republishes about every two minutes, so this cannot
- * make the source fresher — it decides how long a new price sits at the
- * server before it reaches the screen. The request is a cached read.
+ * How often the open page asks for a new figure.
+ *
+ * Five seconds while the exchange is trading, which is exactly how long the
+ * server holds a quote — so every ask can return something new and none of
+ * them can hit the feed twice for the same second. Asking every second would
+ * not make the price fresher: the source itself republishes about every two
+ * minutes, and the age shown beside the price ticks every second regardless.
+ *
+ * Once the session is shut the figures are final, so the page stops asking
+ * in earnest and just checks now and then in case it reopens.
  */
-const POLL_MS = 10_000;
+const LIVE_POLL_MS = 5_000;
+const CLOSED_POLL_MS = 60_000;
 
 interface Stream {
   quote: Quote;
   listeners: Set<() => void>;
   timer: ReturnType<typeof setInterval> | null;
+  /** The interval the timer is running at, so a change of session can move it. */
+  cadence: number | null;
   onVisible: (() => void) | null;
+}
+
+/** Runs the poll at the cadence the current session calls for. */
+function schedule(symbol: string, stream: Stream): void {
+  const wanted = stream.quote.isLive === false ? CLOSED_POLL_MS : LIVE_POLL_MS;
+  if (stream.timer && stream.cadence === wanted) return;
+  if (stream.timer) clearInterval(stream.timer);
+  stream.cadence = wanted;
+  stream.timer = setInterval(() => refresh(symbol, stream), wanted);
 }
 
 const streams = new Map<string, Stream>();
@@ -59,6 +80,8 @@ async function refresh(symbol: string, stream: Stream): Promise<void> {
     // of nothing; the previous figure stands.
     if (data.price === null) return;
     stream.quote = data;
+    // A session that has just opened or shut changes how often to ask.
+    schedule(symbol, stream);
     for (const listener of stream.listeners) listener();
   } catch {
     // A missed poll just leaves the previous figure in place.
@@ -78,6 +101,7 @@ export function useLiveQuote(symbol: string, initial: Quote): Quote {
           quote: seed.current,
           listeners: new Set(),
           timer: null,
+          cadence: null,
           onVisible: null,
         };
         streams.set(symbol, stream);
@@ -88,7 +112,7 @@ export function useLiveQuote(symbol: string, initial: Quote): Quote {
 
       if (!current.timer) {
         const tick = () => refresh(symbol, current);
-        current.timer = setInterval(tick, POLL_MS);
+        schedule(symbol, current);
         current.onVisible = tick;
         document.addEventListener("visibilitychange", tick);
         tick();
@@ -98,6 +122,7 @@ export function useLiveQuote(symbol: string, initial: Quote): Quote {
         current.listeners.delete(listener);
         if (current.listeners.size === 0) {
           if (current.timer) clearInterval(current.timer);
+          current.timer = null;
           if (current.onVisible) {
             document.removeEventListener("visibilitychange", current.onVisible);
           }

@@ -97,6 +97,8 @@ export async function GET(
         marketOpen === true
           ? (live.at?.slice(11, 16) ?? null)
           : (closedAt ?? live.at?.slice(11, 16) ?? null),
+      // The full stamp as the exchange wrote it, for the age ticker.
+      atIso: live.at,
       // Live only while the exchange says it is trading; the same figures
       // become that day's final numbers once the session shuts.
       isLive: marketOpen === true,
