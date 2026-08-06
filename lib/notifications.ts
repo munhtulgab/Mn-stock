@@ -46,7 +46,18 @@ export async function recordNotifications(
       .skip(KEEP)
       .toArray();
     if (stale.length > 0) {
-      await collection.deleteMany({ _id: { $in: stale.map((d) => d._id) } });
+      const ids = stale.map((d) => d._id);
+      await collection.deleteMany({ _id: { $in: ids } });
+      // Readers keep the ids they have opened and dismissed. An id whose
+      // alert no longer exists is a name for nothing, and left alone the two
+      // lists would grow for as long as the account did.
+      const gone = ids.map(String);
+      await db.collection<User>("users").updateMany({}, {
+        $pull: {
+          notificationsRead: { $in: gone },
+          notificationsDismissed: { $in: gone },
+        },
+      } as never);
     }
   }
 }
@@ -63,18 +74,38 @@ async function getNotifications(
     .toArray();
 }
 
+/**
+ * Whether this reader has read a given alert.
+ *
+ * Opening the page is not reading it: an alert is read when the reader opens
+ * the thing it is about. The legacy cutoff is still honoured as a floor so
+ * alerts cleared under the old rule stay cleared.
+ */
+function isRead(user: User, id: string, createdAt: Date): boolean {
+  if (user.notificationsRead?.includes(id)) return true;
+  return !!user.notificationsReadAt && createdAt <= user.notificationsReadAt;
+}
+
+function isDismissed(user: User, id: string): boolean {
+  return !!user.notificationsDismissed?.includes(id);
+}
+
 export async function getUnreadCount(db: Db, user: User): Promise<number> {
-  const since = user.notificationsReadAt;
-  return db
-    .collection<AppNotification>("notifications")
-    .countDocuments(since ? { createdAt: { $gt: since } } : {});
+  const items = await getNotifications(db);
+  return items.filter(
+    (n) =>
+      !isDismissed(user, String(n._id)) &&
+      !isRead(user, String(n._id), new Date(n.createdAt)),
+  ).length;
 }
 
 export interface FeedNotification
   extends Omit<AppNotification, "_id" | "createdAt"> {
+  /** The alert's own id, for marking it read and for swiping it away. */
+  id: string;
   /** `HH:MM` in Ulaanbaatar. */
   time: string;
-  /** Arrived since this reader last opened the page. */
+  /** Not yet opened by this reader. */
   isNew: boolean;
 }
 
@@ -87,33 +118,31 @@ export interface NotificationFeed {
 /**
  * The feed as the page shows it: newest first, split into days.
  *
- * Grouping and the unread cutoff both need the current time, and a component
- * that reads the clock while rendering is not idempotent — so the reading
- * happens here, once, and the page renders what it is handed.
- *
- * Unread is decided by comparing timestamps rather than counting rows off the
- * top: a sync writes a whole batch at once, and position in the list is not a
- * reliable stand-in for "newer than your last visit".
+ * Grouping needs the current time, and a component that reads the clock while
+ * rendering is not idempotent — so the reading happens here, once, and the
+ * page renders what it is handed.
  */
 export async function getNotificationFeed(
   db: Db,
   user: User,
 ): Promise<NotificationFeed> {
-  const [items, unread] = await Promise.all([
-    getNotifications(db),
-    getUnreadCount(db, user),
-  ]);
+  const items = (await getNotifications(db)).filter(
+    (n) => !isDismissed(user, String(n._id)),
+  );
   const { today, yesterday } = todayAndYesterday();
-  const readAt = user.notificationsReadAt;
 
   const groups: NotificationFeed["groups"] = [];
+  let unread = 0;
   for (const n of items) {
     const createdAt = new Date(n.createdAt);
     const day = ulaanbaatarDay(createdAt);
     if (groups.at(-1)?.day !== day) {
       groups.push({ day, heading: dayHeading(day, today, yesterday), items: [] });
     }
+    const isNew = !isRead(user, String(n._id), createdAt);
+    if (isNew) unread++;
     groups.at(-1)!.items.push({
+      id: String(n._id),
       title: n.title,
       body: n.body,
       url: n.url,
@@ -122,17 +151,27 @@ export async function getNotificationFeed(
       signal: n.signal,
       previousSignal: n.previousSignal,
       time: ulaanbaatarTime(createdAt),
-      isNew: !readAt || createdAt > readAt,
+      isNew,
     });
   }
 
   return { groups, unread, total: items.length };
 }
 
-export async function markAllRead(db: Db, userId: string): Promise<void> {
+/** The reader opened this alert, so it is read. */
+export async function markRead(db: Db, userId: string, id: string): Promise<void> {
   await db
     .collection<User>("users")
     .updateOne({ _id: userId } as never, {
-      $set: { notificationsReadAt: new Date() },
-    });
+      $addToSet: { notificationsRead: id },
+    } as never);
+}
+
+/** The reader swiped this alert away, so it is gone from their feed. */
+export async function dismiss(db: Db, userId: string, id: string): Promise<void> {
+  await db
+    .collection<User>("users")
+    .updateOne({ _id: userId } as never, {
+      $addToSet: { notificationsDismissed: id },
+    } as never);
 }

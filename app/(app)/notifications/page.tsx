@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
-import { getNotificationFeed, markAllRead } from "@/lib/notifications";
+import { getNotificationFeed } from "@/lib/notifications";
 import NotificationList from "@/components/NotificationList";
 import { BellIcon } from "@/components/icons";
 
@@ -11,10 +11,10 @@ export default async function NotificationsPage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
 
-  // Built before the cutoff is cleared, so this render can still mark which
-  // rows were new when the page was opened.
+  // Opening this page reads nothing. An alert is read when the reader opens
+  // what it is about, which the row itself reports; until then it keeps its
+  // dot however many times the list has been looked at.
   const { groups, unread, total } = await getNotificationFeed(db, user!);
-  if (unread > 0) await markAllRead(db, user!._id!);
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-5">

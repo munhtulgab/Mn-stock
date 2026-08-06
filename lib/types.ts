@@ -135,8 +135,18 @@ export interface User {
    * this app has no bucket to put it in.
    */
   avatar?: string;
-  /** Everything created after this is unread for the user. */
+  /**
+   * Legacy read cutoff: everything created before it counts as read.
+   *
+   * Kept as a floor rather than maintained. Read is per alert now — an alert
+   * is read when the reader opens it — and dropping this would resurrect
+   * every alert a reader had already cleared under the old rule.
+   */
   notificationsReadAt?: Date;
+  /** Alert ids this reader has opened. */
+  notificationsRead?: string[];
+  /** Alert ids this reader has swiped away. */
+  notificationsDismissed?: string[];
   /** When the user last opened the news page; stories newer than it are new. */
   newsSeenAt?: Date;
 }
