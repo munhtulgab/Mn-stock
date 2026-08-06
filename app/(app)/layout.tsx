@@ -27,10 +27,14 @@ export default async function AppLayout({
   const unread = await getUnreadCount(db, user);
 
   return (
-    <div className="min-h-screen bg-app-bg lg:flex">
+    /* dvh rather than vh: on a phone the viewport is the height it is right
+       now, not the height it would be with the browser's chrome hidden. */
+    <div className="min-h-dvh bg-app-bg lg:flex">
       <SideNav unread={unread} />
-      <div className="flex min-h-screen flex-1 flex-col lg:min-h-0">
-        <main className="mx-auto w-full max-w-md flex-1 pb-4 md:max-w-3xl lg:max-w-6xl lg:px-6">
+      <div className="flex min-h-dvh flex-1 flex-col lg:min-h-0">
+        {/* The foot of the page clears the tab bar, which no longer takes
+            space of its own now that it is fixed. */}
+        <main className="mx-auto w-full max-w-md flex-1 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] md:max-w-3xl lg:max-w-6xl lg:px-6 lg:pb-4">
           {children}
         </main>
         <BottomNav />
