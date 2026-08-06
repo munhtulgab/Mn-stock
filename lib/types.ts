@@ -48,6 +48,12 @@ export interface Financials {
   rota: number | null;
   eps: number | null;
   pe: number | null;
+  /**
+   * Which of the exchange's four report layouts this company files, which is
+   * the only statement it makes anywhere about what kind of business this is.
+   * Absent on rows stored before the layouts were told apart.
+   */
+  reportKind?: "general" | "bank" | "nbfi" | "insurance";
   fetchedAt: Date;
 }
 

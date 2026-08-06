@@ -26,6 +26,11 @@
   --color-app-positive-bg: #0e2a1d;
   --color-app-negative: #ff5a5f;
   --color-app-negative-bg: #2c1518;
+  /* The middle of three: a ratio level with its sector rather than above or
+     below it. Amber reads as "neither" against both the green and the red,
+     which a dimmer grey would not on a card carrying all three at once. */
+  --color-app-warn: #ffb020;
+  --color-app-warn-bg: #2b2110;
 
   /* Floating tab bar (swapped: surface takes the old active tone, active
      takes the old surface tone) plus lighter twins for a convex gradient. */

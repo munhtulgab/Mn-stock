@@ -57,8 +57,11 @@ function thin(points: ChartPoint[]): ChartPoint[] {
  * drawing looking shoved sideways; "100мя" needs less than half of that.
  */
 function shortNumber(value: number): string {
-  if (Math.abs(value) >= 1_000_000) return `${round(value / 1_000_000)}сая`;
-  if (Math.abs(value) >= 1_000) return `${round(value / 1_000)}мя`;
+  const magnitude = Math.abs(value);
+  if (magnitude >= 1_000_000) return `${round(value / 1_000_000)}сая`;
+  // Four figures fit the gutter as they are. Shortening them turned a scale
+  // running 1,114 to 1,471 into the same "1.1мя" at every tick.
+  if (magnitude >= 10_000) return `${round(value / 1_000)}мя`;
   return round(value);
 }
 

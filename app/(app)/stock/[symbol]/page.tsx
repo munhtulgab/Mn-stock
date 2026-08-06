@@ -16,6 +16,14 @@ import LivePrice from "@/components/LivePrice";
 import TradeModal from "@/components/TradeModal";
 import WatchlistButton from "@/components/WatchlistButton";
 import MetricInfo, { type MetricTerm } from "@/components/MetricInfo";
+import TechnicalScorecard from "@/components/TechnicalScorecard";
+import FundamentalPanel from "@/components/FundamentalPanel";
+import RiskPanel from "@/components/RiskPanel";
+import DividendHistory from "@/components/DividendHistory";
+import PeerTable from "@/components/PeerTable";
+import CombinedSignalCard from "@/components/CombinedSignalCard";
+import CandleChart from "@/components/CandleChart";
+import { buildAnalysis } from "@/lib/analysis/report";
 import { getDividendsFor } from "@/lib/dividends";
 import { ulaanbaatarDay } from "@/lib/day";
 
@@ -67,9 +75,17 @@ export default async function StockDetailPage({
   const { security, financials, priceHistory, fullHistory, recommendation, marketMedianPe } =
     detail;
 
+  // The price every derived figure is measured against: the running quote
+  // where the market is open, the last close otherwise. Read once here so
+  // the dividend yields and the P/B on the analysis are quoting the same
+  // number the header is.
+  const currentPrice =
+    liveQuotes.get(security.companyCode)?.price ?? priceHistory.at(-1)?.close ?? null;
+  const today = ulaanbaatarDay(new Date());
+
   // Resolved during render, not after: leaving it to the client meant the
   // page painted the stored close and visibly corrected itself a moment later.
-  const [portfolio, watchlist, marketOpen, dividends] = await Promise.all([
+  const [portfolio, watchlist, marketOpen, dividends, analysis] = await Promise.all([
     getPortfolioSummary(db, user!._id!),
     getWatchlist(db, user!._id!),
     fetchMarketOpen().catch(() => null),
@@ -78,12 +94,20 @@ export default async function StockDetailPage({
     getDividendsFor(
       db,
       security.companyCode,
-      liveQuotes.get(security.companyCode)?.price ?? priceHistory.at(-1)?.close ?? null,
+      currentPrice,
       // The clock is read here, once, rather than inside a component: which
       // three years the card shows depends on today, and a render that reads
       // the time is not the same render twice.
-      ulaanbaatarDay(new Date()),
+      today,
     ).catch(() => []),
+    // The scorecards, ratios, risk figures and peer ranking, all built from
+    // the same candles on the server. It reads the whole market's latest
+    // reports to rank this company against its sector, so it is awaited
+    // alongside the rest rather than after them.
+    buildAnalysis(db, security, currentPrice, today).catch((err) => {
+      console.error(`analysis failed for ${security.symbol}`, err);
+      return null;
+    }),
   ]);
   const live = liveQuotes.get(security.companyCode) ?? null;
   const closedAt = sessionEnd(liveQuotes);
@@ -174,26 +198,43 @@ export default async function StockDetailPage({
           768px so an iPad held upright gets it too, rather than only when it
           is turned on its side. */}
       <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-3 md:gap-4 md:items-stretch">
-      <div className="md:order-1 md:col-span-3 rounded-2xl border border-app-border bg-app-card p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <SignalBadge signal={recommendation.signal} />
-          <span className="text-xs text-app-muted">
-            Score {recommendation.score} (Техник {recommendation.technicalScore} / Фундаментал{" "}
-            {recommendation.fundamentalScore})
-          </span>
-        </div>
-        <ul className="space-y-1 text-xs text-app-text">
-          {recommendation.reasons.map((reason, i) => (
-            <li key={i} className="before:content-['›'] before:text-brand before:mr-2">
-              {reason}
-            </li>
-          ))}
-        </ul>
+      {/* The verdict leads the page. When the full analysis could not be
+          built — the market's reports are read to rank this company against
+          its sector, and that can fail — the older single-company reading
+          stands in rather than leaving the page with no conclusion at all. */}
+      <div className="md:order-1 md:col-span-3">
+        {analysis ? (
+          <CombinedSignalCard combined={analysis.combined} />
+        ) : (
+          <div className="rounded-2xl border border-app-border bg-app-card p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <SignalBadge signal={recommendation.signal} />
+              <span className="text-xs text-app-muted">
+                Score {recommendation.score} (Техник {recommendation.technicalScore} / Фундаментал{" "}
+                {recommendation.fundamentalScore})
+              </span>
+            </div>
+            <ul className="space-y-1 text-xs text-app-text">
+              {recommendation.reasons.map((reason, i) => (
+                <li key={i} className="before:content-['›'] before:text-brand before:mr-2">
+                  {reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {priceHistory.length > 0 && (
         <div className="md:order-2 md:col-span-3 rounded-2xl border border-app-border bg-app-card p-4">
-          <PriceChart data={chartData} title="Ханшийн график" />
+          {/* Candles where the full OHLC is to hand, which is everywhere the
+              analysis built; the closing line is the fallback because it can
+              be drawn from the two fields the page already had. */}
+          {analysis && analysis.enoughHistory ? (
+            <CandleChart candles={analysis.candles} />
+          ) : (
+            <PriceChart data={chartData} title="Ханшийн график" />
+          )}
         </div>
       )}
 
@@ -208,25 +249,12 @@ export default async function StockDetailPage({
           &nbsp;
         </div>
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-1">
-        <div className="rounded-2xl border border-app-border bg-app-card p-4">
-          <h2 className="text-sm font-semibold text-app-text mb-3">Техник үзүүлэлт</h2>
-          <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
-            <Metric label="SMA20" value={money(recommendation.indicators.sma20)} />
-            <Metric label="SMA50" value={money(recommendation.indicators.sma50)} />
-            <Metric label="RSI(14)" value={fmt(recommendation.indicators.rsi14, 1)} />
-            <Metric
-              label="Момент 20х"
-              value={
-                recommendation.indicators.momentum20 === null
-                  ? "—"
-                  : `${fmt(recommendation.indicators.momentum20)}%`
-              }
-            />
-            <Metric label="52 долоо хоногийн дээд" value={money(recommendation.indicators.weekHigh52)} />
-            <Metric label="52 долоо хоногийн доод" value={money(recommendation.indicators.weekLow52)} />
-          </dl>
-        </div>
-
+        {/* The old six-figure technical card stood here. It is gone rather
+            than kept alongside the scorecard below: it computed its RSI as a
+            plain average over a 400-day window where the scorecard uses
+            Wilder's smoothing over the whole history, so the two printed
+            different RSIs for the same company on the same screen. The
+            52-week range it also carried is in the market panel underneath. */}
         <div className="rounded-2xl border border-app-border bg-app-card p-4">
           <h2 className="text-sm font-semibold text-app-text mb-3">
             Санхүүгийн үзүүлэлт {financials ? `· ${financials.period}` : ""}
@@ -266,7 +294,48 @@ export default async function StockDetailPage({
         <CompanyNews symbol={security.symbol} />
       </div>
 
-      <div className="md:order-5 md:col-span-3">
+      {/* The analysis proper, below the fold on every screen: the price, the
+          news and the headline verdict are what a page is opened for, and
+          these are what is read once the reader has decided to look further.
+
+          Laid out two-thirds/one-third so the wide tables — the ratios, the
+          risk tiles — get the room they need while the narrow ones sit
+          beside them instead of under them. */}
+      {analysis && (
+        <>
+          <div className="md:order-5 md:col-span-3">
+            <TechnicalScorecard scorecards={analysis.scorecards} />
+          </div>
+
+          <div className="md:order-6 md:col-span-2">
+            <FundamentalPanel
+              ratios={analysis.ratios}
+              period={analysis.period}
+              sectorLabel={analysis.sectorLabel}
+              peerCount={analysis.peerCount}
+              comparedToMarket={analysis.comparedToMarket}
+            />
+          </div>
+
+          <div className="md:order-7 md:self-start">
+            <DividendHistory dividends={analysis.dividends} />
+          </div>
+
+          <div className="md:order-8 md:col-span-2">
+            <RiskPanel risk={analysis.risk} years={analysis.riskYears} />
+          </div>
+
+          <div className="md:order-9 md:self-start">
+            <PeerTable
+              peers={analysis.peers}
+              sectorLabel={analysis.sectorLabel}
+              comparedToMarket={analysis.comparedToMarket}
+            />
+          </div>
+        </>
+      )}
+
+      <div className="md:order-10 md:col-span-3">
         <AiSignalPanel symbol={security.symbol} />
       </div>
       </div>

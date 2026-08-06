@@ -287,6 +287,29 @@ async function getAllDividends(db: Db): Promise<Record<string, Dividend[]>> {
   }
 }
 
+/**
+ * Every declaration this company has made, newest first, with the yield each
+ * would give at today's price.
+ *
+ * The three-year card below answers "does it pay?"; this answers "how much,
+ * and when did they say so?" — so unlike that card it keeps the notice's own
+ * date and a link to it, and it does not manufacture rows for years with
+ * nothing in them.
+ */
+export async function getDividendHistory(
+  db: Db,
+  companyCode: number,
+  price: number | null,
+): Promise<Dividend[]> {
+  const all = await getAllDividends(db);
+  return (all[String(companyCode)] ?? [])
+    .map((d) => ({
+      ...d,
+      yieldPct: price && price > 0 ? (d.amount / price) * 100 : null,
+    }))
+    .sort((a, b) => b.year - a.year);
+}
+
 /** One year's line, whether or not anything was declared for it. */
 export interface DividendYear {
   year: number;
