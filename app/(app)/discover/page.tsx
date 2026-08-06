@@ -12,7 +12,7 @@ export default async function DiscoverPage() {
     getDashboardRows(db),
     getSettings(db),
   ]);
-  const rows = await applyLiveQuotes(storedRows, {
+  const { rows } = await applyLiveQuotes(storedRows, {
     extraCaCerts: settings.extraCaCerts,
   });
 

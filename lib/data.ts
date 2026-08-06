@@ -2,7 +2,9 @@ import type { Db } from "mongodb";
 import { computeRecommendation } from "@/lib/recommendation";
 import { syncPricesForCompany } from "@/lib/sync";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
+import { fetchExchangeMovers, type ExchangeMovers } from "@/lib/mse/movers";
 import { daysBetween, sessionChangePct } from "@/lib/priceChange";
+import { ulaanbaatarDay } from "@/lib/day";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 
 const INDICATOR_WINDOW_DAYS = 400;
@@ -340,19 +342,73 @@ export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
  * Deliberately not folded into getDashboardRows: the sync job reads those
  * rows too, and has no business making a third-party call.
  */
+export interface LiveRows {
+  rows: DashboardRow[];
+  /** The day the figures describe, as far as anything here can establish. */
+  session: string | null;
+  /** The exchange's own gainers and losers, empty if it could not be asked. */
+  board: ExchangeMovers;
+}
+
 export async function applyLiveQuotes(
   rows: DashboardRow[],
   options: { extraCaCerts?: string } = {},
-): Promise<DashboardRow[]> {
-  let quotes: Awaited<ReturnType<typeof fetchLiveQuotes>>;
-  try {
-    quotes = await fetchLiveQuotes(options);
-  } catch {
-    return rows;
-  }
-  if (quotes.size === 0) return rows;
+): Promise<LiveRows> {
+  const [quotes, movers] = await Promise.all([
+    fetchLiveQuotes(options).catch(() => new Map<number, LiveQuote>()),
+    fetchExchangeMovers().catch(() => ({ gainers: [], losers: [] })),
+  ]);
 
-  return rows.map((row) => {
+  // The exchange's own board of what moved today, keyed by ticker. It is the
+  // most current thing there is — it is the exchange — so it overrides both
+  // the stored close and the third-party quote.
+  const board = new Map(
+    [...movers.gainers, ...movers.losers].map((m) => [m.symbol, m]),
+  );
+
+  if (quotes.size === 0 && board.size === 0) {
+    return { rows, session: latestSessionDate(rows), board: movers };
+  }
+
+  // What day these figures describe.
+  //
+  // The live feed timestamps its quotes, so it answers this outright when it
+  // is up. When it is not, the exchange's board answers it by implication: it
+  // is always the running session, so if any of its prices differs from the
+  // close stored for that company, a session has traded since the one stored
+  // — and that session is today. If every price matches what is stored, the
+  // board is that same stored session and keeps its date. A market closed
+  // for the weekend or a holiday therefore keeps the last trading day rather
+  // than being stamped with the date somebody happened to open the app.
+  let session: string | null = null;
+  for (const quote of quotes.values()) {
+    const day = quote.at?.slice(0, 10);
+    if (day && (!session || day > session)) session = day;
+  }
+  if (!session) {
+    const storedSession = latestSessionDate(rows);
+    const movedSinceStored = rows.some((row) => {
+      const moved = board.get(row.symbol);
+      return moved && row.lastPrice !== null && moved.price !== row.lastPrice;
+    });
+    session = movedSinceStored ? ulaanbaatarDay(new Date()) : storedSession;
+  }
+
+  const updated = rows.map((row) => {
+    const moved = board.get(row.symbol);
+    if (moved) {
+      return {
+        ...row,
+        lastPrice: moved.price,
+        changePct: moved.changePct,
+        lastDate: session ?? row.lastDate,
+        sparkline:
+          row.sparkline.length > 0
+            ? [...row.sparkline.slice(0, -1), moved.price]
+            : row.sparkline,
+      };
+    }
+
     const live = quotes.get(row.companyCode);
     if (!live || live.price === null) return row;
     const liveDate = live.at?.slice(0, 10) ?? row.lastDate;
@@ -383,6 +439,8 @@ export async function applyLiveQuotes(
           : row.sparkline,
     };
   });
+
+  return { rows: updated, session, board: movers };
 }
 
 /**

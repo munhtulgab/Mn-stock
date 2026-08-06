@@ -7,6 +7,7 @@ import {
   tradedSession,
   type DashboardRow,
 } from "@/lib/data";
+import type { ExchangeMover } from "@/lib/mse/movers";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getMarketIndices } from "@/lib/indices";
@@ -45,24 +46,52 @@ export default async function HomePage() {
     getWatchlist(db, user!._id!),
     getMarketIndices(db),
   ]);
-  const rows = await applyLiveQuotes(storedRows, {
+  const { rows, session, board } = await applyLiveQuotes(storedRows, {
     extraCaCerts: settings.extraCaCerts,
   });
 
   const displayName = user?.fullName || user?.username || "";
 
-  // Movers describe one session, so only securities that traded in it
-  // qualify. Ranking every listing by "change since it last traded" put a
-  // 2006 price at the top of the gainers with +308%.
-  const { session, rows: traded } = tradedSession(rows, MOVERS * 2);
-  const gainers = traded
-    .filter((r) => r.changePct! > 0)
-    .sort((a, b) => b.changePct! - a.changePct!)
-    .slice(0, MOVERS);
-  const losers = traded
-    .filter((r) => r.changePct! < 0)
-    .sort((a, b) => a.changePct! - b.changePct!)
-    .slice(0, MOVERS);
+  // Straight from the exchange's own board where it can be reached: those
+  // are the securities moving in the session that is running, said by the
+  // exchange, rather than a ranking of whatever closes happen to be stored.
+  // The stored rows are still what draws each card — logo, trend line, the
+  // link to the company — so the two are joined on the ticker.
+  const bySymbol = new Map(rows.map((r) => [r.symbol, r]));
+  const fromBoard = (movers: ExchangeMover[]): DashboardRow[] =>
+    movers.slice(0, MOVERS).map((m) => {
+      const row = bySymbol.get(m.symbol);
+      return {
+        symbol: m.symbol,
+        name: row?.name ?? m.name,
+        classification: row?.classification ?? "unknown",
+        companyCode: row?.companyCode ?? 0,
+        lastPrice: m.price,
+        lastDate: session,
+        changePct: m.changePct,
+        volume: row?.volume ?? null,
+        signal: row?.signal ?? "HOLD",
+        score: row?.score ?? 0,
+        sparkline: row?.sparkline ?? [],
+      };
+    });
+
+  // Only when the exchange cannot be asked: rank the stored session instead.
+  const stored = tradedSession(rows, MOVERS * 2);
+  const hasBoard = board.gainers.length > 0 || board.losers.length > 0;
+  const gainers = hasBoard
+    ? fromBoard(board.gainers)
+    : stored.rows
+        .filter((r) => r.changePct! > 0)
+        .sort((a, b) => b.changePct! - a.changePct!)
+        .slice(0, MOVERS);
+  const losers = hasBoard
+    ? fromBoard(board.losers)
+    : stored.rows
+        .filter((r) => r.changePct! < 0)
+        .sort((a, b) => a.changePct! - b.changePct!)
+        .slice(0, MOVERS);
+  const moversSession = hasBoard ? session : stored.session;
   // Untraded listings score 0 across the board; ranking them as "top picks"
   // would just surface whatever sorts first alphabetically. A long-dormant
   // listing is excluded for the same reason its indicators are meaningless.
@@ -198,14 +227,14 @@ export default async function HomePage() {
 
       <Section
         title="Өсөлттэй"
-        note={session}
+        note={moversSession}
         action={{ href: "/discover", label: "Зах зээл" }}
         className="lg:col-span-2"
       >
         <MoverList rows={gainers} />
       </Section>
 
-      <Section title="Уналттай" note={session} className="lg:col-span-2">
+      <Section title="Уналттай" note={moversSession} className="lg:col-span-2">
         <MoverList rows={losers} />
       </Section>
 

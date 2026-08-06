@@ -1,6 +1,7 @@
 import type { Db } from "mongodb";
 import { fetchIndexSeries, INDEX_KEYS, type IndexKey } from "@/lib/mse/indices";
 import { fetchLiveIndices } from "@/lib/marketinfo/indices";
+import { fetchLiveIndexTable, type LiveIndexTable } from "@/lib/mse/movers";
 
 /** Trading days drawn in a card's mini trend line. */
 const SPARKLINE_POINTS = 30;
@@ -66,9 +67,39 @@ async function computeMarketIndices(): Promise<MarketIndexView[]> {
  * its change come from the live feed, with today's point appended so the
  * line ends where the number says it does.
  */
+const EXCHANGE_LEVELS: Record<
+  IndexKey,
+  [keyof LiveIndexTable, keyof LiveIndexTable, keyof LiveIndexTable]
+> = {
+  top20: ["top20Unit", "top20Change", "top20Percent"],
+  mseA: ["mseAUnit", "mseAChange", "mseAPercent"],
+  mseB: ["mseBUnit", "mseBChange", "mseBPercent"],
+};
+
 async function withLiveLevels(
   indices: MarketIndexView[],
 ): Promise<MarketIndexView[]> {
+  // The exchange's own front page first: it is the exchange, and it is
+  // current the moment the index moves. marketinfo is the fallback.
+  const table = await fetchLiveIndexTable().catch(() => null);
+  if (table) {
+    return indices.map((index) => {
+      const keys = EXCHANGE_LEVELS[index.key];
+      if (!keys) return index;
+      const [unit, change, percent] = keys;
+      const value = table[unit];
+      if (!Number.isFinite(value) || value <= 0) return index;
+      return {
+        ...index,
+        value,
+        change: table[change],
+        changePct: table[percent],
+        sparkline: [...index.sparkline.slice(0, -1), value],
+        live: true,
+      };
+    });
+  }
+
   let live: Awaited<ReturnType<typeof fetchLiveIndices>>;
   try {
     live = await fetchLiveIndices();
