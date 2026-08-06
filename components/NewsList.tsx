@@ -1,3 +1,5 @@
+import { ulaanbaatarDay, ulaanbaatarTime } from "@/lib/day";
+
 export interface NewsListItem {
   title: string;
   url: string;
@@ -5,6 +7,11 @@ export interface NewsListItem {
   source: string;
   /** Local `YYYY-MM-DD[THH:MM:SS]`; the time is shown when stated. */
   date: string;
+  /**
+   * When the feed first carried this story, as an ISO instant. Stands in for
+   * the time when the publisher gave only a day — see {@link formatWhen}.
+   */
+  addedAt?: string;
 }
 
 /**
@@ -31,7 +38,9 @@ export default function NewsList({ items }: { items: NewsListItem[] }) {
             {item.title}
           </div>
           <div className="mt-1 flex items-baseline justify-between gap-3 text-[11px]">
-            <span className="text-app-muted">{formatWhen(item.date)}</span>
+            <span className="text-app-muted">
+              {formatWhen(item.date, item.addedAt)}
+            </span>
             <span className="text-brand truncate">{item.source}</span>
           </div>
         </a>
@@ -44,10 +53,25 @@ export default function NewsList({ items }: { items: NewsListItem[] }) {
  * Rendered from the digits rather than through Date: the sources state
  * Ulaanbaatar time, and a device in another zone would shift a closing
  * report onto the previous day.
+ *
+ * The exchange's own listing states a day and no time — the hour is only in
+ * the article itself, which is a call per headline — so where a publisher
+ * gives none, the moment the feed first carried the story stands in. That is
+ * a fair reading of when it appeared, but only while the two fall on the
+ * same day: a story we first saw a week after it ran gets no time rather
+ * than one that would be wrong by a week.
  */
-function formatWhen(date: string): string {
+function formatWhen(date: string, addedAt?: string): string {
   if (!date) return "";
   const day = date.slice(0, 10);
-  const time = date.slice(11, 16);
-  return time ? `${day} ${time}` : day;
+  const stated = date.slice(11, 16);
+  if (stated) return `${day} ${stated}`;
+
+  if (addedAt) {
+    const seen = new Date(addedAt);
+    if (!Number.isNaN(seen.getTime()) && ulaanbaatarDay(seen) === day) {
+      return `${day} ${ulaanbaatarTime(seen)}`;
+    }
+  }
+  return day;
 }

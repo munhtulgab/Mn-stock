@@ -9,27 +9,41 @@ import type { TradeReport } from "@/lib/tradeReports";
  * which on the weekly review runs to seven tables, opens on a tap. Native
  * <details>, so it works before any JavaScript arrives and costs nothing
  * when it stays shut.
+ *
+ * The heading line carries what to do with the card rather than its date:
+ * the title already says which day the report is about, and "Дэлгэрэнгүй" is
+ * what a reader is looking for there. The date goes to the far end of the
+ * footer, opposite the source, which is where the rest of the app puts it.
+ *
+ * The whole head is the toggle — title, and the lead under it — so opening
+ * the report is a tap anywhere on what is already showing rather than on one
+ * word of it.
  */
 export default function TradeReportCard({ report }: { report: TradeReport }) {
   const [lead, ...rest] = report.body;
 
-  return (
-    <section className="rounded-2xl border border-app-border bg-app-card p-4 h-full space-y-2">
+  const head = (
+    <>
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-sm font-semibold text-app-text">{report.title}</h2>
-        <span className="text-[11px] text-app-muted tabular-nums whitespace-nowrap">
-          {report.date}
-        </span>
-      </div>
-
-      {lead && <Block block={lead} />}
-
-      {rest.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer list-none text-xs font-semibold text-brand active:opacity-70">
+        {rest.length > 0 && (
+          <span className="shrink-0 text-[11px] font-semibold text-brand whitespace-nowrap">
             {/* Two labels, one shown at a time: no state to keep. */}
             <span className="group-open:hidden">Дэлгэрэнгүй</span>
             <span className="hidden group-open:inline">Хураах</span>
+          </span>
+        )}
+      </div>
+      {lead && <div className="mt-2">{<Block block={lead} />}</div>}
+    </>
+  );
+
+  return (
+    <section className="rounded-2xl border border-app-border bg-app-card p-4 h-full space-y-2">
+      {rest.length > 0 ? (
+        <details className="group">
+          <summary className="cursor-pointer list-none active:opacity-70">
+            {head}
           </summary>
           <div className="mt-2 space-y-2">
             {rest.map((block, i) => (
@@ -37,16 +51,21 @@ export default function TradeReportCard({ report }: { report: TradeReport }) {
             ))}
           </div>
         </details>
+      ) : (
+        head
       )}
 
-      <a
-        href={report.url}
-        target="_blank"
-        rel="noreferrer"
-        className="block text-[11px] text-app-muted active:opacity-70"
-      >
-        mse.mn
-      </a>
+      <div className="flex items-baseline justify-between gap-3 text-[11px] text-app-muted">
+        <a
+          href={report.url}
+          target="_blank"
+          rel="noreferrer"
+          className="active:opacity-70"
+        >
+          mse.mn
+        </a>
+        <span className="shrink-0 tabular-nums whitespace-nowrap">{report.date}</span>
+      </div>
     </section>
   );
 }
