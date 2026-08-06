@@ -8,6 +8,26 @@ function average(values: number[]): number | null {
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
+/**
+ * How much of the prompt the raw news extracts may take, in characters, and
+ * how large the whole message may get.
+ *
+ * A per-source cap was the wrong shape: it bounded each extract but not how
+ * many there were, so a reader with a dozen configured sites sent a
+ * forty-thousand-token prompt. Groq's free tier allows twelve thousand
+ * tokens a minute and refused every run with a 413; the paid providers took
+ * it, and were being billed for a wall of front-page text nobody had asked
+ * them to read.
+ *
+ * Mongolian in Cyrillic runs near two characters per token, so these are
+ * roughly seven and a half thousand tokens of news inside a message of about
+ * nine thousand — under the smallest ceiling any configured provider has.
+ */
+const EXTERNAL_BUDGET_CHARS = 6_000;
+const MAX_MESSAGE_CHARS = 18_000;
+/** Below this an extract is a headline fragment and not worth a slot. */
+const MIN_EXTRACT_CHARS = 400;
+
 export interface AnalystInput {
   security: Security;
   prices: PricePoint[];
@@ -106,23 +126,47 @@ export function buildUserMessage(input: AnalystInput): string {
     `Дараах МХБ-д бүртгэлтэй "${security.symbol}" (${security.name}) компанийн бодит арилжааны болон санхүүгийн дата өгөгдлийг дүн шинжилгээ хийж, зааврын дагуу зөвхөн JSON гаргана.`,
     "",
     "```json",
-    JSON.stringify(payload, null, 2),
+    // Unindented: a model reads the same object either way, and the two
+    // spaces in front of every line of thirty candles are a third of this
+    // block for nothing.
+    JSON.stringify(payload),
     "```",
   ];
 
-  if (externalNews && externalNews.length > 0) {
+  const extracts = externalNews ? shareBudget(externalNews) : [];
+  if (extracts.length > 0) {
     parts.push(
       "",
       `Хэрэглэгчийн тохируулсан мэдээний эх сурвалжуудаас татсан түүхий бичвэр (${security.symbol}-тэй холбоотой эсэхийг өөрөө үнэлж, зөвхөн хамааралтай хэсгийг сэтгэл хөдлөлийн шинжилгээнд ашигла):`,
     );
-    for (const src of externalNews) {
-      parts.push(
-        "",
-        `--- Эх сурвалж: ${src.url} ---`,
-        src.text.slice(0, 3000),
-      );
+    for (const src of extracts) {
+      parts.push("", `--- Эх сурвалж: ${src.url} ---`, src.text);
     }
   }
 
-  return parts.join("\n");
+  const message = parts.join("\n");
+  // A last guard rather than the main defence: the budget above is what keeps
+  // the message small, and this only catches a payload that grew some other
+  // way — an unusually long list of rule reasons, say.
+  return message.length > MAX_MESSAGE_CHARS
+    ? `${message.slice(0, MAX_MESSAGE_CHARS)}\n…(таслав)`
+    : message;
+}
+
+/**
+ * Divides the news budget between the sources that answered.
+ *
+ * An even split, so no single site can crowd out the rest, and sources past
+ * the point where a share would be a fragment are dropped rather than
+ * included as a sentence and a half.
+ */
+function shareBudget(sources: NewsSourceExtract[]): NewsSourceExtract[] {
+  const affordable = Math.max(
+    1,
+    Math.min(sources.length, Math.floor(EXTERNAL_BUDGET_CHARS / MIN_EXTRACT_CHARS)),
+  );
+  const share = Math.floor(EXTERNAL_BUDGET_CHARS / affordable);
+  return sources
+    .slice(0, affordable)
+    .map((src) => ({ url: src.url, text: src.text.slice(0, share) }));
 }

@@ -23,6 +23,18 @@ const RULES: Rule[] = [
       `${p}: Таны урьдчилсан төлбөрийн кредит дууссан байна. Төсөл болон төлбөр тооцоогоо удирдахын тулд https://ai.studio/projects хаягаар AI Studio руу очно уу. Дэлгэрэнгүй мэдээллийг https://ai.google.dev/gemini-api/docs/billing#prepay хаягаар авна уу.`,
   },
   {
+    // Before the rate-limit rule below: this is a size refusal, not a
+    // frequency one, and waiting does not fix it.
+    // The Mongolian phrase is in the test as well as the message: a stored
+    // document is put back through here every time it is read, and without
+    // it the rule below would claim its own output on the second pass and
+    // rewrite this into a different error entirely.
+    test: (m) =>
+      /\b413\b|Request too large|tokens per minute|\bTPM\b|минут тутмын токений хязгаар/i.test(m),
+    message: (p) =>
+      `${p}: Илгээсэн хүсэлт үйлчилгээний минут тутмын токений хязгаараас давлаа. Тохиргоо хуудсан дээрх мэдээний эх сурвалжийн тоог цөөлөх, эсвэл багцаа шинэчлэх шаардлагатай.`,
+  },
+  {
     test: (m) => /RESOURCE_EXHAUSTED|429|rate.?limit|quota/i.test(m),
     message: (p, retrySeconds) =>
       retrySeconds !== null

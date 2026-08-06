@@ -129,11 +129,14 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
             </span>
           </div>
 
-          <div className="grid gap-1.5 sm:grid-cols-2">
+          {/* One row, centred. Two of them in a grid left the third alone
+              under an empty half; abreast they read as what they are — the
+              same question put to every model. */}
+          <div className="flex flex-wrap justify-center gap-1.5">
             {state.data.providers.map((p) => (
               <div
                 key={p.provider}
-                className={`rounded-xl border px-2.5 py-1.5 ${
+                className={`min-w-0 flex-1 basis-40 rounded-xl border px-2.5 py-1.5 ${
                   p.ok
                     ? "border-app-border"
                     : "border-app-negative/30 bg-app-negative-bg"
