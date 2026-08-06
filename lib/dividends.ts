@@ -9,10 +9,10 @@ import type { Security } from "@/lib/types";
  * There is no dividend endpoint: open.mse.mn's company profile has tabs for
  * shareholders, board members and financials and none for payouts, and the
  * site's data fetcher has no route for it either. What the exchange does
- * publish is a notice per declaration, filed under its own "dividend"
- * category, and each one states the amount in its standfirst — "нэгж
- * хувьцаанд 692 төгрөгийн ногдол ашиг хуваарилна". That sentence is the
- * source.
+ * publish is a notice per declaration, and each one states the amount in its
+ * standfirst — "нэгж хувьцаанд 692 төгрөгийн ногдол ашиг хуваарилна". That
+ * sentence is the source. Its own "dividend" tab does not hold all of them,
+ * so the general feed is read as well.
  *
  * Which means this is only as complete as the exchange's newsroom: a company
  * that declared before the archive starts, or whose notice is worded in a
@@ -39,9 +39,16 @@ const SNAPSHOT_KEY = "dividends";
 /** A declaration is an annual event; a day between rebuilds is plenty. */
 const CACHE_MS = 24 * 60 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 /** Notices to read back through — several years of declarations. */
 const NOTICES = 120;
+/**
+ * A declaration is not reliably filed under the exchange's own "dividend"
+ * tab. QPAY's 60₮ announcement of 2026-07-30 is in the general feed and
+ * nowhere else, so both are read and merged; the amount pattern below is
+ * what decides whether a story is a declaration, not which tab it sat in.
+ */
+const DIVIDEND_PHRASE = /ногдол\s+ашиг/i;
 /** Years kept per company; older than this is history, not a figure. */
 const KEEP_YEARS = 6;
 
@@ -101,35 +108,78 @@ function normalize(name: string): string {
 }
 
 /**
+ * Short names carry no identity: "Ард" begins the name of several listings
+ * and of a good many companies that are not listed at all.
+ */
+const MIN_DISTINCTIVE_CHARS = 5;
+
+interface Listing {
+  name: string;
+  companyCode: number;
+}
+
+/**
  * Which listing a notice is about.
  *
  * The exchange opens every one of these with the company in quote marks —
- * `"ХУДАЛДАА ХӨГЖЛИЙН БАНК" ХК 2025 ОНЫ ...` — so the quoted name is matched
- * first and exactly. Falling back to "the name appears in the title" would
- * file a notice about "Ард санхүүгийн нэгдэл" under "Ард" as well.
+ * `"ХУДАЛДАА ХӨГЖЛИЙН БАНК" ХК 2025 ОНЫ ...` — so the quoted name is what is
+ * matched, exactly where it can be.
+ *
+ * It often cannot be. The registry holds the name a company listed under and
+ * the newsroom writes the name it trades as, which is usually longer: QPAY
+ * is registered as "Инновэйшн" and announced as "Инновэйшн инвестмент". So a
+ * registered name that the announced one *begins with*, on a word boundary,
+ * counts too — the longest such name, so a notice about "Ард санхүүгийн
+ * нэгдэл" goes to that listing rather than to a listing called "Ард". Names
+ * too short to identify anybody are not matched this way at all.
  */
-function companyOf(title: string, byName: Map<string, number>): number | null {
+function companyOf(
+  title: string,
+  exact: Map<string, number>,
+  prefixes: Listing[],
+): number | null {
   const quoted = /^\s*["“«]([^"”»]+)["”»]/.exec(title);
   if (!quoted) return null;
-  return byName.get(normalize(quoted[1])) ?? null;
+  const name = normalize(quoted[1]);
+
+  const direct = exact.get(name);
+  if (direct !== undefined) return direct;
+
+  let best: Listing | null = null;
+  for (const listing of prefixes) {
+    if (!name.startsWith(`${listing.name} `)) continue;
+    if (!best || listing.name.length > best.name.length) best = listing;
+  }
+  return best?.companyCode ?? null;
 }
 
 export async function computeDividends(
   db: Db,
 ): Promise<Record<string, Dividend[]>> {
-  const [notices, securities] = await Promise.all([
+  const [filed, general, securities] = await Promise.all([
     fetchExchangeNews(NOTICES, "dividend"),
+    fetchExchangeNews(NOTICES),
     db
       .collection<Security>("securities")
       .find({}, { projection: { _id: 0, companyCode: 1, name: 1 } })
       .toArray(),
   ]);
 
-  const byName = new Map(securities.map((s) => [normalize(s.name), s.companyCode]));
+  // Both feeds, the general one narrowed to stories that mention a payout,
+  // deduplicated by the article each came from.
+  const notices = [...filed, ...general.filter((n) => DIVIDEND_PHRASE.test(n.title))];
+  const seen = new Set<string>();
+
+  const exact = new Map(securities.map((s) => [normalize(s.name), s.companyCode]));
+  const prefixes: Listing[] = securities
+    .map((s) => ({ name: normalize(s.name), companyCode: s.companyCode }))
+    .filter((listing) => listing.name.length >= MIN_DISTINCTIVE_CHARS);
   const byCompany: Record<string, Dividend[]> = {};
 
   for (const notice of notices) {
-    const companyCode = companyOf(notice.title, byName);
+    if (seen.has(notice.url)) continue;
+    seen.add(notice.url);
+    const companyCode = companyOf(notice.title, exact, prefixes);
     if (companyCode === null) continue;
     const amount = perShare(`${notice.description} ${notice.title}`);
     if (amount === null) continue;
@@ -137,7 +187,7 @@ export async function computeDividends(
     const year = profitYear(notice.title, notice.date);
     const list = (byCompany[companyCode] ??= []);
     // One declaration per year per company: the exchange sometimes follows a
-    // notice with a correction or a reminder, and the first is the newest.
+    // notice with a correction or a reminder, and the newest is read first.
     if (list.some((d) => d.year === year)) continue;
     list.push({ year, amount, yieldPct: null, url: notice.url, date: notice.date });
   }
