@@ -150,12 +150,17 @@ export default async function StockDetailPage({
         </div>
       </div>
 
-      {/* From a laptop up the page becomes a board rather than a scroll: the
-          chart takes two thirds with the numbers beside it, and the news sits
-          next to who owns the company. Source order is the same either way,
-          so the reading sequence does not depend on the screen. */}
-      <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:items-start">
-      <div className="lg:col-span-3 rounded-2xl border border-app-border bg-app-card p-4">
+      {/* From a tablet up the page becomes a board rather than a scroll: the
+          chart runs the full width, and under it the company's news takes two
+          thirds with every panel of figures stacked in the last third.
+
+          A phone reads the figures before the news, which is the order they
+          are written in; the board wants the news on the left, so the two
+          swap with `order` rather than by writing them twice. It starts at
+          768px so an iPad held upright gets it too, rather than only when it
+          is turned on its side. */}
+      <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-3 md:gap-4 md:items-start">
+      <div className="md:order-1 md:col-span-3 rounded-2xl border border-app-border bg-app-card p-4">
         <div className="flex items-center gap-3 mb-3">
           <SignalBadge signal={recommendation.signal} />
           <span className="text-xs text-app-muted">
@@ -173,14 +178,13 @@ export default async function StockDetailPage({
       </div>
 
       {priceHistory.length > 0 && (
-        <div className="lg:col-span-2 rounded-2xl border border-app-border bg-app-card p-4">
+        <div className="md:order-2 md:col-span-3 rounded-2xl border border-app-border bg-app-card p-4">
           <PriceChart data={chartData} title="Ханшийн график" />
         </div>
       )}
 
-      {/* Beside the chart on a wide screen, where one under the other keeps
-          the pair the same height as it. */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+      {/* The three panels of figures, in the board's last third. */}
+      <div className="md:order-4 grid gap-4 sm:grid-cols-2 md:grid-cols-1">
         <div className="rounded-2xl border border-app-border bg-app-card p-4">
           <h2 className="text-sm font-semibold text-app-text mb-3">Техник үзүүлэлт</h2>
           <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
@@ -220,17 +224,7 @@ export default async function StockDetailPage({
             <p className="text-xs text-app-muted">Мэдээлэл олдсонгүй.</p>
           )}
         </div>
-      </div>
 
-      {/* News first: marketinfo.mn carries nothing for a good many listings
-          and its panel then renders nothing at all, which on a wide screen
-          would leave the news stranded in the right two thirds beside a
-          hole where the panel would have been. */}
-      <div className="lg:col-span-2">
-        <CompanyNews symbol={security.symbol} />
-      </div>
-
-      <div>
         <MarketInfoPanel
           symbol={security.symbol}
           weekHigh52={recommendation.indicators.weekHigh52}
@@ -238,15 +232,21 @@ export default async function StockDetailPage({
         />
       </div>
 
-      <div className="lg:col-span-3">
+      <div className="md:order-3 md:col-span-2">
+        <CompanyNews symbol={security.symbol} />
+      </div>
+
+      <div className="md:order-5 md:col-span-3">
         <AiSignalPanel symbol={security.symbol} />
       </div>
       </div>
 
       {/* In the page, under the analyst panel, and staying where it is put.
           It used to follow the scroll — first sticky, then fixed — and either
-          way it moved about the screen while everything else did. */}
-      <div className="mx-auto max-w-md">
+          way it moved about the screen while everything else did. Full width,
+          so the pair splits it in half rather than sitting in a narrow strip
+          down the middle of a board. */}
+      <div>
         <TradeModal
           symbol={security.symbol}
           initial={{
