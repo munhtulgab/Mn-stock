@@ -355,11 +355,26 @@ export async function applyLiveQuotes(
   return rows.map((row) => {
     const live = quotes.get(row.companyCode);
     if (!live || live.price === null) return row;
+    const liveDate = live.at?.slice(0, 10) ?? row.lastDate;
+
+    // marketinfo does not always state a change. When it doesn't, and the
+    // row it is overlaying is a session older, the row's own close is the
+    // previous one — which is exactly what the change is measured from.
+    // Without this those securities carry no change at all and drop out of
+    // the movers, which is how a day with fifty trades showed four.
+    const priorClose =
+      row.lastDate && liveDate && row.lastDate < liveDate ? row.lastPrice : null;
+    const changePct =
+      live.changePct ??
+      (priorClose && priorClose > 0
+        ? ((live.price - priorClose) / priorClose) * 100
+        : row.changePct);
+
     return {
       ...row,
       lastPrice: live.price,
-      changePct: live.changePct,
-      lastDate: live.at?.slice(0, 10) ?? row.lastDate,
+      changePct,
+      lastDate: liveDate,
       volume: live.volume ?? row.volume,
       // Keep the line ending where the number says it does.
       sparkline:
@@ -387,16 +402,34 @@ export function latestSessionDate(rows: DashboardRow[]): string | null {
 }
 
 /**
- * Rows that actually traded in the latest session.
+ * The session the movers should describe, and the rows that traded in it.
  *
- * Gainers and losers are statements about that session, so a security whose
- * newest price is months old belongs to neither list however far it moved on
- * the day it last traded.
+ * Not simply the newest date any row carries. A running quote arrives for
+ * one company the moment it trades, and that alone would make its date "the
+ * session" — leaving the lists with that single row while yesterday's fifty
+ * are excluded for being a day old. So the newest date that carries a real
+ * session's worth of trades wins, and only if no date does that at all is
+ * the newest one used. Either way the section prints the date it is talking
+ * about, so a reader is never told Tuesday is Wednesday.
  */
-export function tradedInLatestSession(rows: DashboardRow[]): DashboardRow[] {
-  const session = latestSessionDate(rows);
-  if (!session) return [];
-  return rows.filter((r) => r.lastDate === session);
+export function tradedSession(
+  rows: DashboardRow[],
+  minimum: number,
+): { session: string | null; rows: DashboardRow[] } {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.lastDate || row.changePct === null) continue;
+    counts.set(row.lastDate, (counts.get(row.lastDate) ?? 0) + 1);
+  }
+
+  const dates = [...counts.keys()].sort().reverse();
+  const session = dates.find((d) => counts.get(d)! >= minimum) ?? dates[0] ?? null;
+  if (!session) return { session: null, rows: [] };
+
+  return {
+    session,
+    rows: rows.filter((r) => r.lastDate === session && r.changePct !== null),
+  };
 }
 
 /**

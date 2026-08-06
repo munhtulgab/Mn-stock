@@ -3,9 +3,8 @@ import { getDb } from "@/lib/mongodb";
 import {
   applyLiveQuotes,
   getDashboardRows,
-  latestSessionDate,
   pricedRecently,
-  tradedInLatestSession,
+  tradedSession,
   type DashboardRow,
 } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth";
@@ -28,6 +27,14 @@ export const dynamic = "force-dynamic";
  */
 const TOP_PICK_MAX_AGE_DAYS = 45;
 
+/**
+ * How many gainers and how many losers to show. Also what makes a date worth
+ * calling a session: a day that produced fewer trades than the two lists ask
+ * for has not really opened yet, and yesterday's full board is the more
+ * useful thing to show until it has.
+ */
+const MOVERS = 6;
+
 export default async function HomePage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
@@ -44,19 +51,18 @@ export default async function HomePage() {
 
   const displayName = user?.fullName || user?.username || "";
 
-  // Movers describe the last session, so only securities that traded in it
+  // Movers describe one session, so only securities that traded in it
   // qualify. Ranking every listing by "change since it last traded" put a
   // 2006 price at the top of the gainers with +308%.
-  const session = latestSessionDate(rows);
-  const traded = tradedInLatestSession(rows).filter((r) => r.changePct !== null);
+  const { session, rows: traded } = tradedSession(rows, MOVERS * 2);
   const gainers = traded
     .filter((r) => r.changePct! > 0)
     .sort((a, b) => b.changePct! - a.changePct!)
-    .slice(0, 6);
+    .slice(0, MOVERS);
   const losers = traded
     .filter((r) => r.changePct! < 0)
     .sort((a, b) => a.changePct! - b.changePct!)
-    .slice(0, 6);
+    .slice(0, MOVERS);
   // Untraded listings score 0 across the board; ranking them as "top picks"
   // would just surface whatever sorts first alphabetically. A long-dormant
   // listing is excluded for the same reason its indicators are meaningless.
