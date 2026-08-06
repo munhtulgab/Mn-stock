@@ -39,7 +39,7 @@ const SNAPSHOT_KEY = "dividends";
 /** A declaration is an annual event; a day between rebuilds is plenty. */
 const CACHE_MS = 24 * 60 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 /** Notices to read back through — several years of declarations. */
 const NOTICES = 120;
 /**
@@ -165,6 +165,7 @@ function companyOf(
   title: string,
   exact: Map<string, number>,
   prefixes: Listing[],
+  spaceless: Map<string, number>,
 ): number | null {
   const quoted = /^\s*["“«]([^"”»]+)["”»]/.exec(title);
   if (!quoted) return null;
@@ -178,7 +179,32 @@ function companyOf(
     if (!name.startsWith(`${listing.name} `)) continue;
     if (!best || listing.name.length > best.name.length) best = listing;
   }
-  return best?.companyCode ?? null;
+  if (best) return best.companyCode;
+
+  // Last: the same name written without the space. The registry has "Таван
+  // толгой" and the newsroom writes "ТАВАНТОЛГОЙ", which neither of the two
+  // above can see past. Only names that stay unique once the spaces are
+  // dropped are matched this way — two listings collapse onto
+  // "МОНГОЛДААТГАЛ", and a guess between them is worse than no figure.
+  return spaceless.get(collapse(name)) ?? null;
+}
+
+function collapse(name: string): string {
+  return name.replace(/\s+/g, "");
+}
+
+/** Spaceless names that belong to exactly one listing. */
+function unambiguousSpaceless(listings: Listing[]): Map<string, number> {
+  const seen = new Map<string, number[]>();
+  for (const listing of listings) {
+    const key = collapse(listing.name);
+    seen.set(key, [...(seen.get(key) ?? []), listing.companyCode]);
+  }
+  return new Map(
+    [...seen.entries()]
+      .filter(([, codes]) => new Set(codes).size === 1)
+      .map(([key, codes]) => [key, codes[0]]),
+  );
 }
 
 export async function computeDividends(
@@ -198,16 +224,18 @@ export async function computeDividends(
   const notices = [...filed, ...general.filter((n) => DIVIDEND_PHRASE.test(n.title))];
   const seen = new Set<string>();
 
-  const exact = new Map(securities.map((s) => [normalize(s.name), s.companyCode]));
-  const prefixes: Listing[] = securities
+  const listings: Listing[] = securities
     .map((s) => ({ name: normalize(s.name), companyCode: s.companyCode }))
-    .filter((listing) => listing.name.length >= MIN_DISTINCTIVE_CHARS);
+    .filter((listing) => listing.name.length > 0);
+  const exact = new Map(listings.map((l) => [l.name, l.companyCode]));
+  const prefixes = listings.filter((l) => l.name.length >= MIN_DISTINCTIVE_CHARS);
+  const spaceless = unambiguousSpaceless(prefixes);
   const byCompany: Record<string, Dividend[]> = {};
 
   for (const notice of notices) {
     if (seen.has(notice.url)) continue;
     seen.add(notice.url);
-    const companyCode = companyOf(notice.title, exact, prefixes);
+    const companyCode = companyOf(notice.title, exact, prefixes, spaceless);
     if (companyCode === null) continue;
     const amount = perShare(`${notice.description} ${notice.title}`);
     if (amount === null) continue;

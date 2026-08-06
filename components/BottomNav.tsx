@@ -1,8 +1,48 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS, isActive } from "./navItems";
+
+/**
+ * Keeps the bar against the bottom of what the reader can actually see.
+ *
+ * `position: fixed` is measured against the layout viewport, which on iOS is
+ * not what is on the screen once the page is zoomed: at 2x the reader sees
+ * the top half and the bar stays pinned to a bottom edge 330px below it —
+ * which is how a bar meant for the foot of the screen ends up lying across
+ * the middle of an article. The visual viewport knows where the reader is
+ * looking, so the bar is lifted by the difference between the two.
+ *
+ * Written straight to the node rather than through state: this fires on
+ * every frame of a pinch, and a re-render per frame is a re-render too many.
+ */
+function useVisualViewportBottom<T extends HTMLElement>() {
+  const node = useRef<T>(null);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const apply = () => {
+      const el = node.current;
+      if (!el) return;
+      const hidden = window.innerHeight - (viewport.offsetTop + viewport.height);
+      el.style.transform = hidden > 1 ? `translateY(${-hidden}px)` : "";
+    };
+
+    apply();
+    viewport.addEventListener("resize", apply);
+    viewport.addEventListener("scroll", apply);
+    return () => {
+      viewport.removeEventListener("resize", apply);
+      viewport.removeEventListener("scroll", apply);
+    };
+  }, []);
+
+  return node;
+}
 
 /**
  * Renders inside <Link>, so it can read that link's own transition state.
@@ -21,6 +61,7 @@ function PendingDot() {
 export default function BottomNav() {
   const pathname = usePathname();
   const items = NAV_ITEMS.filter((item) => !item.headerOnly);
+  const bar = useVisualViewportBottom<HTMLElement>();
 
   return (
     /* Fixed, not sticky. A sticky bar is positioned against its containing
@@ -29,7 +70,7 @@ export default function BottomNav() {
        mid-screen, or cut, for as long as the transition lasts. Fixed takes
        it out of the scroll altogether; the shell pads the content by the
        height it occupies. */
-    <nav className="fixed inset-x-0 bottom-0 z-30 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+26px)] bg-linear-to-t from-app-bg via-app-bg to-transparent">
+    <nav ref={bar} className="fixed inset-x-0 bottom-0 z-30 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+26px)] bg-linear-to-t from-app-bg via-app-bg to-transparent">
       <div className="mx-auto max-w-md flex items-center justify-between gap-1 rounded-full bg-linear-to-b from-nav-surface-hi to-nav-surface p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_1px_rgba(0,0,0,0.35)]">
         {items.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
