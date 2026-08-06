@@ -39,7 +39,7 @@ const SNAPSHOT_KEY = "dividends";
 /** A declaration is an annual event; a day between rebuilds is plenty. */
 const CACHE_MS = 24 * 60 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 /** Notices to read back through — several years of declarations. */
 const NOTICES = 120;
 /**
@@ -79,8 +79,26 @@ function perShare(text: string): number | null {
     /нэгж\s+хувьцаа[а-яөүёА-ЯӨҮЁ]*\s+([\d,]+(?:\.\d+)?)\s*(?:\([^)]*\)\s*)?төгрөг/i.exec(
       text,
     );
-  if (!match) return null;
-  const amount = Number(match[1].replace(/,/g, ""));
+  return match ? parseAmount(match[1]) : null;
+}
+
+/**
+ * A written figure to a number, deciding what its commas are for.
+ *
+ * Both conventions appear in these notices: "4,400 төгрөг" is four thousand
+ * four hundred, and "0,226 төгрөг буюу нийт 250,000,000" is a fifth of a
+ * tugrik. Stripping every comma reads the second as 226 — a thousand times
+ * the dividend the company declared — so a comma is only a thousands
+ * separator where it can be one: never after a lone zero, and never with
+ * fewer than three digits behind it.
+ */
+function parseAmount(raw: string): number | null {
+  const decimalComma =
+    (raw.match(/,/g) ?? []).length === 1 &&
+    (/^0,/.test(raw) || /^\d+,\d{1,2}$/.test(raw));
+  const amount = Number(
+    decimalComma ? raw.replace(",", ".") : raw.replace(/,/g, ""),
+  );
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
@@ -97,11 +115,21 @@ function profitYear(title: string, date: string): number {
   return Number.isFinite(stated) ? stated : Number(date.slice(0, 4));
 }
 
-/** Upper-cased, without quote marks or the legal form, for comparing names. */
+/**
+ * Upper-cased, without quote marks or the legal form, for comparing names.
+ *
+ * The form is matched between spaces rather than with `\b`, which in
+ * JavaScript means an ASCII word boundary and therefore finds none at all
+ * after a Cyrillic "ХК" — the registry's "Инновэйшн инвестмент ХК" kept its
+ * suffix, matched nothing the newsroom writes, and took the whole market's
+ * dividends down with it.
+ */
+const LEGAL_FORM = /(?:^|\s)(ХК|ХХК|АА|ТӨХК|ТӨААТҮГ|ХУВЬЦААТ КОМПАНИ)(?=\s|$)/giu;
+
 function normalize(name: string): string {
   return name
     .replace(/["“”«»']/g, "")
-    .replace(/\s*(ХК|ХХК|АА|ТӨХК|ТӨААТҮГ)\b/gi, "")
+    .replace(LEGAL_FORM, " ")
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
