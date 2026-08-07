@@ -30,6 +30,15 @@ export const viewport: Viewport = {
   themeColor: "#0d0f14",
   width: "device-width",
   initialScale: 1,
+  /**
+   * The on-screen keyboard shrinks the layout viewport rather than sliding
+   * over the page, so anything fixed to the bottom — the tab bar, a trade
+   * ticket's buttons — comes up with it and stays reachable. This is the
+   * declarative version of what the tab bar used to attempt in JavaScript by
+   * measuring the visual viewport, which is what left it stranded across the
+   * middle of the screen.
+   */
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

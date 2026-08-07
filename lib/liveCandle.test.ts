@@ -87,7 +87,7 @@ test("stated open, high, low and volume are used as given", () => {
 });
 
 test("an empty history still gains today's bar", () => {
-  const out = withLiveCandle([], quote({}));
+  const out = withLiveCandle([] as Candle[], quote({}));
   assert.equal(out.length, 1);
   assert.equal(out[0].close, 1460);
   // Nothing behind it to open from, so it opens at its own price.
