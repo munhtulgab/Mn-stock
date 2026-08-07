@@ -7,6 +7,18 @@
     {
       "path": "/api/news/refresh",
       "schedule": "30 4 * * 1-5"
+    },
+    {
+      "path": "/api/prices/tick",
+      "schedule": "59 1 * * 1-5"
+    },
+    {
+      "path": "/api/prices/tick",
+      "schedule": "1-59/2 2-4 * * 1-5"
+    },
+    {
+      "path": "/api/prices/tick",
+      "schedule": "1 5 * * 1-5"
     }
   ]
 }
