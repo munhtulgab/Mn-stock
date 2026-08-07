@@ -18,6 +18,8 @@ import { buildScorecard, type Scorecard } from "./indicators";
 import { computeRisk, RISK_YEARS, type RiskMetrics } from "./risk";
 import { combineSignal, type CombinedSignal } from "./signal";
 import { TIMEFRAMES, type Candle, type Timeframe } from "./series";
+import { withLiveCandle } from "@/lib/liveCandle";
+import type { LiveQuote } from "@/lib/marketinfo/quotes";
 
 /**
  * The whole analysis for one company, assembled once on the server.
@@ -245,11 +247,18 @@ export async function buildAnalysis(
   security: Security,
   price: number | null,
   today: string,
+  /**
+   * The running quote, so the chart and every indicator reach today rather
+   * than stopping at the last published session. The exchange publishes a
+   * day only once it has closed, so without this the chart ends on
+   * yesterday's close while the header above it quotes this morning.
+   */
+  live?: LiveQuote | null,
 ): Promise<StockAnalysis> {
   const from = `${Number(today.slice(0, 4)) - HISTORY_YEARS}${today.slice(4)}`;
 
   const [
-    candles,
+    storedCandles,
     financialsByCompany,
     pricesByCompany,
     securities,
@@ -271,6 +280,10 @@ export async function buildAnalysis(
     getTdbLatest(db).catch(() => new Map<number, { latest: TdbYear; previous: TdbYear | null }>()),
     getTdbDividends(db, security.companyCode).catch(() => []),
   ]);
+
+  // Today's bar goes on before anything is computed from the series, so the
+  // scorecards, the risk figures and the chart all describe the same market.
+  const candles = withLiveCandle(storedCandles, live);
 
   const ownReports = financialsByCompany.get(security.companyCode) ?? [];
   const financials = ownReports[0] ?? null;

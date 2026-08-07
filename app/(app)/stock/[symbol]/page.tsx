@@ -87,8 +87,8 @@ export default async function StockDetailPage({
   // where the market is open, the last close otherwise. Read once here so
   // the dividend yields and the P/B on the analysis are quoting the same
   // number the header is.
-  const currentPrice =
-    liveQuotes.get(security.companyCode)?.price ?? priceHistory.at(-1)?.close ?? null;
+  const live = liveQuotes.get(security.companyCode) ?? null;
+  const currentPrice = live?.price ?? priceHistory.at(-1)?.close ?? null;
   const today = ulaanbaatarDay(new Date());
 
   // Resolved during render, not after: leaving it to the client meant the
@@ -112,12 +112,11 @@ export default async function StockDetailPage({
     // the same candles on the server. It reads the whole market's latest
     // reports to rank this company against its sector, so it is awaited
     // alongside the rest rather than after them.
-    buildAnalysis(db, security, currentPrice, today).catch((err) => {
+    buildAnalysis(db, security, currentPrice, today, live).catch((err) => {
       console.error(`analysis failed for ${security.symbol}`, err);
       return null;
     }),
   ]);
-  const live = liveQuotes.get(security.companyCode) ?? null;
   const closedAt = sessionEnd(liveQuotes);
   const holding = portfolio.holdings.find((h) => h.symbol === security.symbol);
   const inWatchlist = watchlist.some((w) => w.symbol === security.symbol);

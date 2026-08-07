@@ -6,6 +6,7 @@ import { fetchExchangeMovers, type ExchangeMovers } from "@/lib/mse/movers";
 import { daysBetween, sessionChangePct } from "@/lib/priceChange";
 import { ulaanbaatarDay } from "@/lib/day";
 import { needsPriceRefresh } from "@/lib/priceFreshness";
+import { liveCandle } from "@/lib/liveCandle";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 
 const INDICATOR_WINDOW_DAYS = 400;
@@ -209,35 +210,29 @@ function withLivePoint(
   live: LiveQuote | undefined,
   companyCode: number,
 ): PricePoint[] {
-  const date = live?.at?.slice(0, 10);
-  if (!live || live.price === null || !date) return prices;
-
   const lastStored = prices.at(-1);
+  const date = live?.at?.slice(0, 10);
   // What this point replaces, if it replaces one: the close before today.
   const priorClose =
     lastStored?.date === date ? prices.at(-2)?.close : lastStored?.close;
 
-  // Every field is filled rather than left undefined. The 52-week range is
-  // Math.max over p.high across a year of points, and one undefined in that
-  // array makes the whole figure NaN — which is how a running quote with no
-  // stated high (most of them) could blank the range on a company's page.
-  const open = live.open ?? priorClose ?? live.price;
+  // The bar itself comes from the shared builder, so the point appended here
+  // and the candle the chart draws are the same bar. They were written twice
+  // once, and the chart ended a session short of the price in the header.
+  const bar = liveCandle(live, priorClose);
+  if (!bar) return prices;
+
   const point: PricePoint = {
+    ...bar,
     companyCode,
-    date,
-    open,
-    close: live.price,
-    high: live.high ?? Math.max(live.price, open),
-    low: live.low ?? Math.min(live.price, open),
-    vwap: live.price,
-    volume: live.volume ?? 0,
+    vwap: bar.close,
     turnover: 0,
     trades: 0,
-    previousClose: live.previousClose ?? priorClose ?? 0,
+    previousClose: live!.previousClose ?? priorClose ?? 0,
   };
 
-  if (lastStored?.date === date) return [...prices.slice(0, -1), point];
-  if (!lastStored || lastStored.date < date) return [...prices, point];
+  if (lastStored?.date === bar.date) return [...prices.slice(0, -1), point];
+  if (!lastStored || lastStored.date < bar.date) return [...prices, point];
   return prices;
 }
 
