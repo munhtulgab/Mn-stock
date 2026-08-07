@@ -68,7 +68,11 @@ export default function TechnicalScorecard({
 }: {
   scorecards: Record<Timeframe, Scorecard>;
 }) {
-  const [timeframe, setTimeframe] = useState<Timeframe>("1D");
+  // Opens on the monthly reading. A daily scorecard on this market is mostly
+  // noise — most listings trade a few dozen times a month, so a day's worth
+  // of bars flips verdicts on single small orders — where the monthly one
+  // describes the trend a holder is actually in.
+  const [timeframe, setTimeframe] = useState<Timeframe>("1M");
   const card = scorecards[timeframe];
   const { buy, sell, neutral } = card.counts;
   const total = buy + sell + neutral;

@@ -27,7 +27,7 @@ import RiskPanel from "@/components/RiskPanel";
 import DividendHistory from "@/components/DividendHistory";
 import PeerTable from "@/components/PeerTable";
 import CombinedSignalCard from "@/components/CombinedSignalCard";
-import CandleChart from "@/components/CandleChart";
+import PriceChartPro from "@/components/PriceChartPro";
 import { buildAnalysis } from "@/lib/analysis/report";
 import { getDividendsFor } from "@/lib/dividends";
 import { ulaanbaatarDay } from "@/lib/day";
@@ -239,7 +239,7 @@ export default async function StockDetailPage({
               analysis built; the closing line is the fallback because it can
               be drawn from the two fields the page already had. */}
           {analysis && analysis.enoughHistory ? (
-            <CandleChart candles={analysis.candles} />
+            <PriceChartPro candles={analysis.candles} />
           ) : (
             <PriceChart data={chartData} title="Ханшийн график" />
           )}
