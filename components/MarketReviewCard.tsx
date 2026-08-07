@@ -22,12 +22,16 @@ export default function MarketReviewCard({
     <section className="rounded-2xl border border-app-border bg-app-card p-4 h-full space-y-3">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-sm font-semibold text-app-text">{title}</h2>
-        <span className="text-[11px] text-app-muted tabular-nums whitespace-nowrap">
-          {/* A single session is one date, not a range from itself to itself. */}
-          {review.from === review.to
-            ? review.to
-            : `${review.from} – ${review.to}`}
-        </span>
+        {/* Dropped when the heading already carries the dates, as the weekly
+            summary's does now that it is titled like the report it is. */}
+        {!title.includes(review.from.replaceAll("-", ".")) && (
+          <span className="text-[11px] text-app-muted tabular-nums whitespace-nowrap">
+            {/* A single session is one date, not a range from itself to itself. */}
+            {review.from === review.to
+              ? review.to
+              : `${review.from} – ${review.to}`}
+          </span>
+        )}
       </div>
 
       {review.indices.length > 0 && (

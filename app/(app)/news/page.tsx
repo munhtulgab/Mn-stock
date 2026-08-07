@@ -14,12 +14,41 @@ import MarketReviewCard from "@/components/MarketReviewCard";
 import TradeReportCard from "@/components/TradeReportCard";
 import ReviewTabs, { type ReviewTab } from "@/components/ReviewTabs";
 import ReportSlider from "@/components/ReportSlider";
-import { getMarketReviews } from "@/lib/marketReview";
+import { getMarketReviews, weeklyReviewTitle } from "@/lib/marketReview";
 import { getTradeReports, type TradeReport } from "@/lib/tradeReports";
 import type { MarketReview } from "@/lib/marketReview";
 import { dayHeading, dayPossessive } from "@/lib/day";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Fragment that opens the weekly tab, for the feed row below.
+ *
+ * ASCII, though everything around it is Cyrillic: a fragment goes into the
+ * address bar percent-encoded, so `location.hash` reads back as
+ * "%D0%B4%D0%BE..." and never matches the tab it was written from.
+ */
+const WEEKLY_HASH = "weekly-review";
+
+/**
+ * The app's weekly summary, as a story in the feed.
+ *
+ * It is a report of the same kind as the exchange's own — five named days,
+ * the same turnover, the same movers — and a reader scanning the week's
+ * headlines should find it among them rather than only as a panel above
+ * them. It links into the page it is already on, which is why NewsList
+ * leaves an internal row in the current tab.
+ */
+function weeklyReviewStory(review: MarketReview): MarketNewsItem {
+  return {
+    title: weeklyReviewTitle(review),
+    url: `#${WEEKLY_HASH}`,
+    source: "MSE Advisor",
+    // Dated to the week's last session, so it files under that day with the
+    // reports covering the same period.
+    date: review.to,
+  };
+}
 
 function groupByDay(items: MarketNewsItem[]): [string, MarketNewsItem[]][] {
   const groups = new Map<string, MarketNewsItem[]>();
@@ -40,10 +69,47 @@ function reviewTab(
   title: string,
   review: MarketReview | null,
   reports: TradeReport[],
+  /**
+   * Puts this period's own summary into the slider rather than beside it.
+   *
+   * The week wants it: its summary is a dated report like the exchange's
+   * own, covering the same five days, so the two read as two accounts of
+   * one week and belong in the same slot. The day does not — its summary is
+   * the figures for a session that is still the newest thing on the page,
+   * and burying it behind a swipe would hide the answer to "what happened
+   * today" behind a gesture.
+   */
+  options: { asSlide?: boolean; hash?: string } = {},
 ): ReviewTab | null {
   if (!review && reports.length === 0) return null;
+
+  if (options.asSlide) {
+    const slides = [
+      ...(review
+        ? [<MarketReviewCard key="own" title={title} review={review} />]
+        : []),
+      ...reports.map((report) => (
+        <TradeReportCard key={report.id} report={report} />
+      )),
+    ];
+    return {
+      label,
+      hash: options.hash,
+      content: (
+        <ReportSlider
+          labels={[
+            ...(review ? [title] : []),
+            ...reports.map((report) => report.title),
+          ]}
+          slides={slides}
+        />
+      ),
+    };
+  }
+
   return {
     label,
+    hash: options.hash,
     content: (
       // Side by side only when there are two of them: the month has nothing
       // of the exchange's own, and one card in a two-column grid is a card
@@ -74,12 +140,22 @@ export default async function NewsPage() {
     getCurrentUser(db),
     getMarketNews(db),
   ]);
-  // The reports come out of the feed — they are headlines already in it —
-  // and the weekly one then says which week the weekly review is about, so
-  // the card and the article beside it cover the same five days.
+  // The reports come out of the feed — they are headlines already in it.
+  //
+  // The weekly review is no longer anchored to the exchange's article. It
+  // used to be, so the two covered the same five days while they sat side by
+  // side; but the exchange publishes its review of a week during the week
+  // after, which left the card describing the previous week on the Friday of
+  // a full one. They are slides in one slot now, each carrying its own dates,
+  // and the app's summary describes the week it has the prices for.
   const reports = await getTradeReports(db, items);
-  const reviews = await getMarketReviews(db, reports.weekly[0]?.date);
-  const days = groupByDay(items);
+  const reviews = await getMarketReviews(db);
+  // Ahead of the exchange's own stories for the same day: it is the summary
+  // of the whole week those stories are pieces of.
+  const feed = reviews.week
+    ? [weeklyReviewStory(reviews.week), ...items]
+    : items;
+  const days = groupByDay(feed);
   const fresh = countNewSince(items, user?.newsSeenAt);
 
   // Marked after the page has been sent, so what the reader is looking at is
@@ -106,7 +182,18 @@ export default async function NewsPage() {
       reviews.day,
       reports.daily,
     ),
-    reviewTab("7 хоног", "7 хоногийн зах зээлийн тойм", reviews.week, reports.weekly),
+    // Named for the five days it covers, and sliding: the app's summary and
+    // the exchange's own review of the same week are two accounts of one
+    // thing and share a slot.
+    reviewTab(
+      "7 хоног",
+      reviews.week
+        ? weeklyReviewTitle(reviews.week)
+        : "Долоо хоногийн тойм",
+      reviews.week,
+      reports.weekly,
+      { asSlide: true, hash: WEEKLY_HASH },
+    ),
     reviewTab("Өнгөрсөн сар", "Өнгөрсөн сарын зах зээлийн тойм", reviews.month, []),
   ].filter((tab): tab is ReviewTab => tab !== null);
 

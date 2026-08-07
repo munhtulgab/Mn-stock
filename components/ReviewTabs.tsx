@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export interface ReviewTab {
   /** Short enough for a chip on a phone: "Өчигдөр", "7 хоног". */
   label: string;
   content: React.ReactNode;
+  /**
+   * Fragment that selects this tab, for links elsewhere on the page. The
+   * weekly summary appears in the feed below as a story of its own, and
+   * tapping it should land on the week rather than on whichever tab happened
+   * to be open.
+   */
+  hash?: string;
 }
 
 /**
@@ -21,10 +28,34 @@ export interface ReviewTab {
  */
 export default function ReviewTabs({ tabs }: { tabs: ReviewTab[] }) {
   const [active, setActive] = useState(0);
+
+  // A link into a period selects it. Read on mount as well as on change,
+  // because arriving with the fragment already in the address bar fires no
+  // event — the reader is simply already there.
+  useEffect(() => {
+    const select = () => {
+      // Decoded, because the browser stores a fragment percent-encoded and
+      // a tab's own hash is written as plain text.
+      const raw = window.location.hash.slice(1);
+      let wanted = raw;
+      try {
+        wanted = decodeURIComponent(raw);
+      } catch {
+        // A malformed escape is not a tab name; the raw text still might be.
+      }
+      if (!wanted) return;
+      const index = tabs.findIndex((tab) => tab.hash === wanted);
+      if (index >= 0) setActive(index);
+    };
+    select();
+    window.addEventListener("hashchange", select);
+    return () => window.removeEventListener("hashchange", select);
+  }, [tabs]);
+
   if (tabs.length === 0) return null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" id="market-review">
       <div className="flex items-center gap-1.5">
         {tabs.map((tab, i) => (
           <button

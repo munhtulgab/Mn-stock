@@ -30,8 +30,13 @@ export default function NewsList({ items }: { items: NewsListItem[] }) {
         <a
           key={`${item.url}|${i}`}
           href={item.url}
-          target="_blank"
-          rel="noopener noreferrer"
+          // Only a foreign story opens elsewhere. The app's own summaries sit
+          // in this same list and are already on this page; sending one to a
+          // new tab would leave the reader looking at a second copy of where
+          // they started.
+          {...(isInternal(item.url)
+            ? {}
+            : { target: "_blank", rel: "noopener noreferrer" })}
           className="block px-4 py-3 active:bg-app-elevated"
         >
           <div className="text-sm font-semibold uppercase text-app-text leading-snug">
@@ -47,6 +52,11 @@ export default function NewsList({ items }: { items: NewsListItem[] }) {
       ))}
     </div>
   );
+}
+
+/** A link into this app rather than out of it. */
+function isInternal(url: string): boolean {
+  return url.startsWith("#") || url.startsWith("/");
 }
 
 /**

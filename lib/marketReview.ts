@@ -51,6 +51,29 @@ export interface MarketReview {
   indices: ReviewIndex[];
 }
 
+/**
+ * A period written as the exchange writes one: "2026.08.03-2026.08.07".
+ *
+ * Dots rather than dashes between the parts, because a dash is already
+ * doing the work of separating the two dates and "2026-08-03-2026-08-07"
+ * is unreadable.
+ */
+function dotted(date: string): string {
+  return date.replaceAll("-", ".");
+}
+
+/**
+ * The app's own weekly summary, named as a story rather than as a panel.
+ *
+ * "7 хоногийн зах зээлийн тойм" is a heading — it says what kind of thing
+ * this is and nothing about which week. Once the summary sits in the feed
+ * beside the exchange's own reports it needs to say which five days it
+ * covers, the way every dated report around it does.
+ */
+export function weeklyReviewTitle(review: MarketReview): string {
+  return `Долоо хоногийн тойм (${dotted(review.from)}-${dotted(review.to)})`;
+}
+
 export interface MarketReviews {
   /** The last session on its own, measured against the one before it. */
   day: MarketReview | null;
@@ -64,7 +87,7 @@ const TOP = 3;
 const SNAPSHOT_KEY = "marketReviews";
 const CACHE_MS = 30 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 interface ReviewSnapshot {
   key: string;
@@ -162,10 +185,9 @@ function indexMoves(series: IndexSeries, from: string, to: string): ReviewIndex[
 /**
  * Reads the stored reviews, rebuilding them when they have gone stale.
  *
- * `weekOf` is any date inside the week the weekly review should cover —
- * in practice the date on the exchange's own weekly report, so the card and
- * the article beside it are about the same five days. Without it the last
- * week that has fully passed is used.
+ * `weekOf` is any date inside the week the weekly review should cover, for a
+ * caller that wants a particular one. Without it the week is chosen from the
+ * sessions the exchange has actually held — see `weekStart`.
  */
 export async function getMarketReviews(
   db: Db,
@@ -173,7 +195,10 @@ export async function getMarketReviews(
 ): Promise<MarketReviews> {
   const snapshots = db.collection<ReviewSnapshot>("marketSnapshots");
   const cached = await snapshots.findOne({ key: SNAPSHOT_KEY });
-  const week = weekStart(weekOf);
+  // The window is derived from the sessions held, so it can move when the
+  // day does; keying on the day rebuilds it then rather than serving
+  // yesterday's idea of which week this is.
+  const week = weekOf ? mondayOf(weekOf) : ulaanbaatarDay(new Date());
   if (
     cached?.schemaVersion === SCHEMA_VERSION &&
     cached.weekOf === week &&
@@ -205,13 +230,35 @@ export async function getMarketReviews(
 }
 
 /**
- * The Monday of the week a review covers: the one holding `weekOf` when the
- * exchange has published a review, and otherwise the last week that has
- * fully passed — this week is still happening and is not a review yet.
+ * Sessions a week must already have held before it is worth reviewing.
+ *
+ * Two, so a Monday morning shows the week that has just finished rather than
+ * a "weekly review" of a single session, and every other day of the week
+ * shows the week the reader is actually in.
  */
-function weekStart(weekOf?: string): string {
-  const today = ulaanbaatarDay(new Date());
-  return weekOf ? mondayOf(weekOf) : shiftDays(mondayOf(today), -7);
+const MIN_SESSIONS_FOR_A_WEEK = 2;
+
+/**
+ * The Monday of the week a review covers.
+ *
+ * The week the market is in, as soon as it has traded enough of it to be
+ * worth summarising. This used to be anchored to the date on the exchange's
+ * own weekly article, so that the app's card and that article covered the
+ * same five days while they sat side by side — but the exchange publishes
+ * its review of a week during the week after, so on the Friday of a full
+ * trading week the card was still describing the week before. Now that the
+ * two are slides in one slot rather than a pair, each carries its own dates
+ * and the app's own summary describes the week it has the prices for.
+ *
+ * `weekOf` still overrides, for a caller that wants a particular week.
+ */
+function weekStart(sessions: string[], weekOf?: string): string {
+  if (weekOf) return mondayOf(weekOf);
+
+  const latest = sessions[sessions.length - 1] ?? ulaanbaatarDay(new Date());
+  const thisWeek = mondayOf(latest);
+  const held = sessions.filter((date) => date >= thisWeek).length;
+  return held >= MIN_SESSIONS_FOR_A_WEEK ? thisWeek : shiftDays(thisWeek, -7);
 }
 
 export async function computeMarketReviews(
@@ -227,9 +274,19 @@ export async function computeMarketReviews(
   if (!newest) return { day: null, week: null, month: null };
 
   const to = newest.date;
+
+  // Which days the exchange actually held a session on recently, so the week
+  // can be chosen by how much of it has traded rather than by the calendar
+  // alone — a week of holidays is not a week to review.
+  const sessions = (
+    await db
+      .collection<PricePoint>("prices")
+      .distinct("date", { date: { $gte: shiftDays(mondayOf(to), -14) } })
+  ).sort();
+
   // Calendar periods rather than rolling windows: "өнгөрсөн сар" is July,
-  // and the week is the one the exchange reviews, not the last seven days.
-  const weekFrom = weekStart(weekOf);
+  // and the week is the one the market is in once it has traded enough of it.
+  const weekFrom = weekStart(sessions, weekOf);
   const weekTo = shiftDays(weekFrom, 6);
   const month = previousMonth(ulaanbaatarDay(new Date()));
   // Far enough back that the earliest window has a close before it to be
