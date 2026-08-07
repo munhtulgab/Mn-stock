@@ -86,6 +86,11 @@ export default function FundamentalPanel({
                   <span className="text-[9px] text-app-muted/70 ml-1">
                     {ratio.direction === "lower" ? "↓ сайн" : "↑ сайн"}
                   </span>
+                  {/* Marked because it is a different vintage: MSE's figures
+                      are this quarter, Datalab's are the last closed year. */}
+                  {ratio.external && (
+                    <span className="text-[9px] text-app-muted/70 ml-1">· TDB</span>
+                  )}
                 </td>
                 <td
                   className={`py-1.5 px-2 text-right tabular-nums font-semibold ${
@@ -131,12 +136,11 @@ export default function FundamentalPanel({
       <p className="mt-3 text-[10px] text-app-muted">
         Байр — салбартаа эзлэх байрлал (100% нь хамгийн сайн). Салбарын
         дунджаас ±10% дотор бол шар.
-        {/* Said plainly rather than left as a silently missing row: the
-            exchange's summary publishes only balance-sheet totals, so there
-            is nothing to compute a current ratio from. */}
-        {" "}Хөрвөх чадварын харьцаа (Current Ratio) МХБ-ийн тайланд эргэлтийн
-        хөрөнгө, богино хугацаат өр төлбөр тусдаа заагддаггүй тул тооцоолох
-        боломжгүй.
+        {/* Said rather than left to be noticed: two vintages sit in one
+            table, and a reader comparing a P/E with a current ratio should
+            know they are not describing the same moment. */}
+        {" "}TDB тэмдэгтэй мөр нь МХБ нийтэлдэггүй тул TDB Datalab-ийн сүүлийн
+        хаагдсан жилийн тайлангаас авав; бусад нь МХБ-ийн энэ улирлынх.
       </p>
     </div>
   );

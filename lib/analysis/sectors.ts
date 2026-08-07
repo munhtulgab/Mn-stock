@@ -167,6 +167,40 @@ const LAYOUT_SECTORS: Record<NonNullable<Financials["reportKind"]>, SectorKey | 
  */
 const LEGAL_FORM = /\s+(ХК|XK|ХХК|ТӨХК|АА)\s*$/iu;
 
+/**
+ * A company's industry as somebody who knows has classified it.
+ *
+ * TDB Securities' Datalab files each company under a real industry code —
+ * "Чулуун, хүрэн нүүрс олборлолт" for the coalfields, "Хувцас үйлдвэрлэл"
+ * for the garment makers — which is a statement of fact where everything
+ * below is inference from a name. It covers 88 of the exchange's listings;
+ * the rest still fall to the reading below.
+ *
+ * The label is passed through as TDB writes it rather than mapped onto the
+ * buckets here, because their taxonomy is finer than this one and flattening
+ * "Металл боловсруулах үйлдвэрлэл" into "Үйлдвэрлэл" would throw away the
+ * only good sector data on the page.
+ */
+export interface Sector {
+  key: SectorKey;
+  label: string;
+  /** True when it came from a published classification, not from the name. */
+  stated: boolean;
+}
+
+export function resolveSector(
+  name: string,
+  symbol: string,
+  reportKind: Financials["reportKind"] | undefined,
+  statedIndustry: string | null | undefined,
+): Sector {
+  if (statedIndustry) {
+    return { key: classifySector(name, symbol, reportKind), label: statedIndustry, stated: true };
+  }
+  const key = classifySector(name, symbol, reportKind);
+  return { key, label: SECTOR_LABELS[key], stated: false };
+}
+
 export function classifySector(
   name: string,
   symbol: string,

@@ -11,11 +11,17 @@ import { median, percentileRank } from "./series";
  * does not carry is an invented number: a ratio whose inputs the exchange
  * did not publish is null all the way through rather than zero.
  *
- * Current Ratio is deliberately absent. It is current assets over current
- * liabilities and the exchange's summary publishes neither — only the totals
- * — so there is no honest way to compute it from what MSE makes available.
- * Nine ratios were asked for and eight are here; the ninth would have to be
- * fabricated.
+ * Current Ratio comes from TDB Securities' Datalab rather than from MSE.
+ * MSE's summary publishes only balance-sheet totals, never the current and
+ * non-current split a liquidity ratio needs, so for a long time this card
+ * carried eight of the nine ratios and said why. Datalab publishes the split
+ * for 59 companies, and the ratio with it.
+ *
+ * It is marked as a different vintage on the card, because it is: MSE's
+ * figures are the running quarter and Datalab's are the last closed
+ * financial year, and quietly setting a 2026 P/E beside a 2024 current ratio
+ * as though they described the same moment would be worse than the gap it
+ * fills.
  */
 
 export type Direction = "higher" | "lower";
@@ -41,6 +47,11 @@ export interface RatioView {
   standing: Standing | null;
   /** Change against the same quarter a year earlier, in the ratio's units. */
   yoy: number | null;
+  /**
+   * True for a figure that came from Datalab's last closed year rather than
+   * from the exchange's running quarter, so the card can date it separately.
+   */
+  external?: boolean;
 }
 
 export interface RatioInputs {
@@ -52,6 +63,9 @@ export interface RatioInputs {
   roa: number | null;
   netMargin: number | null;
   debtToEquity: number | null;
+  /** From Datalab's closed year, not from MSE's running quarter. */
+  currentRatio: number | null;
+  cashRatio: number | null;
 }
 
 const RATIO_META: {
@@ -60,6 +74,8 @@ const RATIO_META: {
   direction: Direction;
   digits: number;
   suffix?: string;
+  /** Sourced from Datalab's closed year rather than MSE's quarter. */
+  external?: boolean;
 }[] = [
   { key: "pe", label: "P/E", direction: "lower", digits: 2 },
   { key: "pb", label: "P/B", direction: "lower", digits: 2 },
@@ -69,6 +85,11 @@ const RATIO_META: {
   { key: "roa", label: "ROA", direction: "higher", digits: 2, suffix: "%" },
   { key: "netMargin", label: "Цэвэр ашгийн маржин", direction: "higher", digits: 2, suffix: "%" },
   { key: "debtToEquity", label: "Өр / Өөрийн хөрөнгө", direction: "lower", digits: 2 },
+  // A company should be able to cover what it owes this year with what it
+  // owns this year, so more is better — up to a point this card does not
+  // try to judge, since a very high one is idle cash rather than strength.
+  { key: "currentRatio", label: "Эргэлтийн харьцаа", direction: "higher", digits: 2, external: true },
+  { key: "cashRatio", label: "Бэлэн мөнгөний харьцаа", direction: "higher", digits: 2, external: true },
 ];
 
 /**
@@ -82,17 +103,29 @@ const RATIO_META: {
 export function computeRatios(
   financials: Financials | null,
   price: number | null,
+  /**
+   * The liquidity ratios from Datalab's last closed year. MSE publishes
+   * nothing they can be computed from, so they are taken as given or left
+   * empty — never derived from the totals, which would be a guess.
+   */
+  liquidity?: { currentRatio: number | null; cashRatio: number | null } | null,
 ): RatioInputs {
+  const currentRatio = liquidity?.currentRatio ?? null;
+  const cashRatio = liquidity?.cashRatio ?? null;
+
   if (!financials) {
     return {
       pe: null, pb: null, eps: null, bvps: null,
       roe: null, roa: null, netMargin: null, debtToEquity: null,
+      currentRatio, cashRatio,
     };
   }
 
   const { bookValuePerShare, equity, totalLiabilities, netProfit, revenue } = financials;
 
   return {
+    currentRatio,
+    cashRatio,
     pe: financials.pe,
     pb:
       price !== null && bookValuePerShare !== null && bookValuePerShare > 0
@@ -224,12 +257,26 @@ export interface SectorPeer {
   ratios: RatioInputs;
 }
 
+/**
+ * The two sides of a year-on-year change.
+ *
+ * Both sides must come from the same source and cover the same length of
+ * period, which is why `current` is here rather than being assumed to be the
+ * figures on display. MSE's latest report is a half-year where Datalab's is
+ * a full year, so subtracting one from the other read Таван толгойн EPS as
+ * having risen 8,348₮ when what had actually changed was the source.
+ */
+export interface YearOnYear {
+  current: RatioInputs;
+  previous: RatioInputs;
+}
+
 export function buildRatioViews(
   own: RatioInputs,
   peers: SectorPeer[],
-  previousYear: RatioInputs | null,
+  change: YearOnYear | null,
 ): RatioView[] {
-  return RATIO_META.map(({ key, label, direction, digits, suffix }) => {
+  return RATIO_META.map(({ key, label, direction, digits, suffix, external }) => {
     const raw = own[key];
     const population = peers
       .map((p) => p.ratios[key])
@@ -251,7 +298,8 @@ export function buildRatioViews(
           : percentileRank(value, population)
         : null;
 
-    const before = previousYear?.[key] ?? null;
+    const now = change?.current[key] ?? null;
+    const before = change?.previous[key] ?? null;
 
     return {
       key,
@@ -260,14 +308,20 @@ export function buildRatioViews(
       direction,
       digits,
       suffix,
+      external,
       sectorMedian,
       percentile: rank,
       standing:
         value !== null && sectorMedian !== null
           ? standingOf(value, sectorMedian, direction)
           : null,
+      // Measured between the pair, not against the figure on display: those
+      // are the same thing when MSE has both quarters and emphatically not
+      // when the change had to fall back to Datalab's years.
       yoy:
-        value !== null && before !== null && Number.isFinite(before) ? value - before : null,
+        now !== null && before !== null && Number.isFinite(now) && Number.isFinite(before)
+          ? now - before
+          : null,
     };
   });
 }

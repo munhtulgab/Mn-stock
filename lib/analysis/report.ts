@@ -2,12 +2,16 @@ import type { Db } from "mongodb";
 import type { Financials, PricePoint, Security } from "@/lib/types";
 import { fetchIndexSeries } from "@/lib/mse/indices";
 import { getDividendHistory, type Dividend } from "@/lib/dividends";
-import { classifySector, SECTOR_LABELS, type SectorKey } from "./sectors";
+import { classifySector, resolveSector, type SectorKey } from "./sectors";
+import { getTdbDividends, getTdbLatest } from "@/lib/tdb/store";
+import type { TdbDividend, TdbYear } from "@/lib/tdb/datalab";
 import {
   buildRatioViews,
   computeRatios,
   isBlankReport,
+  type RatioInputs,
   type RatioView,
+  type YearOnYear,
   type SectorPeer,
 } from "./fundamentals";
 import { buildScorecard, type Scorecard } from "./indicators";
@@ -43,9 +47,27 @@ export interface PeerRow {
   self: boolean;
 }
 
+/**
+ * One year's payout, from whichever source knew about it.
+ *
+ * `date` and `url` are present only where the exchange announced it, so a
+ * reader can always tell a figure they can check from one they cannot.
+ */
+export interface DividendRow {
+  year: number;
+  amount: number;
+  yieldPct: number | null;
+  payoutRatio: number | null;
+  date: string | null;
+  url: string | null;
+  source: "mse" | "tdb";
+}
+
 export interface StockAnalysis {
   sector: SectorKey;
   sectorLabel: string;
+  /** True when the label is a published classification, not a guess. */
+  sectorStated: boolean;
   /** Companies the ratios were compared against, this one excluded. */
   peerCount: number;
   /**
@@ -60,11 +82,61 @@ export interface StockAnalysis {
   risk: RiskMetrics;
   riskYears: number;
   combined: CombinedSignal;
-  dividends: Dividend[];
+  dividends: DividendRow[];
   peers: PeerRow[];
   candles: Candle[];
   /** False for a listing too new or too thinly traded to read a chart from. */
   enoughHistory: boolean;
+}
+
+/**
+ * One dividend history out of the two sources that have one.
+ *
+ * The exchange's own notices are authoritative and carry a date and a link
+ * to the announcement, but they only reach back as far as the newsroom does
+ * and cover 34 companies. Datalab covers 83 and goes back five years, with
+ * the payout ratio, but states only a year.
+ *
+ * So a year the exchange announced keeps the exchange's row — the figure, the
+ * date, the link — and Datalab fills in the years it does not have. The two
+ * agree where they overlap: Хаан банк's 2025 payment reads 214₮ in the
+ * notices and Datalab's summary states the same 214₮.
+ */
+function mergeDividends(
+  notices: Dividend[],
+  datalab: TdbDividend[],
+  price: number | null,
+): DividendRow[] {
+  const rows = new Map<number, DividendRow>();
+
+  for (const entry of datalab) {
+    rows.set(entry.year, {
+      year: entry.year,
+      amount: entry.amountPerShare,
+      yieldPct:
+        entry.yieldPct ??
+        (price && price > 0 ? (entry.amountPerShare / price) * 100 : null),
+      payoutRatio: entry.payoutRatio,
+      date: null,
+      url: null,
+      source: "tdb",
+    });
+  }
+
+  // Second, so the exchange's own announcement wins the year outright.
+  for (const notice of notices) {
+    rows.set(notice.year, {
+      year: notice.year,
+      amount: notice.amount,
+      yieldPct: notice.yieldPct,
+      payoutRatio: rows.get(notice.year)?.payoutRatio ?? null,
+      date: notice.date,
+      url: notice.url,
+      source: "mse",
+    });
+  }
+
+  return [...rows.values()].sort((a, b) => b.year - a.year);
 }
 
 /** Full daily OHLCV, which the chart and every indicator are built from. */
@@ -138,6 +210,28 @@ async function getLatestPrices(db: Db): Promise<Map<number, number>> {
  * matching quarter was never stored — the app has only been collecting these
  * since it was built — there is no comparison and the column stays empty.
  */
+/**
+ * Datalab's own year as a ratio set, for comparing against.
+ *
+ * Only used as the year-ago side of a change, never as the figures shown:
+ * where MSE publishes a ratio it is MSE's that appears on the card, because
+ * MSE is the exchange and its quarter is the current one.
+ */
+function tdbRatios(year: TdbYear): RatioInputs {
+  return {
+    pe: year.pe,
+    pb: year.pb,
+    eps: year.eps,
+    bvps: year.bookValuePerShare,
+    roe: year.roe,
+    roa: year.roa,
+    netMargin: year.netMargin,
+    debtToEquity: year.debtToEquity,
+    currentRatio: year.currentRatio,
+    cashRatio: year.cashRatio,
+  };
+}
+
 function priorYear(reports: Financials[], latest: Financials): Financials | null {
   return (
     reports.find(
@@ -154,21 +248,44 @@ export async function buildAnalysis(
 ): Promise<StockAnalysis> {
   const from = `${Number(today.slice(0, 4)) - HISTORY_YEARS}${today.slice(4)}`;
 
-  const [candles, financialsByCompany, pricesByCompany, securities, dividends, indices] =
-    await Promise.all([
-      getCandles(db, security.companyCode, from),
-      getFinancialsForPeers(db),
-      getLatestPrices(db),
-      db.collection<Security>("securities").find({ status: "active" }).toArray(),
-      getDividendHistory(db, security.companyCode, price).catch(() => []),
-      // The market's own series, for the beta. Its absence costs one figure,
-      // not the page.
-      fetchIndexSeries().catch(() => ({})),
-    ]);
+  const [
+    candles,
+    financialsByCompany,
+    pricesByCompany,
+    securities,
+    noticeDividends,
+    indices,
+    tdb,
+    tdbDividends,
+  ] = await Promise.all([
+    getCandles(db, security.companyCode, from),
+    getFinancialsForPeers(db),
+    getLatestPrices(db),
+    db.collection<Security>("securities").find({ status: "active" }).toArray(),
+    getDividendHistory(db, security.companyCode, price).catch(() => []),
+    // The market's own series, for the beta. Its absence costs one figure,
+    // not the page.
+    fetchIndexSeries().catch(() => ({})),
+    // Datalab's closed years: the stated industry, the liquidity ratios MSE
+    // does not publish, and last year's figures to measure a change against.
+    getTdbLatest(db).catch(() => new Map<number, { latest: TdbYear; previous: TdbYear | null }>()),
+    getTdbDividends(db, security.companyCode).catch(() => []),
+  ]);
 
   const ownReports = financialsByCompany.get(security.companyCode) ?? [];
   const financials = ownReports[0] ?? null;
-  const sector = classifySector(security.name, security.symbol, financials?.reportKind);
+  const ownTdb = tdb.get(security.companyCode) ?? null;
+
+  // Where Datalab states an industry it is used verbatim; where it does not,
+  // the company falls back to being read from its name and its report layout.
+  const resolved = resolveSector(
+    security.name,
+    security.symbol,
+    financials?.reportKind,
+    ownTdb?.latest.industry,
+  );
+  const sector = resolved.key;
+  const statedIndustry = ownTdb?.latest.industry ?? null;
 
   // Peers are the sector's other companies that filed a report. A company is
   // never its own peer: leaving it in would pull the median towards itself
@@ -181,9 +298,15 @@ export async function buildAnalysis(
     return !!report && !isBlankReport(report);
   });
 
+  // Grouped by the stated industry where this company has one, because
+  // Datalab's taxonomy is finer than the buckets here — it separates the
+  // coalfields from the metal refiners, where "Уул уурхай" holds both — and
+  // a peer group is only as good as the line drawn round it. Companies with
+  // no stated industry fall back to the coarse key on both sides.
   const sectorMembers = reportingCompanies.filter((s) => {
     if (s.companyCode === security.companyCode) return false;
     const report = financialsByCompany.get(s.companyCode)![0];
+    if (statedIndustry) return tdb.get(s.companyCode)?.latest.industry === statedIndustry;
     return classifySector(s.name, s.symbol, report.reportKind) === sector;
   });
 
@@ -200,16 +323,30 @@ export async function buildAnalysis(
     ratios: computeRatios(
       financialsByCompany.get(s.companyCode)?.[0] ?? null,
       pricesByCompany.get(s.companyCode) ?? null,
+      tdb.get(s.companyCode)?.latest ?? null,
     ),
   }));
 
-  const own = computeRatios(financials, price);
-  const before = financials ? priorYear(ownReports, financials) : null;
-  const ratios = buildRatioViews(
-    own,
-    peers,
-    before ? computeRatios(before, price) : null,
-  );
+  const own = computeRatios(financials, price, ownTdb?.latest);
+
+  // A year ago, from whichever source can answer it.
+  //
+  // MSE is preferred when the app has been running long enough to have
+  // stored the same quarter last year, since that compares like with like.
+  // Otherwise Datalab's previous closed year fills in — a genuine annual
+  // comparison rather than a quarter against a year, and the only one
+  // available at all for a company whose history here starts this month.
+  // Both sides from one source. MSE against MSE where the app has kept the
+  // matching quarter, Datalab's latest closed year against the one before it
+  // otherwise — never MSE's half-year against Datalab's full one.
+  const mseBefore = financials ? priorYear(ownReports, financials) : null;
+  const change: YearOnYear | null = mseBefore
+    ? { current: own, previous: computeRatios(mseBefore, price, ownTdb?.previous) }
+    : ownTdb?.previous
+      ? { current: tdbRatios(ownTdb.latest), previous: tdbRatios(ownTdb.previous) }
+      : null;
+
+  const ratios = buildRatioViews(own, peers, change);
 
   const scorecards = Object.fromEntries(
     TIMEFRAMES.map(({ key }) => [key, buildScorecard(candles, key)]),
@@ -227,7 +364,7 @@ export async function buildAnalysis(
     scorecard: scorecards["1D"],
     ratios,
     risk,
-    sectorLabel: SECTOR_LABELS[sector],
+    sectorLabel: resolved.label,
     peerCount: peers.length,
   });
 
@@ -254,7 +391,8 @@ export async function buildAnalysis(
 
   return {
     sector,
-    sectorLabel: SECTOR_LABELS[sector],
+    sectorLabel: resolved.label,
+    sectorStated: resolved.stated,
     peerCount: peers.length,
     comparedToMarket,
     period: financials?.period ?? null,
@@ -263,7 +401,7 @@ export async function buildAnalysis(
     risk,
     riskYears: RISK_YEARS,
     combined,
-    dividends,
+    dividends: mergeDividends(noticeDividends, tdbDividends, price),
     peers: peerRows,
     candles,
     enoughHistory: candles.length >= MIN_CANDLES,

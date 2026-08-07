@@ -3,6 +3,8 @@ import { fetchSecuritiesList } from "@/lib/mse/securities";
 import { fetchPriceHistory } from "@/lib/mse/prices";
 import { fetchLatestFinancials } from "@/lib/mse/financials";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
+import { syncTdb, tdbIsStale } from "@/lib/tdb/store";
+import { ulaanbaatarDay } from "@/lib/day";
 import type { PricePoint } from "@/lib/types";
 
 export interface SyncState {
@@ -179,6 +181,22 @@ export async function runSyncBatch(
     securitiesRefreshed = true;
   } catch (err) {
     console.error("securities sync failed", err);
+  }
+
+  // Datalab's closed financial years, at most once a week. It is annual
+  // data — the industry each company is in, the liquidity ratios MSE does
+  // not publish, the dividend histories — so it does not belong in the
+  // per-company cursor below, and a failure here must not cost the run its
+  // prices.
+  try {
+    if (await tdbIsStale(db)) {
+      const result = await syncTdb(db, ulaanbaatarDay(new Date()));
+      console.log(
+        `runSyncBatch: TDB ${result.rows} company-years across ${result.years} years, ${result.dividends} dividend histories`,
+      );
+    }
+  } catch (err) {
+    console.error("TDB Datalab sync failed", err);
   }
 
   const active = await db

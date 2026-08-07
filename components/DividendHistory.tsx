@@ -1,19 +1,22 @@
-import type { Dividend } from "@/lib/dividends";
+import type { DividendRow } from "@/lib/analysis/report";
 import Num from "./Num";
 
 /**
- * Every payout the exchange has announced for this company.
+ * Every payout either source knows this company has made.
  *
- * Read from the exchange's own notices, so each row can point back at the
- * announcement it came from — which matters here more than elsewhere,
- * because a dividend figure that cannot be traced is a figure nobody should
- * act on. The yield is against today's price, not the price on the day of
- * the announcement, since that is the one a reader can still buy at.
+ * A year the exchange itself announced links back to the announcement, so a
+ * reader can check the figure — which matters more here than anywhere else
+ * on the page, because a dividend that cannot be traced is one nobody should
+ * act on. The years only TDB's Datalab carries have no notice to link to and
+ * say so rather than pretending to a source they do not have.
+ *
+ * The yield is against today's price rather than the price on the day of the
+ * announcement, since today's is the one a reader can still buy at.
  */
 export default function DividendHistory({
   dividends,
 }: {
-  dividends: Dividend[];
+  dividends: DividendRow[];
 }) {
   return (
     <div className="rounded-2xl border border-app-border bg-app-card p-4">
@@ -36,6 +39,9 @@ export default function DividendHistory({
                     Нэгж хувьцаанд
                   </th>
                   <th className="font-medium pb-1.5 px-2 text-right">Өгөөж</th>
+                  <th className="font-medium pb-1.5 px-2 text-right whitespace-nowrap">
+                    Ашгаас
+                  </th>
                   <th className="font-medium pb-1.5 pl-2 text-right whitespace-nowrap">
                     Зарласан
                   </th>
@@ -55,15 +61,27 @@ export default function DividendHistory({
                         ? "—"
                         : `${dividend.yieldPct.toFixed(2)}%`}
                     </td>
+                    {/* What share of the year's profit was handed out. A
+                        payout over 100% is a company paying out of reserves,
+                        which is worth seeing. */}
+                    <td className="py-1.5 px-2 text-right tabular-nums text-app-muted">
+                      {dividend.payoutRatio === null
+                        ? "—"
+                        : `${dividend.payoutRatio.toFixed(0)}%`}
+                    </td>
                     <td className="py-1.5 pl-2 text-right">
-                      <a
-                        href={dividend.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="tabular-nums text-brand"
-                      >
-                        {dividend.date}
-                      </a>
+                      {dividend.url && dividend.date ? (
+                        <a
+                          href={dividend.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="tabular-nums text-brand"
+                        >
+                          {dividend.date}
+                        </a>
+                      ) : (
+                        <span className="text-app-muted">TDB Datalab</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -72,6 +90,7 @@ export default function DividendHistory({
           </div>
           <p className="mt-3 text-[10px] text-app-muted">
             Он гэдэг нь ашиг олсон жил. Өгөөжийг өнөөдрийн ханшаар тооцов.
+            Огноотой мөр нь МХБ-ийн мэдэгдэл — дарж эх сурвалжийг нь үзнэ.
           </p>
         </>
       )}
