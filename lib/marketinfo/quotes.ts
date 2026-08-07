@@ -305,12 +305,31 @@ async function load(
  */
 const PAGE_BUDGET_MS = 3_500;
 
+/**
+ * What one security's own page will wait for its price.
+ *
+ * Longer than a list's budget because the price is what that page is for. A
+ * list can show fifty dated closes and lose nothing; a company page that
+ * gives up after three and a half seconds renders the last published close
+ * as its headline figure and then has the reader watch it change when the
+ * client's own poll — same feed, a second later, now warm — comes back with
+ * the running price. That flip is the bug this budget exists to prevent, and
+ * a second and a half more waiting is a far better trade than showing a
+ * number that is about to be replaced.
+ */
+export const DETAIL_BUDGET_MS = 5_000;
+
 export async function fetchLiveQuotes(
   options: { extraCaCerts?: string; budgetMs?: number } = {},
 ): Promise<Map<number, LiveQuote>> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.quotes;
   if (inFlight) return inFlight;
-  if (Date.now() - failedAt < FAILURE_BACKOFF_MS) return cache?.quotes ?? new Map();
+  // Backing off is only sound while there is something to serve instead.
+  // With no cached snapshot at all it guaranteed the opposite of what it was
+  // for: one slow call, and every render for the next twenty seconds skipped
+  // the feed entirely and published a stale close — several readers in a row
+  // shown a price the very next poll would correct.
+  if (cache && Date.now() - failedAt < FAILURE_BACKOFF_MS) return cache.quotes;
 
   inFlight = load(options.extraCaCerts, options.budgetMs ?? PAGE_BUDGET_MS)
     .then((quotes) => {

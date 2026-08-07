@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import type { Db } from "mongodb";
 import { getDb } from "@/lib/mongodb";
 import { getSettings } from "@/lib/settings";
-import { syncPricesForCompany } from "@/lib/sync";
-import { fetchLiveQuotes, fetchMarketOpen, sessionEnd } from "@/lib/marketinfo/quotes";
+import { ensurePricesCurrent } from "@/lib/data";
+import {
+  DETAIL_BUDGET_MS,
+  fetchLiveQuotes,
+  fetchMarketOpen,
+  sessionEnd,
+} from "@/lib/marketinfo/quotes";
 import { priorClose, sessionChangePct } from "@/lib/priceChange";
+import { ulaanbaatarDay } from "@/lib/day";
 import type { PricePoint, Security } from "@/lib/types";
 
 /**
@@ -19,17 +25,6 @@ import type { PricePoint, Security } from "@/lib/types";
  * Either way the response says which session the figure belongs to and
  * whether it is live, so the page can label it rather than implying.
  */
-
-/** Mongolia is UTC+8 year round. */
-const ULAANBAATAR_OFFSET_MS = 8 * 60 * 60 * 1000;
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-
-/** Last stored-price refresh per company, so viewers don't each re-scrape. */
-const lastRefresh = new Map<number, number>();
-
-function ulaanbaatarToday(): string {
-  return new Date(Date.now() + ULAANBAATAR_OFFSET_MS).toISOString().slice(0, 10);
-}
 
 async function latestTwo(db: Db, companyCode: number) {
   const rows = await db
@@ -55,7 +50,9 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const today = ulaanbaatarToday();
+  // The shared helper, which reads the zone properly rather than assuming
+  // a fixed +8 offset as the local copy here used to.
+  const today = ulaanbaatarDay(new Date());
 
   // Live book first — it is the only source that moves during a session.
   let live = null;
@@ -64,7 +61,12 @@ export async function GET(
   try {
     const settings = await getSettings(db);
     const [quotes, open] = await Promise.all([
-      fetchLiveQuotes({ extraCaCerts: settings.extraCaCerts }),
+      // The same budget the page render uses, so the two cannot disagree
+      // about the price for want of a different amount of patience.
+      fetchLiveQuotes({
+        extraCaCerts: settings.extraCaCerts,
+        budgetMs: DETAIL_BUDGET_MS,
+      }),
       fetchMarketOpen(),
     ]);
     live = quotes.get(security.companyCode) ?? null;
@@ -108,18 +110,14 @@ export async function GET(
     });
   }
 
-  let { last, prev } = await latestTwo(db, security.companyCode);
-  const since = Date.now() - (lastRefresh.get(security.companyCode) ?? 0);
-  if ((!last || last.date < today) && since > REFRESH_INTERVAL_MS) {
-    lastRefresh.set(security.companyCode, Date.now());
-    try {
-      await syncPricesForCompany(db, security.companyCode);
-      ({ last, prev } = await latestTwo(db, security.companyCode));
-    } catch (err) {
-      // A failed refresh just means the stored figure stands.
-      console.error(`quote refresh failed for ${symbol}`, err);
-    }
-  }
+  // The live book had nothing, so the newest published close is the answer —
+  // and it has to be the newest one there is. This is the same call the page
+  // itself makes before it renders, deliberately: this endpoint and that
+  // render used to decide separately whether the stored prices were current,
+  // disagreed, and the disagreement was visible as a stale price correcting
+  // itself a second after the page painted.
+  await ensurePricesCurrent(db, security.symbol);
+  const { last, prev } = await latestTwo(db, security.companyCode);
 
   return NextResponse.json({
     symbol: security.symbol,

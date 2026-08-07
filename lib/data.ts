@@ -5,6 +5,7 @@ import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 import { fetchExchangeMovers, type ExchangeMovers } from "@/lib/mse/movers";
 import { daysBetween, sessionChangePct } from "@/lib/priceChange";
 import { ulaanbaatarDay } from "@/lib/day";
+import { needsPriceRefresh } from "@/lib/priceFreshness";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 
 const INDICATOR_WINDOW_DAYS = 400;
@@ -586,38 +587,61 @@ export async function latestMarketSession(
   return latest;
 }
 
-/** Only relevant when no session date can be established at all. */
-const PRICE_SYNC_TTL_MS = 30 * 60 * 1000;
-
 /**
- * Makes sure this company's stored prices cover the session the market is
- * actually in, fetching them from the exchange if they do not.
+ * Makes sure this company's stored prices cover today, fetching them from
+ * the exchange if they do not.
  *
- * This blocks the page. It has to: the figure a company's page leads with is
- * its price, and a page that prints Tuesday's close on Thursday and quietly
- * corrects itself on the next visit is worse than a page that takes a moment.
- * The background sync walks ~400 companies on a time-boxed cursor and can be
- * days behind on any given one, so this is what closes that gap.
+ * **This is the only definition of "up to date" in the app, and every path
+ * that shows a price calls it.** That is the whole point of the function.
+ * There used to be two: this one asked whether the stored prices covered
+ * "the market session", where the session was the newest date across a
+ * dashboard snapshot that is itself built from stored prices and cached for
+ * half an hour — so on a day when the live feed was quiet it would conclude
+ * that Wednesday's close was current on Friday and skip the fetch. The quote
+ * endpoint the page's own header polls a moment later asked a different
+ * question: is the newest stored close older than today's date? It got the
+ * right answer, fetched, and returned the real price.
  *
- * It costs that fetch once per company per session. A company that did not
- * trade in the session is remembered as checked, so a dormant listing is not
- * re-fetched on every view for the sake of a close that will never exist.
+ * The visible result was a page that painted Wednesday's price and silently
+ * corrected itself a second later, which is exactly what a reader should
+ * never see and what this had already been fixed for once. Two paths to one
+ * number will always drift apart eventually, so there is now one.
+ *
+ * Anchored to the calendar rather than to anything derived from the data it
+ * is checking: circularity is what made the old test unfalsifiable. If the
+ * newest stored close is not today's, the exchange is asked. A company that
+ * did not trade today will not gain a close from that, so an attempt is
+ * stamped and it is left alone for a few minutes rather than re-fetched on
+ * every render.
+ *
+ * It blocks the page, deliberately. The figure a company's page leads with
+ * is its price; a page that prints a stale one and corrects itself is worse
+ * than a page that takes a moment.
  */
 export async function ensurePricesCurrent(
   db: Db,
   symbol: string,
-  marketSession: string | null,
 ): Promise<void> {
   const security = await db
     .collection<Security>("securities")
     .findOne({ symbol: symbol.toUpperCase() });
   if (!security) return;
 
-  if (marketSession) {
-    if (security.pricesSyncedSession === marketSession) return;
-  } else if (Date.now() - (security.pricesSyncedAt?.getTime() ?? 0) <= PRICE_SYNC_TTL_MS) {
-    return;
-  }
+  const today = ulaanbaatarDay(new Date());
+  const newest = await db
+    .collection<PricePoint>("prices")
+    .find({ companyCode: security.companyCode }, { projection: { _id: 0, date: 1 } })
+    .sort({ date: -1 })
+    .limit(1)
+    .next();
+
+  const shouldRefresh = needsPriceRefresh({
+    newestStored: newest?.date ?? null,
+    today,
+    lastAttemptAt: security.pricesSyncedAt,
+    now: Date.now(),
+  });
+  if (!shouldRefresh) return;
 
   try {
     await syncPricesForCompany(db, security.companyCode);
@@ -625,17 +649,14 @@ export async function ensurePricesCurrent(
     console.error(`price refresh failed for ${symbol}`, err);
   }
 
-  // Stamped even when the fetch failed: a source that is down should not be
+  // Stamped even when the fetch failed, so a source that is down is not
   // retried on every render of the page.
-  await db.collection<Security>("securities").updateOne(
-    { companyCode: security.companyCode },
-    {
-      $set: {
-        pricesSyncedAt: new Date(),
-        ...(marketSession ? { pricesSyncedSession: marketSession } : {}),
-      },
-    },
-  );
+  await db
+    .collection<Security>("securities")
+    .updateOne(
+      { companyCode: security.companyCode },
+      { $set: { pricesSyncedAt: new Date(), pricesSyncedSession: today } },
+    );
 }
 
 /**
@@ -646,6 +667,6 @@ export async function getStockDetailFresh(
   symbol: string,
 ): Promise<StockDetail | null> {
   const live = await fetchLiveQuotes().catch(() => new Map<number, LiveQuote>());
-  await ensurePricesCurrent(db, symbol, await latestMarketSession(db, live));
+  await ensurePricesCurrent(db, symbol);
   return getStockDetail(db, symbol, live);
 }

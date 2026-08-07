@@ -2,11 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
-import { ensurePricesCurrent, getStockDetail, latestMarketSession } from "@/lib/data";
+import { ensurePricesCurrent, getStockDetail } from "@/lib/data";
 import { sessionChangePct } from "@/lib/priceChange";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getSettings } from "@/lib/settings";
-import { fetchLiveQuotes, fetchMarketOpen, sessionEnd } from "@/lib/marketinfo/quotes";
+import {
+  DETAIL_BUDGET_MS,
+  fetchLiveQuotes,
+  fetchMarketOpen,
+  sessionEnd,
+} from "@/lib/marketinfo/quotes";
 import SignalBadge from "@/components/SignalBadge";
 import PriceChart, { type ChartPoint } from "@/components/PriceChart";
 import AiSignalPanel from "@/components/AiSignalPanel";
@@ -61,10 +66,13 @@ export default async function StockDetailPage({
   // it on the next visit is not an acceptable trade for a faster paint. It
   // costs one fetch per company per session and nothing on a repeat view.
   const settings = await getSettings(db);
+  // Waited for properly: this page's headline is the price, and rendering a
+  // stale close here is what the reader sees flip a second later.
   const liveQuotes = await fetchLiveQuotes({
     extraCaCerts: settings.extraCaCerts,
+    budgetMs: DETAIL_BUDGET_MS,
   }).catch(() => new Map());
-  await ensurePricesCurrent(db, symbol, await latestMarketSession(db, liveQuotes));
+  await ensurePricesCurrent(db, symbol);
 
   const [detail, user] = await Promise.all([
     getStockDetail(db, symbol, liveQuotes),
