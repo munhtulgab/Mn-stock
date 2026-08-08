@@ -170,12 +170,12 @@ export default async function NewsPage() {
   }
 
   // The last session leads, because it is the one that has just changed.
-  const dayLabel = reviews.day
-    ? dayHeading(reviews.day.to, today, yesterday)
-    : "Өдрийн";
+  // The chips name the period rather than the date — "Сүүлийн өдөр" is the
+  // same chip every day, where "Өчигдөр" became "Өнөөдөр" and moved under
+  // the reader; the dated heading inside each panel says which day it is.
   const tabs = [
     reviewTab(
-      dayLabel,
+      "Сүүлийн өдөр",
       `${
         reviews.day ? dayPossessive(reviews.day.to, today, yesterday) : "Өдрийн"
       } зах зээлийн тойм`,
@@ -186,7 +186,7 @@ export default async function NewsPage() {
     // the exchange's own review of the same week are two accounts of one
     // thing and share a slot.
     reviewTab(
-      "7 хоног",
+      "Өнгөрсөн долоо хоног",
       reviews.week
         ? weeklyReviewTitle(reviews.week)
         : "Долоо хоногийн тойм",
@@ -194,7 +194,7 @@ export default async function NewsPage() {
       reports.weekly,
       { asSlide: true, hash: WEEKLY_HASH },
     ),
-    reviewTab("Өнгөрсөн сар", "Өнгөрсөн сарын зах зээлийн тойм", reviews.month, []),
+    reviewTab("Сүүлийн сар", "Өнгөрсөн сарын зах зээлийн тойм", reviews.month, []),
   ].filter((tab): tab is ReviewTab => tab !== null);
 
   return (

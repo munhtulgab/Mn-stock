@@ -3,7 +3,6 @@ import {
   fetchExchangeArticle,
   type ArticleBlock,
 } from "@/lib/mse/exchangeNews";
-import { mondayOf, shiftDays } from "@/lib/day";
 import type { MarketNewsItem } from "@/lib/marketNews";
 
 /**
@@ -47,7 +46,9 @@ export interface TradeReports {
  * date in the daily one is not something the pattern has to know about.
  */
 const PATTERNS = {
-  daily: /ӨДРИЙН\s+АРИЛЖААНЫ\s+МЭДЭЭ/i,
+  // Both wordings the exchange uses for a session: the dated report and the
+  // review of the same day.
+  daily: /ӨДРИЙН\s+АРИЛЖААНЫ\s+(?:ТОЙМ\s+)?МЭДЭЭ/i,
   weekly: /ДОЛОО\s+ХОНОГИЙН\s+АРИЛЖААНЫ\s+ТОЙМ/i,
 } as const;
 
@@ -56,7 +57,7 @@ const PER_PERIOD = 3;
 
 const SNAPSHOT_KEY = "tradeReports";
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * How long a page render will wait for articles it has not read before.
@@ -99,34 +100,41 @@ function idsOf(items: MarketNewsItem[]): number[] {
     .slice(0, PER_PERIOD);
 }
 
-/** The last session's trading report, and whatever else it was published with. */
+/**
+ * The latest session's trading reports, and only those.
+ *
+ * Every slide in this period is a report of the same day: the dated one and
+ * the review of it, where the exchange published both. It used to carry
+ * whatever else went out that day too — a bond auction, a membership notice,
+ * a training course — which made a slider labelled "the day's trading" mostly
+ * about other things.
+ */
 function selectDaily(items: MarketNewsItem[]): number[] {
-  const feed = exchangeItems(items);
-  const lead = feed.find((item) => PATTERNS.daily.test(item.title));
+  const feed = exchangeItems(items).filter((item) => PATTERNS.daily.test(item.title));
+  const lead = feed[0];
   if (!lead) return [];
+  // The newest day that has one, so a session with two reports shows both and
+  // yesterday's does not follow them.
   const day = lead.date.slice(0, 10);
-  return idsOf([
-    lead,
-    ...feed.filter((item) => item !== lead && item.date.slice(0, 10) === day),
-  ]);
+  return idsOf(feed.filter((item) => item.date.slice(0, 10) === day));
 }
 
-/** The weekly review, and the week's other news — minus its daily reports. */
+/**
+ * The exchange's weekly review, and only that.
+ *
+ * The app's own summary of the same week is put beside it by the page, so
+ * between them the week's slider is two accounts of the week and nothing
+ * else. It used to carry the rest of the week's announcements as well, which
+ * buried the review it is named after.
+ */
 function selectWeekly(items: MarketNewsItem[]): number[] {
-  const feed = exchangeItems(items);
-  const lead = feed.find((item) => PATTERNS.weekly.test(item.title));
-  if (!lead) return [];
-  const from = mondayOf(lead.date.slice(0, 10));
-  const to = shiftDays(from, 6);
-  return idsOf([
-    lead,
-    ...feed.filter((item) => {
-      const day = item.date.slice(0, 10);
-      // The daily reports of that week are the daily tab's business, and five
-      // of them would crowd out everything else the week held.
-      return item !== lead && day >= from && day <= to && !PATTERNS.daily.test(item.title);
-    }),
-  ]);
+  // The newest one only. The exchange publishes one of these a week and the
+  // feed holds a month of them; the week's tab is about this week.
+  return idsOf(
+    exchangeItems(items)
+      .filter((item) => PATTERNS.weekly.test(item.title))
+      .slice(0, 1),
+  );
 }
 
 async function readArticle(id: number): Promise<TradeReport | null> {
