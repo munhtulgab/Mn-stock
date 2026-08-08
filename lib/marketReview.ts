@@ -88,7 +88,7 @@ const TOP = 3;
 const SNAPSHOT_KEY = "marketReviews";
 const CACHE_MS = 30 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 interface ReviewSnapshot {
   key: string;
@@ -187,8 +187,8 @@ function indexMoves(series: IndexSeries, from: string, to: string): ReviewIndex[
  * Reads the stored reviews, rebuilding them when they have gone stale.
  *
  * `weekOf` is any date inside the week the weekly review should cover, for a
- * caller that wants a particular one. Without it the week is chosen from the
- * sessions the exchange has actually held — see `weekStart`.
+ * caller that wants a particular one. Without it the week is the calendar
+ * week before this one — see `weekStart`.
  */
 export async function getMarketReviews(
   db: Db,
@@ -234,35 +234,25 @@ export async function getMarketReviews(
 }
 
 /**
- * Sessions a week must already have held before it is worth reviewing.
- *
- * Two, so a Monday morning shows the week that has just finished rather than
- * a "weekly review" of a single session, and every other day of the week
- * shows the week the reader is actually in.
- */
-const MIN_SESSIONS_FOR_A_WEEK = 2;
-
-/**
  * The Monday of the week a review covers.
  *
- * The week the market is in, as soon as it has traded enough of it to be
- * worth summarising. This used to be anchored to the date on the exchange's
- * own weekly article, so that the app's card and that article covered the
- * same five days while they sat side by side — but the exchange publishes
- * its review of a week during the week after, so on the Friday of a full
- * trading week the card was still describing the week before. Now that the
- * two are slides in one slot rather than a pair, each carries its own dates
- * and the app's own summary describes the week it has the prices for.
+ * The calendar week before the one today falls in, which is what "өнгөрсөн
+ * долоо хоног" says: on Saturday the 8th that is the 27th to the 31st, not
+ * the week just finished. Two earlier versions of this got it wrong in
+ * opposite directions — one anchored to the date on the exchange's own
+ * weekly article, which is published during the week after and so lagged by
+ * one; the other took the week the latest session fell in, which is the week
+ * the label explicitly does not mean.
+ *
+ * It is the plain calendar rule now, and it needs nothing but the clock. The
+ * exchange's own review of the same week sits beside it in the slider, and
+ * that article covers these same five days.
  *
  * `weekOf` still overrides, for a caller that wants a particular week.
  */
-function weekStart(sessions: string[], weekOf?: string): string {
+function weekStart(weekOf?: string): string {
   if (weekOf) return mondayOf(weekOf);
-
-  const latest = sessions[sessions.length - 1] ?? ulaanbaatarDay(new Date());
-  const thisWeek = mondayOf(latest);
-  const held = sessions.filter((date) => date >= thisWeek).length;
-  return held >= MIN_SESSIONS_FOR_A_WEEK ? thisWeek : shiftDays(thisWeek, -7);
+  return shiftDays(mondayOf(ulaanbaatarDay(new Date())), -7);
 }
 
 export async function computeMarketReviews(
@@ -306,20 +296,9 @@ export async function computeMarketReviews(
 
   const to = liveDate ?? newest.date;
 
-  // Which days the exchange actually held a session on recently, so the week
-  // can be chosen by how much of it has traded rather than by the calendar
-  // alone — a week of holidays is not a week to review.
-  const sessions = (
-    await db
-      .collection<PricePoint>("prices")
-      .distinct("date", { date: { $gte: shiftDays(mondayOf(to), -14) } })
-  )
-    .concat(liveDate ? [liveDate] : [])
-    .sort();
-
-  // Calendar periods rather than rolling windows: "өнгөрсөн сар" is July,
-  // and the week is the one the market is in once it has traded enough of it.
-  const weekFrom = weekStart(sessions, weekOf);
+  // Calendar periods rather than rolling windows: "өнгөрсөн сар" is July and
+  // "өнгөрсөн долоо хоног" is the week before this one.
+  const weekFrom = weekStart(weekOf);
   const weekTo = shiftDays(weekFrom, 6);
   const month = previousMonth(ulaanbaatarDay(new Date()));
   // Far enough back that the earliest window has a close before it to be
