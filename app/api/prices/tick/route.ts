@@ -6,6 +6,7 @@ import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 import { refreshDashboardSnapshot } from "@/lib/data";
 import { checkSignalChangesAndNotify } from "@/lib/signalHistory";
 import { ulaanbaatarDateTime } from "@/lib/day";
+import { getCurrentUser } from "@/lib/auth";
 
 /**
  * A price check, every couple of minutes through the trading session.
@@ -70,11 +71,19 @@ function currentPrices(quotes: Map<number, LiveQuote>): Record<string, number> {
 }
 
 async function handle(req: NextRequest) {
-  if (!isScheduled(req)) {
+  const db: Db = await getDb();
+
+  // The scheduler, or an open app.
+  //
+  // Vercel's Hobby plan allows two cron jobs a project and runs them once a
+  // day, so the every-two-minutes schedule this was written for needs Pro.
+  // Until then the reader's own open tab drives it: whenever anybody has the
+  // app in front of them during a session, the market is watched and a
+  // recommendation that turns is noticed. It reads the same public feed the
+  // page reads anyway, so a signed-in caller is asking for nothing new.
+  if (!isScheduled(req) && !(await getCurrentUser(db))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const db: Db = await getDb();
   const checkedAt = new Date();
 
   const settings = await getSettings(db).catch(() => ({ extraCaCerts: undefined }));

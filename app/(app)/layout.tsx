@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import BottomNav from "@/components/BottomNav";
+import MarketTicker from "@/components/MarketTicker";
 
 /**
  * One shell, one shape.
@@ -35,6 +36,8 @@ export default async function AppLayout({
         {children}
       </main>
       <BottomNav />
+      {/* Renders nothing; keeps the market watched while the app is open. */}
+      <MarketTicker />
     </div>
   );
 }
