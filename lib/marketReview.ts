@@ -2,6 +2,7 @@ import type { Db } from "mongodb";
 import { fetchIndexSeries, INDEX_KEYS } from "@/lib/mse/indices";
 import { mondayOf, previousMonth, shiftDays, ulaanbaatarDay } from "@/lib/day";
 import type { PricePoint, Security } from "@/lib/types";
+import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 
 /**
  * What the market did over the last session, over a week and over a month.
@@ -87,7 +88,7 @@ const TOP = 3;
 const SNAPSHOT_KEY = "marketReviews";
 const CACHE_MS = 30 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 interface ReviewSnapshot {
   key: string;
@@ -208,7 +209,10 @@ export async function getMarketReviews(
   }
 
   try {
-    const reviews = await computeMarketReviews(db, weekOf);
+    // Asked for here rather than inside, so a feed that is down costs the
+    // review nothing but the newest session.
+    const live = await fetchLiveQuotes().catch(() => new Map<number, LiveQuote>());
+    const reviews = await computeMarketReviews(db, weekOf, live);
     await snapshots.updateOne(
       { key: SNAPSHOT_KEY },
       {
@@ -264,6 +268,18 @@ function weekStart(sessions: string[], weekOf?: string): string {
 export async function computeMarketReviews(
   db: Db,
   weekOf?: string,
+  /**
+   * The exchange's running quotes, folded in as the newest session.
+   *
+   * The exchange publishes a day's closes only after it shuts, and the app's
+   * own price store fills in behind that on a time-boxed cursor, so on the
+   * afternoon of a trading day the stored history can still stop on
+   * yesterday — which is how a review headed "8 сарын 6" sat under the
+   * exchange's own report for the 7th. The live feed carries exactly the
+   * companies that traded, which is exactly the set a review is about, and
+   * after the close its figures are that session's finals.
+   */
+  live?: Map<number, LiveQuote>,
 ): Promise<MarketReviews> {
   const [newest] = await db
     .collection<PricePoint>("prices")
@@ -273,7 +289,22 @@ export async function computeMarketReviews(
     .toArray();
   if (!newest) return { day: null, week: null, month: null };
 
-  const to = newest.date;
+  // The live session, where it is newer than anything stored.
+  const liveRows: { companyCode: number; date: string; close: number; turnover: number }[] = [];
+  let liveDate: string | null = null;
+  for (const [companyCode, quote] of live ?? []) {
+    const day = quote.at?.slice(0, 10);
+    if (!day || quote.price === null || day <= newest.date) continue;
+    liveRows.push({
+      companyCode,
+      date: day,
+      close: quote.price,
+      turnover: quote.turnover ?? 0,
+    });
+    if (!liveDate || day > liveDate) liveDate = day;
+  }
+
+  const to = liveDate ?? newest.date;
 
   // Which days the exchange actually held a session on recently, so the week
   // can be chosen by how much of it has traded rather than by the calendar
@@ -282,7 +313,9 @@ export async function computeMarketReviews(
     await db
       .collection<PricePoint>("prices")
       .distinct("date", { date: { $gte: shiftDays(mondayOf(to), -14) } })
-  ).sort();
+  )
+    .concat(liveDate ? [liveDate] : [])
+    .sort();
 
   // Calendar periods rather than rolling windows: "өнгөрсөн сар" is July,
   // and the week is the one the market is in once it has traded enough of it.
@@ -309,7 +342,9 @@ export async function computeMarketReviews(
   ]);
 
   const byCompany = new Map<number, Close[]>();
-  for (const row of rows) {
+  // Appended after the stored rows, which are read in date order, so each
+  // company's series still ends on its newest close.
+  for (const row of [...rows, ...liveRows]) {
     const series = byCompany.get(row.companyCode) ?? [];
     series.push({ date: row.date, close: row.close, turnover: row.turnover });
     byCompany.set(row.companyCode, series);

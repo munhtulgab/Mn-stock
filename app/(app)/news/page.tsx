@@ -44,10 +44,27 @@ function weeklyReviewStory(review: MarketReview): MarketNewsItem {
     title: weeklyReviewTitle(review),
     url: `#${WEEKLY_HASH}`,
     source: "MSE Advisor",
-    // Dated to the week's last session, so it files under that day with the
-    // reports covering the same period.
-    date: review.to,
+    // Dated to the close of the week's last session, so it files under that
+    // day and sorts among the day's headlines by when it describes rather
+    // than jumping to the top of them for want of a time. The exchange shuts
+    // at one; a review of the week is written once it has.
+    date: `${review.to}T13:00`,
   };
+}
+
+/**
+ * Newest first, by the moment each story carries.
+ *
+ * A day's rows are whatever order the sources were read in otherwise, which
+ * put an 18:25 story under a 16:24 one and the app's own summary above both.
+ * Rows without a stated time fall back to when the feed first saw them, the
+ * same figure the row itself prints, so what a reader sees and what decides
+ * the order are the same thing.
+ */
+function byNewest(a: MarketNewsItem, b: MarketNewsItem): number {
+  const at = (item: MarketNewsItem) =>
+    item.date.length > 10 ? item.date : (item.addedAt ?? item.date);
+  return at(b).localeCompare(at(a));
 }
 
 function groupByDay(items: MarketNewsItem[]): [string, MarketNewsItem[]][] {
@@ -56,7 +73,10 @@ function groupByDay(items: MarketNewsItem[]): [string, MarketNewsItem[]][] {
     const day = item.date.slice(0, 10);
     groups.set(day, [...(groups.get(day) ?? []), item]);
   }
-  return [...groups.entries()];
+  // Days newest first, and each day's stories newest first within it.
+  return [...groups.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([day, dayItems]) => [day, [...dayItems].sort(byNewest)]);
 }
 
 /**
@@ -150,8 +170,8 @@ export default async function NewsPage() {
   // and the app's summary describes the week it has the prices for.
   const reports = await getTradeReports(db, items);
   const reviews = await getMarketReviews(db);
-  // Ahead of the exchange's own stories for the same day: it is the summary
-  // of the whole week those stories are pieces of.
+  // Placed by its own timestamp among the day's headlines, like every other
+  // row: groupByDay sorts each day newest first.
   const feed = reviews.week
     ? [weeklyReviewStory(reviews.week), ...items]
     : items;
