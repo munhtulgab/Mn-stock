@@ -89,43 +89,9 @@ function reviewTab(
   title: string,
   review: MarketReview | null,
   reports: TradeReport[],
-  /**
-   * Puts this period's own summary into the slider rather than beside it.
-   *
-   * The week wants it: its summary is a dated report like the exchange's
-   * own, covering the same five days, so the two read as two accounts of
-   * one week and belong in the same slot. The day does not — its summary is
-   * the figures for a session that is still the newest thing on the page,
-   * and burying it behind a swipe would hide the answer to "what happened
-   * today" behind a gesture.
-   */
-  options: { asSlide?: boolean; hash?: string; slideLabel?: string } = {},
+  options: { hash?: string } = {},
 ): ReviewTab | null {
   if (!review && reports.length === 0) return null;
-
-  if (options.asSlide) {
-    const slides = [
-      ...(review
-        ? [<MarketReviewCard key="own" title={title} review={review} />]
-        : []),
-      ...reports.map((report) => (
-        <TradeReportCard key={report.id} report={report} />
-      )),
-    ];
-    return {
-      label,
-      hash: options.hash,
-      content: (
-        <ReportSlider
-          labels={[
-            ...(review ? [options.slideLabel ?? title] : []),
-            ...reports.map((report) => report.title),
-          ]}
-          slides={slides}
-        />
-      ),
-    };
-  }
 
   return {
     label,
@@ -205,20 +171,19 @@ export default async function NewsPage() {
     // Named for the five days it covers, and sliding: the app's summary and
     // the exchange's own review of the same week are two accounts of one
     // thing and share a slot.
-    // The card is headed like the day's — the name on the left, the dates it
-    // covers on the right — rather than carrying them inside the heading.
-    // The dated form is the story's title, in the feed and on the slider dot,
-    // where there is no second column to put a range in.
+    // Laid out like the day's: the summary, and the exchange's own review of
+    // the same week beside it on a wide screen and under it on a phone.
+    //
+    // It was a single slider for a while, the two as slides in one slot. That
+    // read well on paper and badly in the hand — the exchange's article was
+    // behind a swipe nobody knew was there, so the week looked as though it
+    // had no report at all while the day plainly did.
     reviewTab(
       "Өнгөрсөн долоо хоног",
       "Долоо хоногийн тойм",
       reviews.week,
       reports.weekly,
-      {
-        asSlide: true,
-        hash: WEEKLY_HASH,
-        slideLabel: reviews.week ? weeklyReviewTitle(reviews.week) : undefined,
-      },
+      { hash: WEEKLY_HASH },
     ),
     reviewTab("Сүүлийн сар", "Өнгөрсөн сарын зах зээлийн тойм", reviews.month, []),
   ].filter((tab): tab is ReviewTab => tab !== null);
