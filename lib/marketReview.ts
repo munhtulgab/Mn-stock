@@ -1,5 +1,6 @@
 import type { Db } from "mongodb";
-import { fetchIndexSeries, INDEX_KEYS } from "@/lib/mse/indices";
+import { fetchIndexSeries, INDEX_KEYS, type IndexKey } from "@/lib/mse/indices";
+import { fetchLiveIndexTable, type LiveIndexTable } from "@/lib/mse/movers";
 import { mondayOf, previousMonth, shiftDays, ulaanbaatarDay } from "@/lib/day";
 import type { PricePoint, Security } from "@/lib/types";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
@@ -88,7 +89,7 @@ const TOP = 3;
 const SNAPSHOT_KEY = "marketReviews";
 const CACHE_MS = 30 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 interface ReviewSnapshot {
   key: string;
@@ -163,6 +164,41 @@ function buildReview(
 }
 
 type IndexSeries = Awaited<ReturnType<typeof fetchIndexSeries>>;
+
+/** Where the exchange's own running index table puts each index. */
+const LIVE_LEVELS: Record<IndexKey, keyof LiveIndexTable> = {
+  top20: "top20Unit",
+  mseA: "mseAUnit",
+  mseB: "mseBUnit",
+};
+
+/**
+ * The index histories with the running levels appended as the newest session.
+ *
+ * The same lag the prices have: the exchange publishes an index point for a
+ * day once that day has shut, so a review whose window now reaches the live
+ * session found no index point inside it and printed no index tiles at all.
+ * The exchange's own running table carries the levels in the meantime.
+ */
+function withLiveIndexLevels(
+  series: IndexSeries,
+  table: LiveIndexTable | null,
+  date: string | null,
+): IndexSeries {
+  if (!table || !date) return series;
+
+  const out: IndexSeries = { ...series };
+  for (const { key } of INDEX_KEYS) {
+    const points = out[key];
+    const value = table[LIVE_LEVELS[key]];
+    if (!points || points.length === 0 || !(value > 0)) continue;
+    const last = points[points.length - 1];
+    if (last.date > date) continue;
+    const point = { date, value, high: value, low: value };
+    out[key] = last.date === date ? [...points.slice(0, -1), point] : [...points, point];
+  }
+  return out;
+}
 
 /** Where each index stood either side of the window. */
 function indexMoves(series: IndexSeries, from: string, to: string): ReviewIndex[] {
@@ -333,10 +369,17 @@ export async function computeMarketReviews(
   // One read of the index histories for all three windows: asking again is
   // another chance for an index to drop out, and the cards then disagree
   // about which indices exist.
-  const series = await fetchIndexSeries().catch((err) => {
+  const stored = await fetchIndexSeries().catch((err) => {
     console.error("index series unavailable for the review", err);
     return {} as IndexSeries;
   });
+  // Reaching the same session the prices now do, so the day's card has its
+  // three index tiles rather than nothing where they belong.
+  const series = withLiveIndexLevels(
+    stored,
+    liveDate ? await fetchLiveIndexTable().catch(() => null) : null,
+    liveDate,
+  );
 
   return {
     // The last session on its own: measured from the close before it, which

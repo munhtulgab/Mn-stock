@@ -99,7 +99,7 @@ function reviewTab(
    * and burying it behind a swipe would hide the answer to "what happened
    * today" behind a gesture.
    */
-  options: { asSlide?: boolean; hash?: string } = {},
+  options: { asSlide?: boolean; hash?: string; slideLabel?: string } = {},
 ): ReviewTab | null {
   if (!review && reports.length === 0) return null;
 
@@ -118,7 +118,7 @@ function reviewTab(
       content: (
         <ReportSlider
           labels={[
-            ...(review ? [title] : []),
+            ...(review ? [options.slideLabel ?? title] : []),
             ...reports.map((report) => report.title),
           ]}
           slides={slides}
@@ -205,14 +205,20 @@ export default async function NewsPage() {
     // Named for the five days it covers, and sliding: the app's summary and
     // the exchange's own review of the same week are two accounts of one
     // thing and share a slot.
+    // The card is headed like the day's — the name on the left, the dates it
+    // covers on the right — rather than carrying them inside the heading.
+    // The dated form is the story's title, in the feed and on the slider dot,
+    // where there is no second column to put a range in.
     reviewTab(
       "Өнгөрсөн долоо хоног",
-      reviews.week
-        ? weeklyReviewTitle(reviews.week)
-        : "Долоо хоногийн тойм",
+      "Долоо хоногийн тойм",
       reviews.week,
       reports.weekly,
-      { asSlide: true, hash: WEEKLY_HASH },
+      {
+        asSlide: true,
+        hash: WEEKLY_HASH,
+        slideLabel: reviews.week ? weeklyReviewTitle(reviews.week) : undefined,
+      },
     ),
     reviewTab("Сүүлийн сар", "Өнгөрсөн сарын зах зээлийн тойм", reviews.month, []),
   ].filter((tab): tab is ReviewTab => tab !== null);
