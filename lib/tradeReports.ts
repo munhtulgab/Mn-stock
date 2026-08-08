@@ -1,6 +1,7 @@
 import type { Db } from "mongodb";
 import {
   fetchExchangeArticle,
+  fetchExchangeNews,
   type ArticleBlock,
 } from "@/lib/mse/exchangeNews";
 import type { MarketNewsItem } from "@/lib/marketNews";
@@ -57,7 +58,7 @@ const PER_PERIOD = 3;
 
 const SNAPSHOT_KEY = "tradeReports";
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * How long a page render will wait for articles it has not read before.
@@ -89,11 +90,14 @@ function articleId(url: string): number | null {
 }
 
 /** Only the exchange's own copy carries a body we can read. */
-function exchangeItems(items: MarketNewsItem[]): MarketNewsItem[] {
-  return items.filter((item) => item.source === "mse.mn");
+function exchangeItems(items: Headline[]): Headline[] {
+  return items.filter((item) => item.url.includes("mse.mn/news/"));
 }
 
-function idsOf(items: MarketNewsItem[]): number[] {
+/** The little a headline has to carry for a report to be found by it. */
+type Headline = { title: string; date: string; url: string };
+
+function idsOf(items: Headline[]): number[] {
   return items
     .map((item) => articleId(item.url))
     .filter((id): id is number => id !== null)
@@ -109,7 +113,7 @@ function idsOf(items: MarketNewsItem[]): number[] {
  * a training course — which made a slider labelled "the day's trading" mostly
  * about other things.
  */
-function selectDaily(items: MarketNewsItem[]): number[] {
+function selectDaily(items: Headline[]): number[] {
   const feed = exchangeItems(items).filter((item) => PATTERNS.daily.test(item.title));
   const lead = feed[0];
   if (!lead) return [];
@@ -127,7 +131,7 @@ function selectDaily(items: MarketNewsItem[]): number[] {
  * else. It used to carry the rest of the week's announcements as well, which
  * buried the review it is named after.
  */
-function selectWeekly(items: MarketNewsItem[]): number[] {
+function selectWeekly(items: Headline[]): number[] {
   // The newest one only. The exchange publishes one of these a week and the
   // feed holds a month of them; the week's tab is about this week.
   return idsOf(
@@ -169,6 +173,21 @@ export async function getTradeReports(
   db: Db,
   items: MarketNewsItem[],
 ): Promise<TradeReports> {
+  // Which headlines to look through.
+  //
+  // Not the app's own feed: that holds 80 stories across every source, which
+  // at the rate they publish is a few days, so the exchange's weekly review
+  // had dropped out of it within a week of going up and the week's tab was
+  // left with a summary and no report beside it. The exchange's own listing
+  // reaches back a month or more and is one call. The feed stands in if that
+  // call fails, which is what it was doing all along.
+  const headlines: Headline[] = await fetchExchangeNews(60)
+    .then((news) => news.map((n) => ({ title: n.title, date: n.date, url: n.url })))
+    .catch((err) => {
+      console.error("exchange listing unavailable for reports", err);
+      return items.map((i) => ({ title: i.title, date: i.date, url: i.url }));
+    });
+
   const snapshots = db.collection<ReportSnapshot>("marketSnapshots");
   const cached = await snapshots.findOne({ key: SNAPSHOT_KEY });
   const stored: TradeReports =
@@ -199,8 +218,8 @@ export async function getTradeReports(
   };
 
   const [daily, weekly] = await Promise.all([
-    resolve(selectDaily(items), stored.daily),
-    resolve(selectWeekly(items), stored.weekly),
+    resolve(selectDaily(headlines), stored.daily),
+    resolve(selectWeekly(headlines), stored.weekly),
   ]);
   const reports: TradeReports = { daily, weekly };
 
