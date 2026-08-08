@@ -14,6 +14,8 @@ import {
   generateMultiProviderSignal,
 } from "@/lib/ai/multiAnalyst";
 import { humanizeProviderError } from "@/lib/ai/errorMessages";
+import { buildAnalysis } from "@/lib/analysis/report";
+import { ulaanbaatarDay } from "@/lib/day";
 import type { AiSignal, Security } from "@/lib/types";
 
 /**
@@ -109,6 +111,25 @@ export async function GET(
     }
   }
 
+  // The same analysis the company's page shows: the technical scorecards,
+  // the ratios ranked against the sector, the dividends, the risk figures,
+  // the peer table and our own combined verdict. Without it every model was
+  // being asked to judge a company from thirty candles and six ratios while
+  // the page beneath it carried a far better picture.
+  //
+  // Never fatal: it reads every other company's last report to build the
+  // ranking, and a run that cannot do that should still return an answer
+  // from the prices and the news, as it always did.
+  const analysis = await buildAnalysis(
+    db,
+    detail.security,
+    detail.priceHistory.at(-1)?.close ?? null,
+    ulaanbaatarDay(new Date()),
+  ).catch((err) => {
+    console.error(`analysis for the AI prompt failed (${detail.security.symbol})`, err);
+    return null;
+  });
+
   try {
     const result = await generateMultiProviderSignal(settings, {
       security: detail.security,
@@ -117,6 +138,7 @@ export async function GET(
       recommendation: detail.recommendation,
       news,
       externalNews,
+      analysis,
     });
 
     const doc: AiSignal = {

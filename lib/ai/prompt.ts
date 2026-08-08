@@ -2,6 +2,9 @@ import { ulaanbaatarDateTime, ulaanbaatarDay } from "@/lib/day";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 import type { CompanyNewsItem } from "@/lib/mse/news";
 import type { NewsSourceExtract } from "@/lib/mse/newsSources";
+import type { StockAnalysis } from "@/lib/analysis/report";
+import type { Reading, Scorecard } from "@/lib/analysis/indicators";
+import type { Timeframe } from "@/lib/analysis/series";
 
 function average(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -19,14 +22,31 @@ function average(values: number[]): number | null {
  * it, and were being billed for a wall of front-page text nobody had asked
  * them to read.
  *
- * Mongolian in Cyrillic runs near two characters per token, so these are
- * roughly seven and a half thousand tokens of news inside a message of about
- * nine thousand — under the smallest ceiling any configured provider has.
+ * Mongolian in Cyrillic runs near two characters per token, so the message
+ * has to stay under the smallest ceiling any configured provider has —
+ * Groq's free tier, at twelve thousand tokens a minute.
+ *
+ * The news share was halved when the worked analysis moved into the prompt.
+ * Three scorecards, the ratios against the sector, the dividends, the risk
+ * figures and the peer table cost about six thousand characters, and they
+ * are worth more per character than a fifth page of somebody's front page:
+ * they are measured from this company's whole history and from every other
+ * company's last report, where the extracts are raw text the model still has
+ * to decide is even about this company. Worst case is now around ten
+ * thousand tokens all told, system prompt included.
  */
-const EXTERNAL_BUDGET_CHARS = 6_000;
+const EXTERNAL_BUDGET_CHARS = 3_000;
 const MAX_MESSAGE_CHARS = 18_000;
 /** Below this an extract is a headline fragment and not worth a slot. */
 const MIN_EXTRACT_CHARS = 400;
+/**
+ * Peers listed in the sector comparison.
+ *
+ * The ranking is computed over every reporting company in the sector and the
+ * percentiles already carry that whole population; the table is here so the
+ * model can name a comparable, and a dozen is enough to do that.
+ */
+const MAX_PEERS = 12;
 
 export interface AnalystInput {
   security: Security;
@@ -35,10 +55,144 @@ export interface AnalystInput {
   recommendation: Recommendation;
   news: CompanyNewsItem[];
   externalNews?: NewsSourceExtract[];
+  /**
+   * Everything the company's page shows below the price: the three technical
+   * scorecards, the ratios against the sector, the dividend history, the
+   * risk figures, the peer table and the app's own combined verdict.
+   *
+   * Optional because a run must still produce an answer when the analysis
+   * cannot be built — it reads the whole market to rank one company, and
+   * that can fail on its own.
+   */
+  analysis?: StockAnalysis | null;
+}
+
+/**
+ * A scorecard's readings as "label: value · detail · verdict".
+ *
+ * Written as strings rather than objects because there are up to fourteen of
+ * them at each of three intervals: as objects the same information costs
+ * three times the characters, and the budget below is what keeps the message
+ * inside the smallest provider's per-minute ceiling.
+ */
+function readings(list: Reading[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const reading of list) {
+    // A reading with no figure and no verdict is an indicator this security
+    // has too little history for. Saying so fourteen times over teaches the
+    // model nothing; leaving it out is the same information, shorter.
+    if (reading.value === null && !reading.verdict) continue;
+    out[reading.label] = [
+      reading.value === null ? "—" : String(reading.value),
+      reading.detail,
+      reading.verdict,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  return out;
+}
+
+function scorecardPayload(scorecard: Scorecard) {
+  return {
+    bars: scorecard.bars,
+    summary: scorecard.summary,
+    counts: scorecard.counts,
+    oscillators: readings(scorecard.oscillators),
+    moving_averages: readings(scorecard.movingAverages),
+  };
+}
+
+const INTERVAL_NOTE: Record<Timeframe, string> = {
+  "1D": "өдрийн лаагаар",
+  "1W": "долоо хоногийн лаагаар",
+  "1M": "сарын лаагаар",
+};
+
+/**
+ * The page's own analysis, laid out for the model.
+ *
+ * These are the same figures a reader sees on the company's page — computed
+ * on the server from the full price history and from every other company's
+ * last report. Handing them over means the model argues with a worked
+ * analysis rather than re-deriving a worse one from thirty candles.
+ */
+function analysisPayload(analysis: StockAnalysis) {
+  const scorecards: Record<string, unknown> = {};
+  for (const [timeframe, scorecard] of Object.entries(analysis.scorecards)) {
+    scorecards[`${timeframe} (${INTERVAL_NOTE[timeframe as Timeframe]})`] =
+      scorecardPayload(scorecard);
+  }
+
+  return {
+    technical_analysis: {
+      note: "Индикатор бүрийн ард гарсан BUY/NEUTRAL/SELL бол уг үзүүлэлтийн дүгнэлт. Эдгээрийг бүрэн ашигла — доорх 30 лаанаас дахин тооцоолох шаардлагагүй.",
+      scorecards,
+    },
+    fundamental_analysis: {
+      period: analysis.period,
+      compared_against: analysis.comparedToMarket
+        ? "Салбартаа хангалттай компани байхгүй тул зах зээлийн бүх компанитай харьцуулсан"
+        : `${analysis.sectorLabel} салбарын ${analysis.peerCount} компанитай харьцуулсан`,
+      note: "percentile нь салбартаа хэддүгээр хувьд байгаа нь (100 = хамгийн сайн). standing нь салбарын медиантай харьцуулсан байдал. yoy нь өмнөх оны мөн үетэй харьцуулсан өөрчлөлт.",
+      ratios: analysis.ratios.map((ratio) => ({
+        label: ratio.label,
+        value: ratio.value,
+        sector_median: ratio.sectorMedian,
+        percentile: ratio.percentile,
+        standing: ratio.standing,
+        yoy: ratio.yoy,
+        // Marked because it is a closed year from Datalab rather than the
+        // exchange's running quarter, and the two are not the same date.
+        ...(ratio.external ? { source: "TDB Datalab, сүүлийн хаагдсан жил" } : {}),
+      })),
+    },
+    dividend_history: analysis.dividends.map((dividend) => ({
+      year: dividend.year,
+      amount_per_share: dividend.amount,
+      yield_pct: dividend.yieldPct,
+      payout_ratio_pct: dividend.payoutRatio,
+      announced: dividend.date,
+    })),
+    risk_metrics: {
+      window_years: analysis.riskYears,
+      sessions_measured: analysis.risk.overlap,
+      beta_vs_top20: analysis.risk.beta,
+      annualised_volatility_pct: analysis.risk.volatility,
+      sharpe: analysis.risk.sharpe,
+      sortino: analysis.risk.sortino,
+      var95_daily_loss_pct: analysis.risk.var95,
+      max_drawdown_pct: analysis.risk.maxDrawdown,
+      annualised_return_pct: analysis.risk.annualReturn,
+    },
+    sector_comparison: {
+      sector: analysis.sectorLabel,
+      // A guessed sector and a published one are not the same evidence, and
+      // a percentile against the wrong peer group is worse than none.
+      sector_is_stated: analysis.sectorStated,
+      peer_count: analysis.peerCount,
+      peers: analysis.peers.slice(0, MAX_PEERS).map((peer) => ({
+        symbol: peer.symbol,
+        pe: peer.pe,
+        pb: peer.pb,
+        roe: peer.roe,
+        ...(peer.self ? { this_company: true } : {}),
+      })),
+    },
+    combined_verdict_from_this_app: {
+      note: "Энэ бол манай системийн эцсийн дүгнэлт. Үүнтэй санал нийлж эсвэл нийлэхгүй байгаагаа тайлбартаа тодорхой хэл.",
+      signal: analysis.combined.signal,
+      score_minus100_to_100: analysis.combined.score,
+      confidence: analysis.combined.confidence,
+      parts: analysis.combined.parts,
+      reasons: analysis.combined.reasons,
+    },
+  };
 }
 
 export function buildUserMessage(input: AnalystInput): string {
-  const { security, prices, financials, recommendation, news, externalNews } = input;
+  const { security, prices, financials, recommendation, news, externalNews, analysis } =
+    input;
   const last = prices.at(-1) ?? null;
   const recent20Volume = average(prices.slice(-20).map((p) => p.volume));
   const dailyLimitUp = last ? last.close * 1.15 : null;
@@ -118,6 +272,9 @@ export function buildUserMessage(input: AnalystInput): string {
           shares_outstanding: financials.sharesOutstanding,
         }
       : null,
+    // The worked analysis, where it could be built. Spread in above the news
+    // and the candles so the finished figures are read before the raw ones.
+    ...(analysis ? analysisPayload(analysis) : {}),
     recent_news_from_mse: news.map((n) => ({ title: n.title, date: n.date })),
     recent_daily_candles_oldest_to_newest: recentCandles,
   };
