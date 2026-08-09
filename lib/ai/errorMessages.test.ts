@@ -33,6 +33,19 @@ test("a 402 is about money, not about waiting", () => {
   assert.doesNotMatch(message, /Түр хүлээгээд/);
 });
 
+test("a truncated answer is reported as a token limit, not a bad format", () => {
+  // What a reasoning model's run looks like when its thinking eats the
+  // completion allowance and the JSON stops mid-string.
+  const raw =
+    "cerebras MAX_TOKENS: хариу дуусахаас өмнө токений хязгаарт хүрлээ (үүнээс 1294 нь дотоод бодолтод зарцуулагдсан)";
+  const message = humanizeProviderError("cerebras", raw);
+  assert.match(message, /токений хязгаараас давж таслагдсан/);
+  // Not the per-minute rule above it, which is a different failure and a
+  // different fix — that one is about how much was sent, this about how
+  // much room the answer had.
+  assert.doesNotMatch(message, /минут тутмын/);
+});
+
 test("every message survives a second pass unchanged", () => {
   // Stored documents are re-humanised each time they are read, so a rule
   // that rewrote its own output would change the error on the second view.
@@ -40,6 +53,7 @@ test("every message survives a second pass unchanged", () => {
     'cloudflare API 401: {"errors":[{"code":10000,"message":"Authentication error"}]}',
     'cerebras API 402: {"message":"Payment required","code":"payment_required"}',
     "groq API 413: Request too large for model on tokens per minute (TPM)",
+    "cerebras MAX_TOKENS: хариу дуусахаас өмнө токений хязгаарт хүрлээ",
     "gemini API 429: RESOURCE_EXHAUSTED quota",
   ];
   for (const raw of raws) {
