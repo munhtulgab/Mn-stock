@@ -242,48 +242,100 @@ function priorYear(reports: Financials[], latest: Financials): Financials | null
   );
 }
 
-export async function buildAnalysis(
-  db: Db,
+/**
+ * Everything an analysis needs that is about the market rather than about
+ * one company: who is listed, what they last reported, what they last
+ * traded at, Datalab's closed years, and the index the beta is measured
+ * against.
+ *
+ * Loaded apart from the per-company work because ranking one company means
+ * reading all of them, and a whole-market pass — which is what the
+ * dashboard's verdict is — would otherwise do that four hundred times over.
+ */
+export interface MarketContext {
+  securities: Security[];
+  financialsByCompany: Map<number, Financials[]>;
+  latestPrices: Map<number, number>;
+  tdb: Map<number, { latest: TdbYear; previous: TdbYear | null }>;
+  top20: { date: string; value: number }[];
+  /**
+   * Every company's ratios from its last report and last close, worked out
+   * once. Each company's peer group is a subset of these, so computing them
+   * per company turned one pass into four hundred squared.
+   */
+  ratiosByCompany: Map<number, RatioInputs>;
+}
+
+export async function loadMarketContext(db: Db): Promise<MarketContext> {
+  const [financialsByCompany, latestPrices, securities, indices, tdb] =
+    await Promise.all([
+      getFinancialsForPeers(db),
+      getLatestPrices(db),
+      db.collection<Security>("securities").find({ status: "active" }).toArray(),
+      // The market's own series, for the beta. Its absence costs one figure,
+      // not the page.
+      fetchIndexSeries().catch(() => ({})),
+      // Datalab's closed years: the stated industry, the liquidity ratios MSE
+      // does not publish, and last year's figures to measure a change against.
+      getTdbLatest(db).catch(
+        () => new Map<number, { latest: TdbYear; previous: TdbYear | null }>(),
+      ),
+    ]);
+
+  const ratiosByCompany = new Map<number, RatioInputs>();
+  for (const security of securities) {
+    ratiosByCompany.set(
+      security.companyCode,
+      computeRatios(
+        financialsByCompany.get(security.companyCode)?.[0] ?? null,
+        latestPrices.get(security.companyCode) ?? null,
+        tdb.get(security.companyCode)?.latest ?? null,
+      ),
+    );
+  }
+
+  return {
+    securities,
+    financialsByCompany,
+    latestPrices,
+    tdb,
+    top20:
+      (indices as Record<string, { date: string; value: number }[]>).top20 ?? [],
+    ratiosByCompany,
+  };
+}
+
+/**
+ * The analysis proper, for one company, given the market around it.
+ *
+ * Pure: no database, no network. This is the single definition of what this
+ * app thinks of a company — the ratios against its sector, the scorecards,
+ * the risk figures and the verdict that follows from them. The company's
+ * page and the whole-market pass behind the home list and the alerts both
+ * come through here, which is what keeps them from disagreeing.
+ */
+export interface CompanyAnalysis {
+  sector: SectorKey;
+  sectorLabel: string;
+  sectorStated: boolean;
+  peerCount: number;
+  comparedToMarket: boolean;
+  period: string | null;
+  ratios: RatioView[];
+  scorecards: Record<Timeframe, Scorecard>;
+  risk: RiskMetrics;
+  combined: CombinedSignal;
+  peers: PeerRow[];
+}
+
+export function analyseCompany(
+  context: MarketContext,
   security: Security,
+  candles: Candle[],
   price: number | null,
   today: string,
-  /**
-   * The running quote, so the chart and every indicator reach today rather
-   * than stopping at the last published session. The exchange publishes a
-   * day only once it has closed, so without this the chart ends on
-   * yesterday's close while the header above it quotes this morning.
-   */
-  live?: LiveQuote | null,
-): Promise<StockAnalysis> {
-  const from = `${Number(today.slice(0, 4)) - HISTORY_YEARS}${today.slice(4)}`;
-
-  const [
-    storedCandles,
-    financialsByCompany,
-    pricesByCompany,
-    securities,
-    noticeDividends,
-    indices,
-    tdb,
-    tdbDividends,
-  ] = await Promise.all([
-    getCandles(db, security.companyCode, from),
-    getFinancialsForPeers(db),
-    getLatestPrices(db),
-    db.collection<Security>("securities").find({ status: "active" }).toArray(),
-    getDividendHistory(db, security.companyCode, price).catch(() => []),
-    // The market's own series, for the beta. Its absence costs one figure,
-    // not the page.
-    fetchIndexSeries().catch(() => ({})),
-    // Datalab's closed years: the stated industry, the liquidity ratios MSE
-    // does not publish, and last year's figures to measure a change against.
-    getTdbLatest(db).catch(() => new Map<number, { latest: TdbYear; previous: TdbYear | null }>()),
-    getTdbDividends(db, security.companyCode).catch(() => []),
-  ]);
-
-  // Today's bar goes on before anything is computed from the series, so the
-  // scorecards, the risk figures and the chart all describe the same market.
-  const candles = withLiveCandle(storedCandles, live);
+): CompanyAnalysis {
+  const { securities, financialsByCompany, tdb, ratiosByCompany } = context;
 
   const ownReports = financialsByCompany.get(security.companyCode) ?? [];
   const financials = ownReports[0] ?? null;
@@ -330,14 +382,14 @@ export async function buildAnalysis(
     ? reportingCompanies.filter((s) => s.companyCode !== security.companyCode)
     : sectorMembers;
 
+  // Read from the context's precomputed table rather than worked out again
+  // here: a peer's ratios are the same figures whoever is asking, and the
+  // whole-market pass would otherwise recompute every company's ratios once
+  // for every other company.
   const peers: SectorPeer[] = comparisonSet.map((s) => ({
     symbol: s.symbol,
     name: s.name,
-    ratios: computeRatios(
-      financialsByCompany.get(s.companyCode)?.[0] ?? null,
-      pricesByCompany.get(s.companyCode) ?? null,
-      tdb.get(s.companyCode)?.latest ?? null,
-    ),
+    ratios: ratiosByCompany.get(s.companyCode)!,
   }));
 
   const own = computeRatios(financials, price, ownTdb?.latest);
@@ -369,7 +421,7 @@ export async function buildAnalysis(
     candles,
     // TOP-20 is the exchange's headline index and the closest thing this
     // market has to "the market".
-    (indices as Record<string, { date: string; value: number }[]>).top20 ?? [],
+    context.top20,
     today,
   );
 
@@ -412,10 +464,141 @@ export async function buildAnalysis(
     ratios,
     scorecards,
     risk,
-    riskYears: RISK_YEARS,
     combined,
-    dividends: mergeDividends(noticeDividends, tdbDividends, price),
     peers: peerRows,
+  };
+}
+
+/**
+ * Every listed company's candles at once, for the whole-market pass.
+ *
+ * One aggregate rather than four hundred queries. The window matches what a
+ * company's own page reads, because a verdict computed from a shorter
+ * history is a different verdict — MA200 alone needs two hundred sessions,
+ * and this market does not trade every company every day.
+ */
+async function getCandlesForAll(db: Db, from: string): Promise<Map<number, Candle[]>> {
+  const rows = await db
+    .collection<PricePoint>("prices")
+    .find(
+      { date: { $gte: from }, close: { $gt: 0 } },
+      {
+        projection: {
+          _id: 0,
+          companyCode: 1,
+          date: 1,
+          open: 1,
+          high: 1,
+          low: 1,
+          close: 1,
+          volume: 1,
+        },
+      },
+    )
+    .sort({ companyCode: 1, date: 1 })
+    .toArray();
+
+  const byCompany = new Map<number, Candle[]>();
+  for (const row of rows) {
+    const list = byCompany.get(row.companyCode) ?? [];
+    list.push({
+      date: row.date,
+      open: row.open > 0 ? row.open : row.close,
+      high: row.high > 0 ? row.high : row.close,
+      low: row.low > 0 ? row.low : row.close,
+      close: row.close,
+      volume: row.volume ?? 0,
+    });
+    byCompany.set(row.companyCode, list);
+  }
+  return byCompany;
+}
+
+/**
+ * The verdict for every listed company, from the same code one company's
+ * page uses.
+ *
+ * This exists because the app used to hold two opinions at once. The home
+ * list and the alerts came from a six-indicator rule engine; the company's
+ * page came from this analysis. They disagreed often enough that a reader
+ * was told MBW had moved to ХҮЛЭЭХ and then found ЗАРАХ on the page the
+ * alert linked to. There is one verdict now, and this is where the rest of
+ * the app reads it.
+ */
+export async function buildCombinedSignals(
+  db: Db,
+  today: string,
+  live?: Map<number, LiveQuote>,
+): Promise<Map<number, CombinedSignal>> {
+  const from = `${Number(today.slice(0, 4)) - HISTORY_YEARS}${today.slice(4)}`;
+  const [context, candlesByCompany] = await Promise.all([
+    loadMarketContext(db),
+    getCandlesForAll(db, from),
+  ]);
+
+  const out = new Map<number, CombinedSignal>();
+  for (const security of context.securities) {
+    const candles = withLiveCandle(
+      candlesByCompany.get(security.companyCode) ?? [],
+      live?.get(security.companyCode),
+    );
+    if (candles.length === 0) continue;
+    // The price every ratio is measured against, same as the page: the
+    // running quote where there is one, the last close otherwise.
+    const price = candles.at(-1)!.close;
+    try {
+      out.set(
+        security.companyCode,
+        analyseCompany(context, security, candles, price, today).combined,
+      );
+    } catch (err) {
+      // One company that cannot be analysed must not cost the other four
+      // hundred their verdict.
+      console.error(`combined signal failed for ${security.symbol}`, err);
+    }
+  }
+  return out;
+}
+
+/**
+ * One company's full analysis, for its own page.
+ *
+ * The market context and the dividend history are what this adds over
+ * `analyseCompany`; the verdict itself is that function's, unchanged, so the
+ * headline on this page is the same verdict the home list and the alerts
+ * carry.
+ */
+export async function buildAnalysis(
+  db: Db,
+  security: Security,
+  price: number | null,
+  today: string,
+  /**
+   * The running quote, so the chart and every indicator reach today rather
+   * than stopping at the last published session. The exchange publishes a
+   * day only once it has closed, so without this the chart ends on
+   * yesterday's close while the header above it quotes this morning.
+   */
+  live?: LiveQuote | null,
+): Promise<StockAnalysis> {
+  const from = `${Number(today.slice(0, 4)) - HISTORY_YEARS}${today.slice(4)}`;
+
+  const [storedCandles, context, noticeDividends, tdbDividends] = await Promise.all([
+    getCandles(db, security.companyCode, from),
+    loadMarketContext(db),
+    getDividendHistory(db, security.companyCode, price).catch(() => []),
+    getTdbDividends(db, security.companyCode).catch(() => []),
+  ]);
+
+  // Today's bar goes on before anything is computed from the series, so the
+  // scorecards, the risk figures and the chart all describe the same market.
+  const candles = withLiveCandle(storedCandles, live);
+  const analysis = analyseCompany(context, security, candles, price, today);
+
+  return {
+    ...analysis,
+    riskYears: RISK_YEARS,
+    dividends: mergeDividends(noticeDividends, tdbDividends, price),
     candles,
     enoughHistory: candles.length >= MIN_CANDLES,
   };

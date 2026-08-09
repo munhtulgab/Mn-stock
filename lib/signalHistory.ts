@@ -6,11 +6,29 @@ import { sendSms } from "@/lib/callpro";
 import { recordNotifications } from "@/lib/notifications";
 import { SIGNAL_LABELS, type Signal } from "@/lib/types";
 
+/**
+ * Which engine produced a stored signal.
+ *
+ * 1 was the six-indicator rule engine. 2 is the combined analysis — the
+ * scorecard, the ratios against the sector and the risk figures — which is
+ * what a company's own page has always shown and what the whole app reads
+ * now.
+ *
+ * Bump this whenever a change would move verdicts across the market. A
+ * signal is only comparable with one from the same engine: measured against
+ * the other, most of the market appears to move at once, and the reader is
+ * handed a hundred alerts about companies that did nothing. Stored signals
+ * from an older engine are re-baselined silently below instead.
+ */
+const SIGNAL_ENGINE_VERSION = 2;
+
 interface SignalHistoryDoc {
   companyCode: number;
   symbol: string;
   signal: Signal;
   updatedAt: Date;
+  /** Absent on documents written before engines were numbered, i.e. engine 1. */
+  engine?: number;
 }
 
 export interface SignalChange {
@@ -62,7 +80,15 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
   const historyCollection = db.collection<SignalHistoryDoc>("signalHistory");
   const existing = await historyCollection.find({}).toArray();
   const isFirstRun = existing.length === 0;
-  const previousByCode = new Map(existing.map((h) => [h.companyCode, h.signal]));
+  // Only signals from the current engine are something this run can be
+  // compared against. A company still carrying an older engine's verdict has
+  // no comparable previous state, so it falls through as NEW — recorded,
+  // announced to nobody, and comparable from the next run onwards.
+  const previousByCode = new Map(
+    existing
+      .filter((h) => (h.engine ?? 1) === SIGNAL_ENGINE_VERSION)
+      .map((h) => [h.companyCode, h.signal]),
+  );
 
   const changes: SignalChange[] = [];
   const ops = priced.map((row) => {
@@ -84,6 +110,7 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
             symbol: row.symbol,
             signal: row.signal,
             updatedAt: new Date(),
+            engine: SIGNAL_ENGINE_VERSION,
           },
         },
         upsert: true,

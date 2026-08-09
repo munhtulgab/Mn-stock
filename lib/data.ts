@@ -7,6 +7,8 @@ import { daysBetween, sessionChangePct } from "@/lib/priceChange";
 import { ulaanbaatarDay } from "@/lib/day";
 import { needsPriceRefresh } from "@/lib/priceFreshness";
 import { liveCandle } from "@/lib/liveCandle";
+import { buildCombinedSignals } from "@/lib/analysis/report";
+import type { CombinedSignal } from "@/lib/analysis/signal";
 import type { Financials, PricePoint, Recommendation, Security } from "@/lib/types";
 
 const INDICATOR_WINDOW_DAYS = 400;
@@ -176,11 +178,19 @@ function buildRow(
   prices: PricePoint[],
   financials: Financials | null,
   marketMedianPe: number | null,
+  /**
+   * The company's combined verdict, from the same analysis its own page
+   * shows. Absent only where that analysis could not be built, in which case
+   * the older rule engine stands in rather than leaving the row blank.
+   */
+  combined: CombinedSignal | undefined,
 ): DashboardRow {
-  const recommendation = computeRecommendation(prices, financials, marketMedianPe);
   const last = prices.at(-1) ?? null;
   const prev = prices.length > 1 ? prices[prices.length - 2] : null;
   const changePct = sessionChangePct(last, prev);
+  const fallback = combined
+    ? null
+    : computeRecommendation(prices, financials, marketMedianPe);
 
   return {
     symbol: security.symbol,
@@ -191,8 +201,8 @@ function buildRow(
     lastDate: last?.date ?? null,
     changePct,
     volume: last?.volume ?? null,
-    signal: recommendation.signal,
-    score: recommendation.score,
+    signal: combined?.signal ?? fallback!.signal,
+    score: combined?.score ?? fallback!.score,
     sparkline: recentSparkline(prices),
   };
 }
@@ -240,15 +250,25 @@ async function computeDashboardRows(
   db: Db,
   options: { live?: Map<number, LiveQuote> } = {},
 ): Promise<DashboardRow[]> {
-  const [securities, financialsByCompany, pricesByCompany] = await Promise.all([
-    db
-      .collection<Security>("securities")
-      .find({ status: "active" })
-      .sort({ symbol: 1 })
-      .toArray(),
-    getLatestFinancialsByCompany(db),
-    getRecentPricesForAll(db),
-  ]);
+  const [securities, financialsByCompany, pricesByCompany, combined] =
+    await Promise.all([
+      db
+        .collection<Security>("securities")
+        .find({ status: "active" })
+        .sort({ symbol: 1 })
+        .toArray(),
+      getLatestFinancialsByCompany(db),
+      getRecentPricesForAll(db),
+      // The verdict every row carries, from the analysis a company's own page
+      // shows. Never fatal: a failure here drops the whole market back to the
+      // rule engine rather than serving no list at all.
+      buildCombinedSignals(db, ulaanbaatarDay(new Date()), options.live).catch(
+        (err) => {
+          console.error("combined signals failed, falling back to the rule engine", err);
+          return new Map<number, CombinedSignal>();
+        },
+      ),
+    ]);
 
   const marketMedianPe = getMarketMedianPe(financialsByCompany);
 
@@ -262,6 +282,7 @@ async function computeDashboardRows(
       ),
       financialsByCompany.get(security.companyCode) ?? null,
       marketMedianPe,
+      combined.get(security.companyCode),
     ),
   );
 }
@@ -274,7 +295,7 @@ const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
  * sync — e.g. the sparkline calendar-window fallback below. A stored
  * snapshot from an older version is treated as stale regardless of age.
  */
-const DASHBOARD_SCHEMA_VERSION = 3;
+const DASHBOARD_SCHEMA_VERSION = 4;
 
 interface MarketSnapshot {
   key: string;

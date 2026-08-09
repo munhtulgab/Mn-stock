@@ -253,13 +253,22 @@ export function buildUserMessage(input: AnalystInput): string {
       avg_volume_last_20d: recent20Volume,
       last_volume: last?.volume ?? null,
     },
-    rule_based_score: {
-      signal: recommendation.signal,
-      score: recommendation.score,
-      technical_score: recommendation.technicalScore,
-      fundamental_score: recommendation.fundamentalScore,
-      reasons: recommendation.reasons,
-    },
+    // Only where the worked analysis is missing. The two are different
+    // engines and they disagree — that disagreement is the bug this app was
+    // just fixed for, and printing both would hand the model two verdicts
+    // and no way to choose. The combined verdict below is the app's opinion;
+    // this older six-indicator score stands in only when there isn't one.
+    ...(analysis
+      ? {}
+      : {
+          rule_based_score: {
+            signal: recommendation.signal,
+            score: recommendation.score,
+            technical_score: recommendation.technicalScore,
+            fundamental_score: recommendation.fundamentalScore,
+            reasons: recommendation.reasons,
+          },
+        }),
     fundamentals: financials
       ? {
           period: financials.period,
