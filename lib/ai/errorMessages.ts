@@ -53,6 +53,23 @@ const RULES: Rule[] = [
         : `${p}: Хүсэлтийн хязгаар (quota) дүүрсэн байна. Түр хүлээгээд дахин оролдоно уу, эсвэл API түлхүүрийн багцаа шинэчилнэ үү.`,
   },
   {
+    // Cloudflare, above the invalid-key rule, which this would otherwise
+    // fall into and be wrong about.
+    //
+    // Workers AI addresses the account in the URL, so there are two ways to
+    // be refused and only one of them is a bad token. A token that is valid
+    // and active — /user/tokens/verify says so — still answers 401 on the
+    // inference path and 403 code 9109 on the account itself when it was
+    // not granted Workers AI on *that* account. Telling the reader their key
+    // is invalid sends them to re-paste a key that was never the problem.
+    test: (m) =>
+      /\b9109\b|Unauthorized to access requested resource/i.test(m) ||
+      (/cloudflare/i.test(m) && /Authentication error/i.test(m)) ||
+      /Workers AI эрх/i.test(m),
+    message: (p) =>
+      `${p}: Токен хүчинтэй ч энэ данс дээр Workers AI эрх алга. Cloudflare dashboard → My Profile → API Tokens дээрээс "Workers AI" эрхтэй, зөв дансанд холбогдсон токен үүсгэж, Account ID-г нь хамт шалгана уу.`,
+  },
+  {
     test: (m) => /API_KEY_INVALID|API key not valid|invalid.?api.?key|401|Unauthorized|Incorrect API key/i.test(m),
     message: (p) =>
       `${p}: API түлхүүр буруу эсвэл хүчингүй байна. Тохиргоо хуудсан дээрээс шалгаж, дахин оруулна уу.`,
