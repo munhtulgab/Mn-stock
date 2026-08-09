@@ -24,6 +24,9 @@ const PROVIDER_LABEL: Record<string, string> = {
   gemini: "Gemini",
   groq: "Groq",
   openrouter: "OpenRouter",
+  mistral: "Mistral",
+  cerebras: "Cerebras",
+  cloudflare: "Cloudflare",
 };
 
 export default function AiSignalPanel({ symbol }: { symbol: string }) {

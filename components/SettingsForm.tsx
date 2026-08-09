@@ -23,7 +23,11 @@ interface MaskedSettings {
     gemini: string | null;
     groq: string | null;
     openrouter: string | null;
+    mistral: string | null;
+    cerebras: string | null;
+    cloudflare: string | null;
   };
+  cloudflareAccountId: string | null;
   sms: {
     enabled: boolean;
     apiKey: string | null;
@@ -103,6 +107,24 @@ const PROVIDER_FIELDS: {
     label: "OpenRouter",
     help: "openrouter.ai дээрх API key",
   },
+  {
+    key: "mistral",
+    bodyKey: "mistralApiKey",
+    label: "Mistral",
+    help: "console.mistral.ai дээрх API key",
+  },
+  {
+    key: "cerebras",
+    bodyKey: "cerebrasApiKey",
+    label: "Cerebras",
+    help: "cloud.cerebras.ai дээрх API key (дансанд billing идэвхтэй байх шаардлагатай)",
+  },
+  {
+    key: "cloudflare",
+    bodyKey: "cloudflareApiKey",
+    label: "Cloudflare Workers AI",
+    help: "Workers AI эрхтэй API token. Доорх Account ID-г бөглөх шаардлагатай.",
+  },
 ];
 
 export default function SettingsForm({
@@ -120,6 +142,8 @@ export default function SettingsForm({
   const [fbCookieInput, setFbCookieInput] = useState("");
   const [fbCookieCurrent, setFbCookieCurrent] = useState(initial.facebookCookie);
   const [caInput, setCaInput] = useState("");
+  const [cfAccountInput, setCfAccountInput] = useState("");
+  const [cfAccountCurrent, setCfAccountCurrent] = useState(initial.cloudflareAccountId);
   const [caCount, setCaCount] = useState(initial.extraCaCount);
   const [sourceCheck, setSourceCheck] = useState<
     | { kind: "idle" }
@@ -316,6 +340,7 @@ export default function SettingsForm({
       if (fbCookieInput.trim()) body.facebookCookie = fbCookieInput.trim();
       if (apifyInput.trim()) body.apifyToken = apifyInput.trim();
       if (caInput.trim()) body.extraCaCerts = caInput.trim();
+      if (cfAccountInput.trim()) body.cloudflareAccountId = cfAccountInput.trim();
 
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -333,6 +358,8 @@ export default function SettingsForm({
       setFbCookieCurrent(data.facebookCookie);
       setFbCookieInput("");
       setCaCount(data.extraCaCount);
+      setCfAccountCurrent(data.cloudflareAccountId);
+      setCfAccountInput("");
       setKeyInputs({});
       setSmsKeyInput("");
       setFbTokenInput("");
@@ -378,6 +405,34 @@ export default function SettingsForm({
               />
             </div>
           ))}
+
+          {/* Not a key, so it is shown in full: it is part of the request
+              path, and the only way to check it is against the dashboard.
+              Kept beside the token it goes with rather than in a section of
+              its own, because neither is any use without the other. */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-app-text">
+                Cloudflare Account ID
+              </div>
+              <span
+                className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${cfAccountCurrent ? "bg-app-positive-bg text-app-positive" : "bg-app-bg text-app-muted"}`}
+              >
+                {cfAccountCurrent ? "Идэвхтэй" : "Тохируулаагүй"}
+              </span>
+            </div>
+            <div className="text-[11px] text-app-muted">
+              Cloudflare dashboard → Workers &amp; Pages → Account ID. Үүнгүйгээр
+              Workers AI ажиллахгүй. Цэвэрлэхийн тулд &quot;-&quot; оруулна.
+            </div>
+            <input
+              type="text"
+              placeholder={cfAccountCurrent ?? "32 тэмдэгт account id"}
+              value={cfAccountInput}
+              onChange={(e) => setCfAccountInput(e.target.value)}
+              className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
+            />
+          </div>
         </div>
       </section>
 

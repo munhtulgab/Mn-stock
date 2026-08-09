@@ -33,6 +33,24 @@ export async function POST(req: NextRequest) {
   if (typeof body.openrouterApiKey === "string" && body.openrouterApiKey.trim()) {
     apiKeys.openrouter = body.openrouterApiKey.trim();
   }
+  if (typeof body.mistralApiKey === "string" && body.mistralApiKey.trim()) {
+    apiKeys.mistral = body.mistralApiKey.trim();
+  }
+  if (typeof body.cerebrasApiKey === "string" && body.cerebrasApiKey.trim()) {
+    apiKeys.cerebras = body.cerebrasApiKey.trim();
+  }
+  if (typeof body.cloudflareApiKey === "string" && body.cloudflareApiKey.trim()) {
+    apiKeys.cloudflare = body.cloudflareApiKey.trim();
+  }
+
+  // Not a key, so it follows the same "blank leaves it alone, - clears it"
+  // rule the tokens use rather than being wiped by an untouched field.
+  const cloudflareAccountId =
+    typeof body.cloudflareAccountId === "string" && body.cloudflareAccountId.trim()
+      ? body.cloudflareAccountId.trim() === "-"
+        ? ""
+        : body.cloudflareAccountId.trim()
+      : undefined;
 
   const apifyToken =
     typeof body.apifyToken === "string" && body.apifyToken.trim()
@@ -98,6 +116,7 @@ export async function POST(req: NextRequest) {
     facebookCookie,
     extraCaCerts,
     apiKeys,
+    cloudflareAccountId,
     sms: Object.keys(sms).length > 0 ? sms : undefined,
     notifications:
       Object.keys(notifications).length > 0 ? notifications : undefined,

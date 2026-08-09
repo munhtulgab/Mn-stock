@@ -53,7 +53,17 @@ export interface AppSettings {
     gemini?: string;
     groq?: string;
     openrouter?: string;
+    mistral?: string;
+    cerebras?: string;
+    cloudflare?: string;
   };
+  /**
+   * Cloudflare puts the account in the URL rather than in the token, so
+   * Workers AI needs this as well as the key. Not a secret — it appears in
+   * every request path — and shown in full on the settings page so it can be
+   * checked against the dashboard.
+   */
+  cloudflareAccountId?: string;
   sms: SmsSettings;
   notifications: NotificationSettings;
 }
@@ -87,6 +97,7 @@ export async function getSettings(db: Db): Promise<AppSettings> {
     facebookCookie: doc.facebookCookie,
     extraCaCerts: doc.extraCaCerts,
     apiKeys: doc.apiKeys ?? {},
+    cloudflareAccountId: doc.cloudflareAccountId,
     sms: {
       enabled: doc.sms?.enabled ?? false,
       apiKey: doc.sms?.apiKey,
@@ -122,7 +133,11 @@ export function maskSettings(settings: AppSettings) {
       gemini: mask(settings.apiKeys.gemini),
       groq: mask(settings.apiKeys.groq),
       openrouter: mask(settings.apiKeys.openrouter),
+      mistral: mask(settings.apiKeys.mistral),
+      cerebras: mask(settings.apiKeys.cerebras),
+      cloudflare: mask(settings.apiKeys.cloudflare),
     },
+    cloudflareAccountId: settings.cloudflareAccountId ?? null,
     sms: {
       enabled: settings.sms.enabled,
       apiKey: mask(settings.sms.apiKey),
@@ -143,6 +158,7 @@ export async function updateSettings(
     facebookCookie?: string;
     extraCaCerts?: string;
     apiKeys?: Partial<AppSettings["apiKeys"]>;
+    cloudflareAccountId?: string;
     sms?: Partial<SmsSettings>;
     notifications?: Partial<NotificationSettings>;
   },
@@ -155,6 +171,7 @@ export async function updateSettings(
     facebookCookie: patch.facebookCookie ?? current.facebookCookie,
     extraCaCerts: patch.extraCaCerts ?? current.extraCaCerts,
     apiKeys: { ...current.apiKeys, ...patch.apiKeys },
+    cloudflareAccountId: patch.cloudflareAccountId ?? current.cloudflareAccountId,
     sms: { ...current.sms, ...patch.sms },
     notifications: { ...current.notifications, ...patch.notifications },
   };

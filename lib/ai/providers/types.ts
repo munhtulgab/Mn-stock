@@ -1,6 +1,13 @@
 import type { ParsedAiSignal } from "@/lib/ai/schema";
 
-export type ProviderName = "anthropic" | "gemini" | "groq" | "openrouter";
+export type ProviderName =
+  | "anthropic"
+  | "gemini"
+  | "groq"
+  | "openrouter"
+  | "mistral"
+  | "cerebras"
+  | "cloudflare";
 
 /**
  * The room each provider leaves for one request, in tokens.
@@ -21,6 +28,14 @@ export type ProviderName = "anthropic" | "gemini" | "groq" | "openrouter";
  */
 export const PROVIDER_TOKEN_BUDGET: Partial<Record<ProviderName, number>> = {
   groq: 5_000,
+  // Workers AI's Llama models carry a 24k context. Comfortable for the
+  // analysis, not for the analysis plus six sites' front pages.
+  cloudflare: 8_000,
+  // Cerebras advertises a wide context on gpt-oss-120b, but this one could
+  // not be measured — inference is refused until the account has billing —
+  // so it gets a bound rather than the benefit of the doubt. Raise it once
+  // a real run has been seen.
+  cerebras: 12_000,
 };
 
 export interface ProviderResult {

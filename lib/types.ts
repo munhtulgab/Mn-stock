@@ -108,7 +108,14 @@ export interface AiSignalParsed {
 }
 
 export interface AiSignalProviderSummary {
-  provider: "anthropic" | "gemini" | "groq" | "openrouter";
+  /**
+   * Widened to a plain string rather than repeating the provider union.
+   * Stored documents outlive the code that wrote them: a signal saved when
+   * four providers were configured is read back after a fifth is added, and
+   * a narrow union here would have to be edited in step with the other list
+   * every time — which is two places to change and one to forget.
+   */
+  provider: string;
   ok: boolean;
   signal?: Signal;
   confidence?: number;

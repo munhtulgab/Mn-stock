@@ -5,6 +5,9 @@ import { callAnthropic } from "@/lib/ai/providers/anthropic";
 import { callGemini } from "@/lib/ai/providers/gemini";
 import { callGroq } from "@/lib/ai/providers/groq";
 import { callOpenRouter } from "@/lib/ai/providers/openrouter";
+import { callMistral } from "@/lib/ai/providers/mistral";
+import { callCerebras } from "@/lib/ai/providers/cerebras";
+import { callCloudflare } from "@/lib/ai/providers/cloudflare";
 import {
   PROVIDER_TOKEN_BUDGET,
   type ProviderName,
@@ -58,8 +61,24 @@ export async function generateMultiProviderSignal(
   const geminiKey = resolveApiKey(settings, "gemini", "GEMINI_API_KEY");
   const groqKey = resolveApiKey(settings, "groq", "GROQ_API_KEY");
   const openrouterKey = resolveApiKey(settings, "openrouter", "OPENROUTER_API_KEY");
+  const mistralKey = resolveApiKey(settings, "mistral", "MISTRAL_API_KEY");
+  const cerebrasKey = resolveApiKey(settings, "cerebras", "CEREBRAS_API_KEY");
+  const cloudflareKey = resolveApiKey(settings, "cloudflare", "CLOUDFLARE_API_KEY");
+  // Workers AI addresses the account in the URL, so a key on its own is not
+  // enough to call it. Without the id the provider simply does not run,
+  // rather than every request 404ing against a path with `undefined` in it.
+  const cloudflareAccount =
+    settings.cloudflareAccountId || process.env.CLOUDFLARE_ACCOUNT_ID;
 
-  if (!anthropicKey && !geminiKey && !groqKey && !openrouterKey) {
+  if (
+    !anthropicKey &&
+    !geminiKey &&
+    !groqKey &&
+    !openrouterKey &&
+    !mistralKey &&
+    !cerebrasKey &&
+    !(cloudflareKey && cloudflareAccount)
+  ) {
     throw new NoProviderConfiguredError();
   }
 
@@ -82,6 +101,13 @@ export async function generateMultiProviderSignal(
   if (geminiKey) calls.push(callGemini(geminiKey, messageFor("gemini")));
   if (groqKey) calls.push(callGroq(groqKey, messageFor("groq")));
   if (openrouterKey) calls.push(callOpenRouter(openrouterKey, messageFor("openrouter")));
+  if (mistralKey) calls.push(callMistral(mistralKey, messageFor("mistral")));
+  if (cerebrasKey) calls.push(callCerebras(cerebrasKey, messageFor("cerebras")));
+  if (cloudflareKey && cloudflareAccount) {
+    calls.push(
+      callCloudflare(cloudflareKey, cloudflareAccount, messageFor("cloudflare")),
+    );
+  }
 
   const currentPrice = input.prices.at(-1)?.close ?? null;
 

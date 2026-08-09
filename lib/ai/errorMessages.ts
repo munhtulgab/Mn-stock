@@ -9,6 +9,9 @@ const PROVIDER_LABEL: Record<string, string> = {
   gemini: "Gemini",
   groq: "Groq",
   openrouter: "OpenRouter",
+  mistral: "Mistral",
+  cerebras: "Cerebras",
+  cloudflare: "Cloudflare Workers AI",
 };
 
 interface Rule {
@@ -33,6 +36,14 @@ const RULES: Rule[] = [
       /\b413\b|Request too large|tokens per minute|\bTPM\b|минут тутмын токений хязгаар/i.test(m),
     message: (p) =>
       `${p}: Илгээсэн хүсэлт үйлчилгээний минут тутмын токений хязгаараас давлаа. Тохиргоо хуудсан дээрх мэдээний эх сурвалжийн тоог цөөлөх, эсвэл багцаа шинэчлэх шаардлагатай.`,
+  },
+  {
+    // Its own rule, above the quota one below, which would otherwise catch
+    // the word "quota" in this body and tell the reader to wait — where
+    // waiting never clears it. Only money does.
+    test: (m) => /\b402\b|payment_required|Payment required|төлбөр төлөгдөөгүй/i.test(m),
+    message: (p) =>
+      `${p}: Дансанд төлбөр/кредит байхгүй байна (402). Тухайн үйлчилгээний billing хуудсан дээрээс төлбөрөө идэвхжүүлнэ үү.`,
   },
   {
     test: (m) => /RESOURCE_EXHAUSTED|429|rate.?limit|quota/i.test(m),
