@@ -111,7 +111,9 @@ function reviewTab(
           <ReportSlider
             labels={reports.map((report) => report.title)}
             slides={reports.map((report) => (
-              <TradeReportCard key={report.id} report={report} />
+              // Keyed by url: only the exchange's own articles have an id,
+              // and a slide from anywhere else would key on undefined.
+              <TradeReportCard key={report.url} report={report} />
             ))}
           />
         )}

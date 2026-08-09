@@ -26,12 +26,18 @@ import type { MarketNewsItem } from "@/lib/marketNews";
  */
 
 export interface TradeReport {
-  id: number;
+  /** The exchange's article number, absent on a slide from anywhere else. */
+  id?: number;
   title: string;
   /** YYYY-MM-DD as the exchange stated it. */
   date: string;
   url: string;
   body: ArticleBlock[];
+  /**
+   * Who published it, for the footer. Absent means the exchange, which is
+   * where every slide came from until the index summaries joined them.
+   */
+  source?: string;
 }
 
 export interface TradeReports {
@@ -51,6 +57,18 @@ const PATTERNS = {
   // review of the same day.
   daily: /ӨДРИЙН\s+АРИЛЖААНЫ\s+(?:ТОЙМ\s+)?МЭДЭЭ/i,
   weekly: /ДОЛОО\s+ХОНОГИЙН\s+АРИЛЖААНЫ\s+ТОЙМ/i,
+  /**
+   * The index summaries, which are about the session but are not the
+   * exchange's own writing — they come from the news sites configured in
+   * settings, so they are found in the app's feed rather than in mse.mn's
+   * listing.
+   *
+   * Anchored at the start, because that is what makes it this kind of story
+   * rather than any article that mentions the index in passing. Both scripts
+   * are matched: "ТОП" in Cyrillic and "TOP" in Latin look identical on a
+   * screen and sources use each.
+   */
+  top20: /^\s*(?:ТОП|TOP)\s*[-–—‑]?\s*20\s+индекс/i,
 } as const;
 
 /** Enough for a period to have more than one side; past it, it is a feed. */
@@ -123,6 +141,40 @@ function selectDaily(items: Headline[]): number[] {
   return idsOf(feed.filter((item) => item.date.slice(0, 10) === day));
 }
 
+/** The day the daily slider is showing, so nothing older is added to it. */
+function dailyDay(items: Headline[]): string | null {
+  const lead = exchangeItems(items).find((item) => PATTERNS.daily.test(item.title));
+  return lead ? lead.date.slice(0, 10) : null;
+}
+
+/**
+ * The newest index summary, as a slide.
+ *
+ * It carries no body: these live on other people's sites, and the exchange's
+ * article API — the only one this app can read a body from — knows nothing
+ * about them. The card handles that, showing the headline, the date and a
+ * link out, which is all there is to show.
+ *
+ * Never older than the session the tab is headed by. A tab labelled "the
+ * last day" that carries last Tuesday's index is worse than one that carries
+ * nothing, and the day is the one thing a reader cannot check at a glance
+ * when the title does not state it.
+ */
+function selectTop20(items: Headline[], notBefore: string | null): TradeReport | null {
+  const story = items.find((item) => PATTERNS.top20.test(item.title));
+  if (!story) return null;
+  const day = story.date.slice(0, 10);
+  if (notBefore && day < notBefore) return null;
+
+  let source: string;
+  try {
+    source = new URL(story.url).hostname.replace(/^www\./, "");
+  } catch {
+    source = story.url;
+  }
+  return { title: story.title, date: day, url: story.url, body: [], source };
+}
+
 /**
  * The exchange's weekly review, and only that.
  *
@@ -140,6 +192,9 @@ function selectWeekly(items: Headline[]): number[] {
       .slice(0, 1),
   );
 }
+
+/** Exposed for the tests, which cover the selection rules rather than the fetch. */
+export const __testing = { selectTop20, dailyDay, PATTERNS };
 
 async function readArticle(id: number): Promise<TradeReport | null> {
   const failed = failedAt.get(id);
@@ -221,6 +276,7 @@ export async function getTradeReports(
     resolve(selectDaily(headlines), stored.daily),
     resolve(selectWeekly(headlines), stored.weekly),
   ]);
+
   const reports: TradeReports = { daily, weekly };
 
   if (fetched) {
@@ -238,5 +294,22 @@ export async function getTradeReports(
     );
   }
 
-  return reports;
+  // Appended after the snapshot is written, deliberately: what is stored is
+  // the set of exchange articles whose bodies were expensive to read, and
+  // this one has no body to keep. Storing it would put a headline into the
+  // cache that the fallback path could serve back weeks later, long after it
+  // stopped being the last session's.
+  //
+  // Read from the app's own feed rather than the exchange listing above —
+  // these summaries are published by the news sites in settings, and mse.mn
+  // has never carried one.
+  //
+  // After the exchange's own report rather than before it: the session report
+  // is what the tab is for and what a reader arrives expecting, and this is a
+  // second account of the same day.
+  const top20 = selectTop20(
+    items.map((i) => ({ title: i.title, date: i.date, url: i.url })),
+    dailyDay(headlines),
+  );
+  return top20 ? { daily: [...daily, top20], weekly } : reports;
 }

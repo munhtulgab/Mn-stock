@@ -62,7 +62,11 @@ export default function TradeReportCard({ report }: { report: TradeReport }) {
           rel="noreferrer"
           className="active:opacity-70"
         >
-          mse.mn
+          {/* Named rather than assumed: the index summaries in this slider
+              come from the news sites in settings, and a card that credited
+              all of them to the exchange would be telling the reader the
+              wrong thing about where the figures came from. */}
+          {report.source ?? "mse.mn"}
         </a>
         <span className="shrink-0 tabular-nums whitespace-nowrap">{report.date}</span>
       </div>
