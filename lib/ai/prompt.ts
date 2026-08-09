@@ -5,6 +5,7 @@ import type { NewsSourceExtract } from "@/lib/mse/newsSources";
 import type { StockAnalysis } from "@/lib/analysis/report";
 import type { Reading, Scorecard } from "@/lib/analysis/indicators";
 import type { Timeframe } from "@/lib/analysis/series";
+import { estimateTokens } from "@/lib/ai/tokens";
 
 function average(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -12,33 +13,36 @@ function average(values: number[]): number | null {
 }
 
 /**
- * How much of the prompt the raw news extracts may take, in characters, and
- * how large the whole message may get.
+ * What the message may cost, in tokens, for a provider that has not said.
  *
- * A per-source cap was the wrong shape: it bounded each extract but not how
- * many there were, so a reader with a dozen configured sites sent a
- * forty-thousand-token prompt. Groq's free tier allows twelve thousand
- * tokens a minute and refused every run with a 413; the paid providers took
- * it, and were being billed for a wall of front-page text nobody had asked
- * them to read.
- *
- * Mongolian in Cyrillic runs near two characters per token, so the message
- * has to stay under the smallest ceiling any configured provider has —
- * Groq's free tier, at twelve thousand tokens a minute.
- *
- * The news share was halved when the worked analysis moved into the prompt.
- * Three scorecards, the ratios against the sector, the dividends, the risk
- * figures and the peer table cost about six thousand characters, and they
- * are worth more per character than a fifth page of somebody's front page:
- * they are measured from this company's whole history and from every other
- * company's last report, where the extracts are raw text the model still has
- * to decide is even about this company. Worst case is now around ten
- * thousand tokens all told, system prompt included.
+ * Generous, because most providers' ceilings are far above anything this
+ * builds. The small ones say so — see PROVIDER_TOKEN_BUDGET.
  */
-const EXTERNAL_BUDGET_CHARS = 3_000;
-const MAX_MESSAGE_CHARS = 18_000;
+const DEFAULT_BUDGET_TOKENS = 30_000;
+
+/**
+ * What is given up first when a budget will not stretch.
+ *
+ * The order is the point. Everything above the line is measured — the
+ * scorecards from this company's whole price history, the ratios from every
+ * other company's last report, the risk figures against the index — and a
+ * model cannot re-derive any of it from what is left. The three below it can
+ * go, in this order, because each is either raw material the analysis has
+ * already read or a duplicate of something above:
+ *
+ *   1. the configured news sites' extracts, which are pages of front-page
+ *      text the model must first decide are even about this company;
+ *   2. the thirty raw candles, which the scorecards were computed from and
+ *      which say less than the scorecards do;
+ *   3. the exchange's own headlines, down to the most recent few.
+ *
+ * Nothing trims the analysis itself. If a provider's ceiling is too low to
+ * carry it, that provider cannot answer this question usefully at all.
+ */
 /** Below this an extract is a headline fragment and not worth a slot. */
 const MIN_EXTRACT_CHARS = 400;
+/** Headlines kept when the exchange's own news has to give ground. */
+const MIN_HEADLINES = 4;
 /**
  * Peers listed in the sector comparison.
  *
@@ -65,6 +69,11 @@ export interface AnalystInput {
    * that can fail on its own.
    */
   analysis?: StockAnalysis | null;
+  /**
+   * What this message may cost the provider it is going to. Left unset for
+   * the providers whose ceilings are far above anything built here.
+   */
+  budgetTokens?: number;
 }
 
 /**
@@ -284,39 +293,73 @@ export function buildUserMessage(input: AnalystInput): string {
     // The worked analysis, where it could be built. Spread in above the news
     // and the candles so the finished figures are read before the raw ones.
     ...(analysis ? analysisPayload(analysis) : {}),
-    recent_news_from_mse: news.map((n) => ({ title: n.title, date: n.date })),
-    recent_daily_candles_oldest_to_newest: recentCandles,
   };
 
-  const parts = [
-    `Дараах МХБ-д бүртгэлтэй "${security.symbol}" (${security.name}) компанийн бодит арилжааны болон санхүүгийн дата өгөгдлийг дүн шинжилгээ хийж, зааврын дагуу зөвхөн JSON гаргана.`,
-    "",
-    "```json",
-    // Unindented: a model reads the same object either way, and the two
-    // spaces in front of every line of thirty candles are a third of this
-    // block for nothing.
-    JSON.stringify(payload),
-    "```",
+  const budget = input.budgetTokens ?? DEFAULT_BUDGET_TOKENS;
+
+  // Assembled largest-first and measured each time, rather than built whole
+  // and cut to length. Slicing a finished message in half leaves the model a
+  // JSON object with no closing brace, which is worse than the same message
+  // without its last section.
+  const compose = (
+    headlines: number,
+    candles: number,
+    extractChars: number,
+  ): string => {
+    const parts = [
+      `Дараах МХБ-д бүртгэлтэй "${security.symbol}" (${security.name}) компанийн бодит арилжааны болон санхүүгийн дата өгөгдлийг дүн шинжилгээ хийж, зааврын дагуу зөвхөн JSON гаргана.`,
+      "",
+      "```json",
+      // Unindented: a model reads the same object either way, and the two
+      // spaces in front of every line of thirty candles are a third of this
+      // block for nothing.
+      JSON.stringify({
+        ...payload,
+        recent_news_from_mse: news
+          .slice(0, headlines)
+          .map((n) => ({ title: n.title, date: n.date })),
+        ...(candles > 0
+          ? { recent_daily_candles_oldest_to_newest: recentCandles.slice(-candles) }
+          : {}),
+      }),
+      "```",
+    ];
+
+    const extracts = shareBudget(externalNews ?? [], extractChars);
+    if (extracts.length > 0) {
+      parts.push(
+        "",
+        `Хэрэглэгчийн тохируулсан мэдээний эх сурвалжуудаас татсан түүхий бичвэр (${security.symbol}-тэй холбоотой эсэхийг өөрөө үнэлж, зөвхөн хамааралтай хэсгийг сэтгэл хөдлөлийн шинжилгээнд ашигла):`,
+      );
+      for (const src of extracts) {
+        parts.push("", `--- Эх сурвалж: ${src.url} ---`, src.text);
+      }
+    }
+    return parts.join("\n");
+  };
+
+  // Each step gives up the next thing on the list above. The last of them
+  // carries the analysis and nothing else that can be spared, so a provider
+  // whose ceiling is below that gets the shortest honest prompt there is
+  // rather than a mutilated one.
+  const steps: [number, number, number][] = [
+    [news.length, 30, 6_000],
+    [news.length, 30, 3_000],
+    [news.length, 30, 0],
+    [news.length, 15, 0],
+    [news.length, 0, 0],
+    [MIN_HEADLINES, 0, 0],
   ];
 
-  const extracts = externalNews ? shareBudget(externalNews) : [];
-  if (extracts.length > 0) {
-    parts.push(
-      "",
-      `Хэрэглэгчийн тохируулсан мэдээний эх сурвалжуудаас татсан түүхий бичвэр (${security.symbol}-тэй холбоотой эсэхийг өөрөө үнэлж, зөвхөн хамааралтай хэсгийг сэтгэл хөдлөлийн шинжилгээнд ашигла):`,
-    );
-    for (const src of extracts) {
-      parts.push("", `--- Эх сурвалж: ${src.url} ---`, src.text);
-    }
+  let message = compose(...steps[0]);
+  for (const step of steps) {
+    message = compose(...step);
+    if (estimateTokens(message) <= budget) return message;
   }
-
-  const message = parts.join("\n");
-  // A last guard rather than the main defence: the budget above is what keeps
-  // the message small, and this only catches a payload that grew some other
-  // way — an unusually long list of rule reasons, say.
-  return message.length > MAX_MESSAGE_CHARS
-    ? `${message.slice(0, MAX_MESSAGE_CHARS)}\n…(таслав)`
-    : message;
+  // Nothing left to give up. Sent as it is: the analysis is the thing worth
+  // asking about, and a provider that refuses it fails loudly rather than
+  // silently answering from half a prompt.
+  return message;
 }
 
 /**
@@ -326,12 +369,16 @@ export function buildUserMessage(input: AnalystInput): string {
  * the point where a share would be a fragment are dropped rather than
  * included as a sentence and a half.
  */
-function shareBudget(sources: NewsSourceExtract[]): NewsSourceExtract[] {
+function shareBudget(
+  sources: NewsSourceExtract[],
+  budgetChars: number,
+): NewsSourceExtract[] {
+  if (budgetChars < MIN_EXTRACT_CHARS || sources.length === 0) return [];
   const affordable = Math.max(
     1,
-    Math.min(sources.length, Math.floor(EXTERNAL_BUDGET_CHARS / MIN_EXTRACT_CHARS)),
+    Math.min(sources.length, Math.floor(budgetChars / MIN_EXTRACT_CHARS)),
   );
-  const share = Math.floor(EXTERNAL_BUDGET_CHARS / affordable);
+  const share = Math.floor(budgetChars / affordable);
   return sources
     .slice(0, affordable)
     .map((src) => ({ url: src.url, text: src.text.slice(0, share) }));

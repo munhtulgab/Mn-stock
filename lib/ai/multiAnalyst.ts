@@ -5,7 +5,11 @@ import { callAnthropic } from "@/lib/ai/providers/anthropic";
 import { callGemini } from "@/lib/ai/providers/gemini";
 import { callGroq } from "@/lib/ai/providers/groq";
 import { callOpenRouter } from "@/lib/ai/providers/openrouter";
-import type { ProviderResult } from "@/lib/ai/providers/types";
+import {
+  PROVIDER_TOKEN_BUDGET,
+  type ProviderName,
+  type ProviderResult,
+} from "@/lib/ai/providers/types";
 import type { ParsedAiSignal } from "@/lib/ai/schema";
 import { buildConsensus, validateSignal } from "@/lib/ai/consensus";
 import type { Signal } from "@/lib/types";
@@ -59,13 +63,25 @@ export async function generateMultiProviderSignal(
     throw new NoProviderConfiguredError();
   }
 
-  const userMessage = buildUserMessage(input);
+  // One message per ceiling rather than one for everybody. A provider that
+  // meters tokens by the minute gets a prompt trimmed to fit it; the rest
+  // get the whole thing, because trimming theirs would cost them evidence
+  // they were happy to read.
+  const messages = new Map<number | undefined, string>();
+  const messageFor = (provider: ProviderName): string => {
+    const budget = PROVIDER_TOKEN_BUDGET[provider];
+    const existing = messages.get(budget);
+    if (existing !== undefined) return existing;
+    const built = buildUserMessage({ ...input, budgetTokens: budget });
+    messages.set(budget, built);
+    return built;
+  };
 
   const calls: Promise<ProviderResult>[] = [];
-  if (anthropicKey) calls.push(callAnthropic(anthropicKey, userMessage));
-  if (geminiKey) calls.push(callGemini(geminiKey, userMessage));
-  if (groqKey) calls.push(callGroq(groqKey, userMessage));
-  if (openrouterKey) calls.push(callOpenRouter(openrouterKey, userMessage));
+  if (anthropicKey) calls.push(callAnthropic(anthropicKey, messageFor("anthropic")));
+  if (geminiKey) calls.push(callGemini(geminiKey, messageFor("gemini")));
+  if (groqKey) calls.push(callGroq(groqKey, messageFor("groq")));
+  if (openrouterKey) calls.push(callOpenRouter(openrouterKey, messageFor("openrouter")));
 
   const currentPrice = input.prices.at(-1)?.close ?? null;
 
