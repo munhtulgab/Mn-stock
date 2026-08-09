@@ -373,9 +373,41 @@ const APIFY_RUN_URL = `${APIFY_ACTOR_URL}/run-sync-get-dataset-items`;
  */
 const APIFY_TIMEOUT_MS = 25_000;
 
-/** How much history is worth paying credits for. */
-const APIFY_POST_LIMIT = 20;
+/**
+ * How much history is worth paying credits for.
+ *
+ * The actor charges per post written, not per run: on the free tier a post
+ * costs $0.005 and starting a run costs $0.001, so twenty posts came to
+ * $0.101 a page every time this refreshed. Against a $5 monthly allowance
+ * that is forty-nine refreshes — one Facebook page fits comfortably, two
+ * only just, and three run the account dry three quarters of the way
+ * through the month. Apify blocks the whole account when the allowance is
+ * gone, so the page that overspent takes the others down with it.
+ *
+ * Five posts costs $0.026, which is a hundred and ninety refreshes — eight
+ * pages every weekday inside the free tier. It is enough for what these are
+ * read for: a daily refresh only needs what was published since yesterday,
+ * and the prompt they feed truncates the lot to three thousand characters
+ * anyway.
+ *
+ * The thirty-day window stays as it is. It does not add to the bill — the
+ * limit above caps what can be charged — and narrowing it would return
+ * nothing at all for a page that posts rarely, which costs a run and gets no
+ * posts to cache, so the next request pays to ask again.
+ */
+const APIFY_POST_LIMIT = 5;
 const APIFY_MAX_AGE_DAYS = 30;
+
+/**
+ * A hard ceiling on one run, in dollars, sent with the request.
+ *
+ * Belt as well as braces: `resultsLimit` is the actor being asked for five
+ * posts, this is Apify being told to stop billing past what five posts and a
+ * start cost. An actor that ignored the limit — a change at their end, a
+ * page that paginates oddly — could otherwise spend a month's allowance in a
+ * single run, and the first anyone would know is every source failing.
+ */
+const APIFY_MAX_CHARGE_USD = 0.04;
 
 /**
  * How long a scrape stands. Long, because it costs credits: the scheduled
@@ -494,16 +526,29 @@ export async function fetchWithApify(
     .slice(0, 10);
 
   try {
-    const res = await fetch(`${APIFY_RUN_URL}?token=${encodeURIComponent(token)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        startUrls: [{ url: pageUrl }],
-        resultsLimit: APIFY_POST_LIMIT,
-        onlyPostsNewerThan: since,
-      }),
-      signal: AbortSignal.timeout(APIFY_TIMEOUT_MS),
-    });
+    const start = (capped: boolean) => {
+      const run = new URL(APIFY_RUN_URL);
+      run.searchParams.set("token", token);
+      if (capped) run.searchParams.set("maxTotalChargeUsd", String(APIFY_MAX_CHARGE_USD));
+      return fetch(run, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startUrls: [{ url: pageUrl }],
+          resultsLimit: APIFY_POST_LIMIT,
+          onlyPostsNewerThan: since,
+        }),
+        signal: AbortSignal.timeout(APIFY_TIMEOUT_MS),
+      });
+    };
+
+    // The cap is documented on the run endpoint but could not be tried
+    // against a real account here, so a rejection of the request itself
+    // falls back to the same run without it. The limit above is what keeps
+    // the bill down; this is only the second line of defence, and it must
+    // not become the reason Facebook stops working.
+    let res = await start(true);
+    if (res.status === 400) res = await start(false);
 
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as {
