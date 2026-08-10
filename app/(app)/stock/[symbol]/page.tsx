@@ -9,6 +9,7 @@ import { getSettings } from "@/lib/settings";
 import {
   DETAIL_BUDGET_MS,
   fetchLiveQuotes,
+  fetchFallbackQuote,
   fetchMarketOpen,
   sessionEnd,
 } from "@/lib/marketinfo/quotes";
@@ -87,7 +88,13 @@ export default async function StockDetailPage({
   // where the market is open, the last close otherwise. Read once here so
   // the dividend yields and the P/B on the analysis are quoting the same
   // number the header is.
-  const live = liveQuotes.get(security.companyCode) ?? null;
+  // Nothing in the live map means the primary feed is down and this company
+  // is not one of the twenty on the exchange's movers board. Datalab knows
+  // the session for any of them, so the page asks about this one rather than
+  // quoting a close from before the weekend.
+  const live =
+    liveQuotes.get(security.companyCode) ??
+    (await fetchFallbackQuote(security.companyCode).catch(() => null));
   const currentPrice = live?.price ?? priceHistory.at(-1)?.close ?? null;
   const today = ulaanbaatarDay(new Date());
 

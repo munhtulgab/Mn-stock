@@ -1,6 +1,7 @@
 import { fetchWithExtraCa, parsePemBundle } from "@/lib/tls/extraCa";
 import { fetchExchangeMovers } from "@/lib/mse/movers";
 import { fetchSecuritiesList } from "@/lib/mse/securities";
+import { fetchTdbQuote, fetchTdbQuotes } from "@/lib/tdb/quotes";
 import { ulaanbaatarDay, ulaanbaatarTime } from "@/lib/day";
 
 /**
@@ -373,6 +374,46 @@ function boardIsAboutToday(now: Date): boolean {
 /** Exposed for the tests: the one judgement in this fallback worth pinning. */
 export const __testing = { boardIsAboutToday };
 
+/** Datalab's session, in the shape the rest of the app reads quotes in. */
+function fromTdb(tdb: NonNullable<Awaited<ReturnType<typeof fetchTdbQuote>>>, at: string): LiveQuote {
+  return {
+    symbol: tdb.symbol,
+    companyCode: tdb.companyCode,
+    price: tdb.close,
+    lastTrade: tdb.close,
+    previousClose: tdb.previousClose,
+    changePct: tdb.changePct,
+    open: tdb.open,
+    high: tdb.high,
+    low: tdb.low,
+    vwap: tdb.vwap,
+    volume: tdb.volume,
+    turnover: tdb.turnover,
+    // Datalab states no trade count and no book.
+    trades: null,
+    bid: null,
+    ask: null,
+    at,
+  };
+}
+
+/**
+ * One company's session, for a page that found nothing in the live map.
+ *
+ * The movers board names twenty companies; the market is four hundred. APU
+ * traded today at 969 against Friday's 965.74 and appears on no board,
+ * because a third of a percent is not a mover — so a reader opening it while
+ * marketinfo is down would have seen Friday. This asks Datalab about the one
+ * company being looked at, which is a single request and only while the
+ * primary feed is out.
+ */
+export async function fetchFallbackQuote(companyCode: number): Promise<LiveQuote | null> {
+  const now = new Date();
+  if (!boardIsAboutToday(now)) return null;
+  const tdb = await fetchTdbQuote(companyCode).catch(() => null);
+  return tdb ? fromTdb(tdb, `${ulaanbaatarDay(now)}T${ulaanbaatarTime(now)}`) : null;
+}
+
 async function exchangeQuotes(): Promise<Map<number, LiveQuote>> {
   const now = new Date();
   const out = new Map<number, LiveQuote>();
@@ -385,9 +426,27 @@ async function exchangeQuotes(): Promise<Map<number, LiveQuote>> {
   if (!movers) return out;
 
   const at = `${ulaanbaatarDay(now)}T${ulaanbaatarTime(now)}`;
+
+  // The board says which companies traded and what they cost; Datalab says
+  // what the session actually looked like — the open, the range, the volume.
+  // Asked only about the companies the board named, because Datalab answers
+  // one company per request and has no listing endpoint.
+  const wanted = [...movers.gainers, ...movers.losers]
+    .map((mover) => codes.get(mover.symbol))
+    .filter((code): code is number => code !== undefined);
+  const detailed = await fetchTdbQuotes(wanted).catch(
+    () => new Map<number, Awaited<ReturnType<typeof fetchTdbQuote>>>(),
+  );
+
   for (const mover of [...movers.gainers, ...movers.losers]) {
     const companyCode = codes.get(mover.symbol);
     if (companyCode === undefined || !Number.isFinite(mover.price)) continue;
+
+    const tdb = detailed.get(companyCode);
+    if (tdb) {
+      out.set(companyCode, fromTdb(tdb, at));
+      continue;
+    }
     // The board states the move, not what it moved from; the close it implies
     // is exact arithmetic rather than a guess.
     const previousClose =
