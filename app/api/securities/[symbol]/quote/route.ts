@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/settings";
 import { ensurePricesCurrent } from "@/lib/data";
 import {
   DETAIL_BUDGET_MS,
+  fetchFallbackQuote,
   fetchLiveQuotes,
   fetchMarketOpen,
   sessionEnd,
@@ -58,6 +59,9 @@ export async function GET(
   let live = null;
   let marketOpen: boolean | null = null;
   let closedAt: string | null = null;
+  // Which feed answered, so the response does not credit a figure to a host
+  // that was returning 503 at the time.
+  let source = "marketinfo.mn";
   try {
     const settings = await getSettings(db);
     const [quotes, open] = await Promise.all([
@@ -70,6 +74,17 @@ export async function GET(
       fetchMarketOpen(),
     ]);
     live = quotes.get(security.companyCode) ?? null;
+    // The same top-up the page render does, for the same reason it does it.
+    //
+    // Without this the two disagreed: the page asked Datalab about the one
+    // company it was showing and painted today's price, then this endpoint —
+    // which only ever looked in the live map — answered with the last stored
+    // close and the client wrote that over it. A reader watched 969 on the
+    // tenth turn into 965.74 on the seventh a second after the page settled.
+    if (!live) {
+      live = await fetchFallbackQuote(security.companyCode);
+      if (live) source = "tdbs.mn";
+    }
     marketOpen = open;
     closedAt = sessionEnd(quotes);
   } catch (err) {
@@ -105,7 +120,7 @@ export async function GET(
       // become that day's final numbers once the session shuts.
       isLive: marketOpen === true,
       marketOpen,
-      source: "marketinfo.mn",
+      source,
       checkedAt: new Date().toISOString(),
     });
   }
