@@ -412,8 +412,24 @@ export async function applyLiveQuotes(
   }
 
   const updated = rows.map((row) => {
-    const moved = board.get(row.symbol);
-    if (moved) {
+    const live = quotes.get(row.companyCode);
+
+    // The quote comes first and the board only fills in behind it.
+    //
+    // It used to be the other way round, on the reasoning that the board is
+    // the exchange itself and therefore the most current thing there is.
+    // That is true and it was still wrong, because the company's own page
+    // has never read the board — it reads this same quote — so the two
+    // disagreed about the same company at the same moment. QPAY stood at
+    // 384.99 on the board and 385.00 on the quote, and a reader saw one
+    // figure in the list and the other a tap later.
+    //
+    // Whichever is fresher matters far less than the two of them agreeing,
+    // and the quote is the one with a timestamp, a range and a volume behind
+    // it. The board still covers what the quote has not reached yet.
+    if (!live || live.price === null) {
+      const moved = board.get(row.symbol);
+      if (!moved) return row;
       return {
         ...row,
         lastPrice: moved.price,
@@ -426,8 +442,6 @@ export async function applyLiveQuotes(
       };
     }
 
-    const live = quotes.get(row.companyCode);
-    if (!live || live.price === null) return row;
     const liveDate = live.at?.slice(0, 10) ?? row.lastDate;
 
     // marketinfo does not always state a change. When it doesn't, and the

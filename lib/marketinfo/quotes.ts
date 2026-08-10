@@ -1,4 +1,5 @@
 import { fetchWithExtraCa, parsePemBundle } from "@/lib/tls/extraCa";
+import { fetchExchangeMovers } from "@/lib/mse/movers";
 import { fetchSecuritiesList } from "@/lib/mse/securities";
 import { fetchTdbQuote } from "@/lib/tdb/quotes";
 import { ulaanbaatarDay, ulaanbaatarTime } from "@/lib/day";
@@ -346,15 +347,59 @@ export const DETAIL_BUDGET_MS = 5_000;
  * requests that can never come back with a session.
  */
 const CODES_TTL_MS = 6 * 60 * 60 * 1000;
-let codeCache: { at: number; codes: number[] } | null = null;
+let codeCache: {
+  at: number;
+  codes: number[];
+  symbols: Map<number, string>;
+} | null = null;
 
-async function activeCodes(): Promise<number[]> {
-  if (codeCache && Date.now() - codeCache.at < CODES_TTL_MS) return codeCache.codes;
+async function activeListings(): Promise<{ codes: number[]; symbols: Map<number, string> }> {
+  if (codeCache && Date.now() - codeCache.at < CODES_TTL_MS) return codeCache;
   const list = await fetchSecuritiesList().catch(() => []);
-  const codes = list.filter((s) => s.status === "active").map((s) => s.companyCode);
-  if (codes.length === 0) return codeCache?.codes ?? [];
-  codeCache = { at: Date.now(), codes };
-  return codes;
+  const active = list.filter((s) => s.status === "active");
+  if (active.length === 0) return codeCache ?? { codes: [], symbols: new Map() };
+  codeCache = {
+    at: Date.now(),
+    codes: active.map((s) => s.companyCode),
+    symbols: new Map(active.map((s) => [s.companyCode, s.symbol])),
+  };
+  return codeCache;
+}
+
+/**
+ * The exchange's board, for the companies Datalab does not carry.
+ *
+ * Three of the twenty on the board this morning — AIG, HRD, MNP — answer 404
+ * on Datalab, so without this they had a price in the list, from the board,
+ * and a stored close on their own page. The board states a move but not what
+ * it moved from, so the previous close is the arithmetic behind the two
+ * figures it does state.
+ */
+function fromBoard(
+  mover: { symbol: string; price: number; changePct: number | null },
+  companyCode: number,
+  at: string,
+): LiveQuote {
+  const changePct = typeof mover.changePct === "number" ? mover.changePct : null;
+  return {
+    symbol: mover.symbol,
+    companyCode,
+    price: mover.price,
+    lastTrade: mover.price,
+    previousClose:
+      changePct !== null && changePct !== -100 ? mover.price / (1 + changePct / 100) : null,
+    changePct,
+    open: null,
+    high: null,
+    low: null,
+    vwap: null,
+    volume: null,
+    turnover: null,
+    trades: null,
+    bid: null,
+    ask: null,
+    at,
+  };
 }
 
 /**
@@ -415,8 +460,21 @@ function fromTdb(tdb: NonNullable<Awaited<ReturnType<typeof fetchTdbQuote>>>, at
 export async function fetchFallbackQuote(companyCode: number): Promise<LiveQuote | null> {
   const now = new Date();
   if (!boardIsAboutToday(now)) return null;
+  const at = `${ulaanbaatarDay(now)}T${ulaanbaatarTime(now)}`;
+
   const tdb = await fetchTdbQuote(companyCode).catch(() => null);
-  return tdb ? fromTdb(tdb, `${ulaanbaatarDay(now)}T${ulaanbaatarTime(now)}`) : null;
+  if (tdb) return fromTdb(tdb, at);
+
+  // Datalab does not carry every listing — AIG, HRD and MNP answer 404 — so
+  // the board is asked about the ones it cannot. Without this those three had
+  // the board's price in the list and a stored close on their own page.
+  const { symbols } = await activeListings();
+  const symbol = symbols.get(companyCode);
+  if (!symbol) return null;
+  const movers = await fetchExchangeMovers().catch(() => null);
+  if (!movers) return null;
+  const mover = [...movers.gainers, ...movers.losers].find((m) => m.symbol === symbol);
+  return mover && Number.isFinite(mover.price) ? fromBoard(mover, companyCode, at) : null;
 }
 
 /**
@@ -465,7 +523,7 @@ async function exchangeQuotes(): Promise<Map<number, LiveQuote>> {
     return fallback.quotes;
   }
 
-  const codes = await activeCodes();
+  const { codes, symbols } = await activeListings();
   if (codes.length === 0) return fallback.quotes;
 
   const deadline = Date.now() + SWEEP_BUDGET_MS;
@@ -491,6 +549,21 @@ async function exchangeQuotes(): Promise<Map<number, LiveQuote>> {
     fallback.cursor = 0;
     fallback.sweptAt = Date.now();
   }
+
+  // Whatever the sweep could not answer for, the board might. Cheap — one
+  // request, already cached for ten seconds — and it is what keeps the map
+  // the lists read and the quote a company's page reads the same map.
+  const movers = await fetchExchangeMovers().catch(() => null);
+  if (movers) {
+    const byCode = new Map([...symbols].map(([code, symbol]) => [symbol, code]));
+    for (const mover of [...movers.gainers, ...movers.losers]) {
+      const code = byCode.get(mover.symbol);
+      if (code === undefined || fallback.quotes.has(code)) continue;
+      if (!Number.isFinite(mover.price)) continue;
+      fallback.quotes.set(code, fromBoard(mover, code, at));
+    }
+  }
+
   void done;
   return fallback.quotes;
 }
