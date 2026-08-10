@@ -1,4 +1,7 @@
 import { fetchWithExtraCa, parsePemBundle } from "@/lib/tls/extraCa";
+import { fetchExchangeMovers } from "@/lib/mse/movers";
+import { fetchSecuritiesList } from "@/lib/mse/securities";
+import { ulaanbaatarDay, ulaanbaatarTime } from "@/lib/day";
 
 /**
  * Intraday quotes from marketinfo.mn.
@@ -319,6 +322,103 @@ const PAGE_BUDGET_MS = 3_500;
  */
 export const DETAIL_BUDGET_MS = 5_000;
 
+/**
+ * The exchange's own board, for when marketinfo is not answering.
+ *
+ * marketinfo.mn is the only live price this app has, and on the morning of
+ * 10 August 2026 every one of its endpoints answered 503 — so the whole app
+ * sat on Friday's closes through an open session, which is the fault this
+ * stands against. mse.mn was up the whole time and publishing the day's
+ * movers and index levels.
+ *
+ * It is a narrower feed and honestly so: the board is the ten risers and the
+ * ten fallers, not the market. That is the set worth having, though — the
+ * companies whose stale price a reader would notice are exactly the ones
+ * that moved. Everything else keeps its last close, which is what it had
+ * anyway.
+ */
+
+/** The exchange's symbol-to-code list. Codes do not churn; this rarely runs. */
+const CODES_TTL_MS = 6 * 60 * 60 * 1000;
+let codeCache: { at: number; codes: Map<string, number> } | null = null;
+
+async function companyCodes(): Promise<Map<string, number>> {
+  if (codeCache && Date.now() - codeCache.at < CODES_TTL_MS) return codeCache.codes;
+  const list = await fetchSecuritiesList().catch(() => []);
+  if (list.length === 0) return codeCache?.codes ?? new Map();
+  const codes = new Map(list.map((s) => [s.symbol, s.companyCode]));
+  codeCache = { at: Date.now(), codes };
+  return codes;
+}
+
+/**
+ * Whether the board is describing today.
+ *
+ * It carries no date of its own, so this is the one thing that has to be
+ * inferred, and getting it wrong would stamp Friday's prices with Monday's
+ * date — worse than showing a close and admitting it. Weekdays only, and
+ * only from the open until well after the close, so a Sunday reader is never
+ * handed the last session dressed as a live one.
+ */
+function boardIsAboutToday(now: Date): boolean {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ulaanbaatar",
+    weekday: "short",
+  }).format(now);
+  if (weekday === "Sat" || weekday === "Sun") return false;
+  const time = ulaanbaatarTime(now);
+  return time >= "10:00" && time <= "17:00";
+}
+
+/** Exposed for the tests: the one judgement in this fallback worth pinning. */
+export const __testing = { boardIsAboutToday };
+
+async function exchangeQuotes(): Promise<Map<number, LiveQuote>> {
+  const now = new Date();
+  const out = new Map<number, LiveQuote>();
+  if (!boardIsAboutToday(now)) return out;
+
+  const [movers, codes] = await Promise.all([
+    fetchExchangeMovers().catch(() => null),
+    companyCodes(),
+  ]);
+  if (!movers) return out;
+
+  const at = `${ulaanbaatarDay(now)}T${ulaanbaatarTime(now)}`;
+  for (const mover of [...movers.gainers, ...movers.losers]) {
+    const companyCode = codes.get(mover.symbol);
+    if (companyCode === undefined || !Number.isFinite(mover.price)) continue;
+    // The board states the move, not what it moved from; the close it implies
+    // is exact arithmetic rather than a guess.
+    const previousClose =
+      typeof mover.changePct === "number" && mover.changePct !== -100
+        ? mover.price / (1 + mover.changePct / 100)
+        : null;
+    out.set(companyCode, {
+      symbol: mover.symbol,
+      companyCode,
+      price: mover.price,
+      lastTrade: mover.price,
+      previousClose,
+      changePct: typeof mover.changePct === "number" ? mover.changePct : null,
+      // The board publishes none of these. Left null rather than invented:
+      // the candle builder opens a bar at yesterday's close and spans what it
+      // knows when they are missing, which is the truth about this feed.
+      open: null,
+      high: null,
+      low: null,
+      vwap: null,
+      volume: null,
+      turnover: null,
+      trades: null,
+      bid: null,
+      ask: null,
+      at,
+    });
+  }
+  return out;
+}
+
 export async function fetchLiveQuotes(
   options: { extraCaCerts?: string; budgetMs?: number } = {},
 ): Promise<Map<number, LiveQuote>> {
@@ -332,11 +432,22 @@ export async function fetchLiveQuotes(
   if (cache && Date.now() - failedAt < FAILURE_BACKOFF_MS) return cache.quotes;
 
   inFlight = load(options.extraCaCerts, options.budgetMs ?? PAGE_BUDGET_MS)
-    .then((quotes) => {
+    .then(async (quotes) => {
       // Keep the previous snapshot if this attempt came back empty.
-      if (quotes.size > 0) cache = { at: Date.now(), quotes };
-      else failedAt = Date.now();
-      return quotes.size > 0 ? quotes : (cache?.quotes ?? new Map());
+      if (quotes.size > 0) {
+        cache = { at: Date.now(), quotes };
+        return quotes;
+      }
+      failedAt = Date.now();
+      // Nothing from marketinfo. Before falling back on a stored close, ask
+      // the exchange what its own board is showing — it was up and trading
+      // on the day this was written and marketinfo was not.
+      const fromExchange = await exchangeQuotes().catch(() => new Map<number, LiveQuote>());
+      if (fromExchange.size > 0) {
+        cache = { at: Date.now(), quotes: fromExchange };
+        return fromExchange;
+      }
+      return cache?.quotes ?? new Map();
     })
     .finally(() => {
       inFlight = null;
