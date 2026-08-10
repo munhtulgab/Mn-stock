@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "./Toast";
-import { CloseIcon, EditIcon, SaveIcon } from "./icons";
+import { CloseIcon, EditIcon, SaveIcon, PhoneIcon, MailIcon } from "./icons";
 
 function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
@@ -261,11 +261,15 @@ export default function ProfileForm({
 
       <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden mt-6">
         <div className="flex items-center justify-between px-4 py-3.5">
-          <span className="text-sm text-app-muted">Утасны дугаар</span>
+          <span className="flex items-center gap-2.5 text-sm text-app-muted">
+            <PhoneIcon /> Утасны дугаар
+          </span>
           <span className="text-sm font-medium text-app-text">{phone || "—"}</span>
         </div>
         <div className="flex items-center justify-between px-4 py-3.5">
-          <span className="text-sm text-app-muted">И-мэйл</span>
+          <span className="flex items-center gap-2.5 text-sm text-app-muted">
+            <MailIcon /> И-мэйл
+          </span>
           <span className="text-sm font-medium text-app-text">{email || "—"}</span>
         </div>
       </div>
