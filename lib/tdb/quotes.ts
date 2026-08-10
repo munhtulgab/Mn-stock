@@ -22,9 +22,6 @@
 const BASE = "https://api.tdbsecurities.mn/tdbs/datalab";
 const TIMEOUT_MS = 8_000;
 
-/** At once. Enough to cover a movers board inside a page budget, and polite. */
-const CONCURRENCY = 6;
-
 export interface TdbQuote {
   companyCode: number;
   symbol: string;
@@ -100,26 +97,4 @@ export async function fetchTdbQuote(companyCode: number): Promise<TdbQuote | nul
   } catch {
     return null;
   }
-}
-
-/** The same, for a handful of companies, a few at a time. */
-export async function fetchTdbQuotes(
-  companyCodes: number[],
-): Promise<Map<number, TdbQuote>> {
-  const out = new Map<number, TdbQuote>();
-  const queue = [...companyCodes];
-
-  const worker = async () => {
-    for (;;) {
-      const code = queue.shift();
-      if (code === undefined) return;
-      const quote = await fetchTdbQuote(code);
-      if (quote) out.set(quote.companyCode, quote);
-    }
-  };
-
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker),
-  );
-  return out;
 }

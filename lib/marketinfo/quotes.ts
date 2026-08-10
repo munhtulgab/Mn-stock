@@ -1,7 +1,6 @@
 import { fetchWithExtraCa, parsePemBundle } from "@/lib/tls/extraCa";
-import { fetchExchangeMovers } from "@/lib/mse/movers";
 import { fetchSecuritiesList } from "@/lib/mse/securities";
-import { fetchTdbQuote, fetchTdbQuotes } from "@/lib/tdb/quotes";
+import { fetchTdbQuote } from "@/lib/tdb/quotes";
 import { ulaanbaatarDay, ulaanbaatarTime } from "@/lib/day";
 
 /**
@@ -339,15 +338,21 @@ export const DETAIL_BUDGET_MS = 5_000;
  * anyway.
  */
 
-/** The exchange's symbol-to-code list. Codes do not churn; this rarely runs. */
+/**
+ * The codes worth asking about: the listings that can trade.
+ *
+ * The exchange's list carries four hundred and twenty-three companies and a
+ * hundred and sixty-two of them are active; sweeping the delisted ones costs
+ * requests that can never come back with a session.
+ */
 const CODES_TTL_MS = 6 * 60 * 60 * 1000;
-let codeCache: { at: number; codes: Map<string, number> } | null = null;
+let codeCache: { at: number; codes: number[] } | null = null;
 
-async function companyCodes(): Promise<Map<string, number>> {
+async function activeCodes(): Promise<number[]> {
   if (codeCache && Date.now() - codeCache.at < CODES_TTL_MS) return codeCache.codes;
   const list = await fetchSecuritiesList().catch(() => []);
-  if (list.length === 0) return codeCache?.codes ?? new Map();
-  const codes = new Map(list.map((s) => [s.symbol, s.companyCode]));
+  const codes = list.filter((s) => s.status === "active").map((s) => s.companyCode);
+  if (codes.length === 0) return codeCache?.codes ?? [];
   codeCache = { at: Date.now(), codes };
   return codes;
 }
@@ -414,68 +419,80 @@ export async function fetchFallbackQuote(companyCode: number): Promise<LiveQuote
   return tdb ? fromTdb(tdb, `${ulaanbaatarDay(now)}T${ulaanbaatarTime(now)}`) : null;
 }
 
+/**
+ * Every company that has traded today, filled in a slice at a time.
+ *
+ * The movers board was the first answer to the outage and it is not enough:
+ * forty-five companies traded on the morning this was written and the board
+ * names twenty, so APU sat on Friday's close in every list while its own
+ * page showed today's. Datalab knows all forty-five, but one company per
+ * request — a full pass over the hundred and sixty-two active listings takes
+ * eleven seconds, which no page render can wait for.
+ *
+ * So no render waits for one. Each call sweeps as far as its budget allows
+ * and keeps what it got; the cursor picks up where the last one stopped, and
+ * a lap around the market marks the map complete. Two or three renders fill
+ * it, and everything after that is served from here until it goes stale.
+ * A reader on the first render of a cold instance sees the stored closes,
+ * which is what they saw anyway.
+ */
+const FALLBACK_TTL_MS = 90_000;
+/** What one call may spend sweeping. Short enough to sit inside a render. */
+const SWEEP_BUDGET_MS = 1_500;
+const SWEEP_CONCURRENCY = 12;
+
+let fallback: {
+  quotes: Map<number, LiveQuote>;
+  /** When the last full lap finished; null while one is still in progress. */
+  sweptAt: number | null;
+  cursor: number;
+  /** The day the accumulated quotes belong to, so they are dropped overnight. */
+  day: string;
+} | null = null;
+
 async function exchangeQuotes(): Promise<Map<number, LiveQuote>> {
   const now = new Date();
-  const out = new Map<number, LiveQuote>();
-  if (!boardIsAboutToday(now)) return out;
+  if (!boardIsAboutToday(now)) return new Map();
 
-  const [movers, codes] = await Promise.all([
-    fetchExchangeMovers().catch(() => null),
-    companyCodes(),
-  ]);
-  if (!movers) return out;
+  const today = ulaanbaatarDay(now);
+  const at = `${today}T${ulaanbaatarTime(now)}`;
 
-  const at = `${ulaanbaatarDay(now)}T${ulaanbaatarTime(now)}`;
-
-  // The board says which companies traded and what they cost; Datalab says
-  // what the session actually looked like — the open, the range, the volume.
-  // Asked only about the companies the board named, because Datalab answers
-  // one company per request and has no listing endpoint.
-  const wanted = [...movers.gainers, ...movers.losers]
-    .map((mover) => codes.get(mover.symbol))
-    .filter((code): code is number => code !== undefined);
-  const detailed = await fetchTdbQuotes(wanted).catch(
-    () => new Map<number, Awaited<ReturnType<typeof fetchTdbQuote>>>(),
-  );
-
-  for (const mover of [...movers.gainers, ...movers.losers]) {
-    const companyCode = codes.get(mover.symbol);
-    if (companyCode === undefined || !Number.isFinite(mover.price)) continue;
-
-    const tdb = detailed.get(companyCode);
-    if (tdb) {
-      out.set(companyCode, fromTdb(tdb, at));
-      continue;
-    }
-    // The board states the move, not what it moved from; the close it implies
-    // is exact arithmetic rather than a guess.
-    const previousClose =
-      typeof mover.changePct === "number" && mover.changePct !== -100
-        ? mover.price / (1 + mover.changePct / 100)
-        : null;
-    out.set(companyCode, {
-      symbol: mover.symbol,
-      companyCode,
-      price: mover.price,
-      lastTrade: mover.price,
-      previousClose,
-      changePct: typeof mover.changePct === "number" ? mover.changePct : null,
-      // The board publishes none of these. Left null rather than invented:
-      // the candle builder opens a bar at yesterday's close and spans what it
-      // knows when they are missing, which is the truth about this feed.
-      open: null,
-      high: null,
-      low: null,
-      vwap: null,
-      volume: null,
-      turnover: null,
-      trades: null,
-      bid: null,
-      ask: null,
-      at,
-    });
+  // A new day starts empty rather than inheriting yesterday's sweep.
+  if (!fallback || fallback.day !== today) {
+    fallback = { quotes: new Map(), sweptAt: null, cursor: 0, day: today };
   }
-  return out;
+  if (fallback.sweptAt !== null && Date.now() - fallback.sweptAt < FALLBACK_TTL_MS) {
+    return fallback.quotes;
+  }
+
+  const codes = await activeCodes();
+  if (codes.length === 0) return fallback.quotes;
+
+  const deadline = Date.now() + SWEEP_BUDGET_MS;
+  let done = 0;
+
+  const worker = async () => {
+    for (;;) {
+      if (Date.now() >= deadline) return;
+      const index = fallback!.cursor++;
+      if (index >= codes.length) return;
+      done++;
+      const quote = await fetchTdbQuote(codes[index]).catch(() => null);
+      // A company that has not traded is removed rather than left behind, so
+      // a price cannot outlive the session it belonged to.
+      if (quote) fallback!.quotes.set(quote.companyCode, fromTdb(quote, at));
+      else fallback!.quotes.delete(codes[index]);
+    }
+  };
+
+  await Promise.all(Array.from({ length: SWEEP_CONCURRENCY }, worker));
+
+  if (fallback.cursor >= codes.length) {
+    fallback.cursor = 0;
+    fallback.sweptAt = Date.now();
+  }
+  void done;
+  return fallback.quotes;
 }
 
 export async function fetchLiveQuotes(
@@ -483,12 +500,26 @@ export async function fetchLiveQuotes(
 ): Promise<Map<number, LiveQuote>> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.quotes;
   if (inFlight) return inFlight;
-  // Backing off is only sound while there is something to serve instead.
-  // With no cached snapshot at all it guaranteed the opposite of what it was
-  // for: one slow call, and every render for the next twenty seconds skipped
-  // the feed entirely and published a stale close — several readers in a row
-  // shown a price the very next poll would correct.
-  if (cache && Date.now() - failedAt < FAILURE_BACKOFF_MS) return cache.quotes;
+
+  // marketinfo answered nothing recently, so this is not the render that
+  // finds out otherwise. Skipping it does two things: it stops every page
+  // spending the feed's whole budget on three addresses that are returning
+  // 503, and — because the backoff no longer short-circuits the whole
+  // function — it lets the fallback carry on filling in. Held that way, the
+  // sweep advanced once every twenty seconds and the market list stayed
+  // eighteen companies deep for the rest of the session.
+  if (Date.now() - failedAt < FAILURE_BACKOFF_MS) {
+    inFlight = exchangeQuotes()
+      .catch(() => new Map<number, LiveQuote>())
+      .then((quotes) => {
+        if (quotes.size > 0) cache = { at: Date.now(), quotes };
+        return quotes.size > 0 ? quotes : (cache?.quotes ?? new Map());
+      })
+      .finally(() => {
+        inFlight = null;
+      });
+    return inFlight;
+  }
 
   inFlight = load(options.extraCaCerts, options.budgetMs ?? PAGE_BUDGET_MS)
     .then(async (quotes) => {
