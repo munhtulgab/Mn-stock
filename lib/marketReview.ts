@@ -89,7 +89,7 @@ const TOP = 3;
 const SNAPSHOT_KEY = "marketReviews";
 const CACHE_MS = 30 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 interface ReviewSnapshot {
   key: string;
@@ -355,6 +355,15 @@ export async function computeMarketReviews(
       .find({}, { projection: { _id: 0, companyCode: 1, symbol: 1, name: 1 } })
       .toArray(),
   ]);
+
+  // TEMP DIAGNOSTIC — narrowing down why the weekly review comes back null.
+  // Remove once resolved.
+  console.log("[marketReview] window", window, "to", to, "rows", rows.length);
+  console.log("[marketReview] weekFrom", weekStart(weekOf), "weekTo", shiftDays(weekStart(weekOf), 6));
+  console.log(
+    "[marketReview] rows in requested week",
+    rows.filter((r) => r.date >= weekStart(weekOf) && r.date <= shiftDays(weekStart(weekOf), 6)).length,
+  );
 
   const byCompany = new Map<number, Close[]>();
   // Appended after the stored rows, which are read in date order, so each
