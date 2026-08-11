@@ -356,15 +356,6 @@ export async function computeMarketReviews(
       .toArray(),
   ]);
 
-  // TEMP DIAGNOSTIC — narrowing down why the weekly review comes back null.
-  // Remove once resolved.
-  console.log("[marketReview] window", window, "to", to, "rows", rows.length);
-  console.log("[marketReview] weekFrom", weekStart(weekOf), "weekTo", shiftDays(weekStart(weekOf), 6));
-  console.log(
-    "[marketReview] rows in requested week",
-    rows.filter((r) => r.date >= weekStart(weekOf) && r.date <= shiftDays(weekStart(weekOf), 6)).length,
-  );
-
   const byCompany = new Map<number, Close[]>();
   // Appended after the stored rows, which are read in date order, so each
   // company's series still ends on its newest close.
