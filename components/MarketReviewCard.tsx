@@ -14,29 +14,20 @@ import type { MarketReview, ReviewMover } from "@/lib/marketReview";
 export default function MarketReviewCard({
   title,
   review,
-  dates = true,
 }: {
   title: string;
   review: MarketReview;
-  /**
-   * Off where the heading already names them. The week's card is titled with
-   * its own range so the dates travel with it into the slider, and printing
-   * them again beside that title says the same thing twice.
-   */
-  dates?: boolean;
 }) {
   return (
     <section className="rounded-2xl border border-app-border bg-app-card p-4 h-full space-y-3">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-sm font-semibold text-app-text">{title}</h2>
-        {dates && (
-          <span className="text-[11px] text-app-muted tabular-nums whitespace-nowrap">
-            {/* A single session is one date, not a range from itself to itself. */}
-            {review.from === review.to
-              ? review.to
-              : `${review.from} – ${review.to}`}
-          </span>
-        )}
+        <span className="text-[11px] text-app-muted tabular-nums whitespace-nowrap">
+          {/* A single session is one date, not a range from itself to itself. */}
+          {review.from === review.to
+            ? review.to
+            : `${review.from} – ${review.to}`}
+        </span>
       </div>
 
       {review.indices.length > 0 && (
