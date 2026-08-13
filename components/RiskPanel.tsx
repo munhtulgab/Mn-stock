@@ -1,4 +1,7 @@
-import type { RiskMetrics } from "@/lib/analysis/risk";
+// Read rather than restated: the footer used to say "10%" in prose, so
+// changing the rate the Sharpe is computed from would have left the panel
+// telling the reader a number it no longer used.
+import { RISK_FREE_RATE, type RiskMetrics } from "@/lib/analysis/risk";
 
 /**
  * What holding this share has actually cost in volatility.
@@ -118,7 +121,7 @@ export default function RiskPanel({
 
       <p className="mt-3 text-[10px] text-app-muted">
         Бета, хэлбэлзлийг TOP-20 индекстэй харьцуулж, хоёулаа арилжаалсан
-        өдрүүдээр тооцов. Эрсдэлгүй өгөөжийг 10% гэж авав.
+        өдрүүдээр тооцов. Эрсдэлгүй өгөөжийг {RISK_FREE_RATE * 100}% гэж авав.
       </p>
     </div>
   );

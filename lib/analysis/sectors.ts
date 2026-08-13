@@ -43,7 +43,7 @@ export type SectorKey =
   | "manufacturing"
   | "other";
 
-export const SECTOR_LABELS: Record<SectorKey, string> = {
+const SECTOR_LABELS: Record<SectorKey, string> = {
   bank: "Банк",
   nbfi: "ББСБ",
   insurance: "Даатгал",

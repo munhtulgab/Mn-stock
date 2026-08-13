@@ -278,7 +278,7 @@ export interface MarketContext {
   ratiosByCompany: Map<number, RatioInputs>;
 }
 
-export async function loadMarketContext(db: Db): Promise<MarketContext> {
+async function loadMarketContext(db: Db): Promise<MarketContext> {
   const [financialsByCompany, latestPrices, securities, indices, tdb] =
     await Promise.all([
       getFinancialsForPeers(db),
@@ -340,7 +340,7 @@ export interface CompanyAnalysis {
   peers: PeerRow[];
 }
 
-export function analyseCompany(
+function analyseCompany(
   context: MarketContext,
   security: Security,
   candles: Candle[],

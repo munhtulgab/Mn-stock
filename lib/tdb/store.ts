@@ -227,20 +227,3 @@ export async function getTdbProfile(
     distribution: doc?.distribution ?? null,
   };
 }
-
-/**
- * Every company's year figures, for the lists and the sector comparisons.
- *
- * The distribution is left out: it is twenty buckets per company and only
- * ever read one company at a time.
- */
-export async function getTdbProfiles(db: Db): Promise<Map<number, TdbProfile>> {
-  const docs = await db
-    .collection<TdbProfileDoc>(PROFILES)
-    .find({ profile: { $ne: null } }, { projection: { _id: 0, distribution: 0 } })
-    .toArray();
-
-  const out = new Map<number, TdbProfile>();
-  for (const doc of docs) if (doc.profile) out.set(doc.companyCode, doc.profile);
-  return out;
-}

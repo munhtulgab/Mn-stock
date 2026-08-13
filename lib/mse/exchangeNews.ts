@@ -165,7 +165,7 @@ function plain(html: string): string {
  * the exchange's articles are paragraphs, lists, tables and inline styling,
  * and what is wanted from them is the text with its breaks kept.
  */
-export function articleBlocks(html: string): ArticleBlock[] {
+function articleBlocks(html: string): ArticleBlock[] {
   const withoutCode = html.replace(/<(script|style)[\s\S]*?<\/\1\s*>/gi, "");
   const blocks: ArticleBlock[] = [];
 

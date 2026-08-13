@@ -104,7 +104,7 @@ export function validateSignal(
 }
 
 /** "1:2.4" from what the consensus actually says, not from one model's text. */
-export function riskRewardRatio(
+function riskRewardRatio(
   currentPrice: number,
   target: number,
   stop: number,
@@ -119,7 +119,7 @@ function average(values: number[]): number {
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
-export function pickMajoritySignal(parsed: ParsedAiSignal[]): Signal {
+function pickMajoritySignal(parsed: ParsedAiSignal[]): Signal {
   const counts: Record<Signal, number> = { BUY: 0, SELL: 0, HOLD: 0 };
   const confidenceSum: Record<Signal, number> = { BUY: 0, SELL: 0, HOLD: 0 };
   for (const p of parsed) {

@@ -482,7 +482,7 @@ export async function applyLiveQuotes(
  * while some have not traded since 2006. The newest date across all rows is
  * therefore the last session the market held.
  */
-export function latestSessionDate(rows: DashboardRow[]): string | null {
+function latestSessionDate(rows: DashboardRow[]): string | null {
   let latest: string | null = null;
   for (const row of rows) {
     if (row.lastDate && (!latest || row.lastDate > latest)) latest = row.lastDate;
@@ -588,33 +588,6 @@ export async function getStockDetail(
     recommendation,
     marketMedianPe,
   };
-}
-
-/**
- * The last session the market held, as far as anything here can tell.
- *
- * Two witnesses. The live feed knows a session has opened before any of it
- * has been stored, and the stored rows know about sessions the feed has
- * since forgotten; the later of the two is the day the app should be
- * showing. Null only when neither has anything to say.
- */
-export async function latestMarketSession(
-  db: Db,
-  live?: Map<number, LiveQuote>,
-): Promise<string | null> {
-  let latest: string | null = null;
-  for (const quote of live?.values() ?? []) {
-    const day = quote.at?.slice(0, 10);
-    if (day && (!latest || day > latest)) latest = day;
-  }
-
-  const snapshot = await db
-    .collection<MarketSnapshot>("marketSnapshots")
-    .findOne({ key: SNAPSHOT_KEY }, { projection: { rows: 1 } });
-  const stored = snapshot ? latestSessionDate(snapshot.rows) : null;
-  if (stored && (!latest || stored > latest)) latest = stored;
-
-  return latest;
 }
 
 /**

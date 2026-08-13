@@ -322,7 +322,7 @@ function weekStart(weekOf?: string): string {
   return shiftDays(mondayOf(ulaanbaatarDay(new Date())), -7);
 }
 
-export async function computeMarketReviews(
+async function computeMarketReviews(
   db: Db,
   weekOf?: string,
   /**

@@ -37,7 +37,7 @@ export interface MarketNewsItem {
   addedAt?: string;
 }
 
-const WINDOW_DAYS = 30;
+export const WINDOW_DAYS = 30;
 
 /**
  * What makes a story market news. Compounds rather than stems: "ашиг" alone

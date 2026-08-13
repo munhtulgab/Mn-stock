@@ -207,7 +207,7 @@ function unambiguousSpaceless(listings: Listing[]): Map<string, number> {
   );
 }
 
-export async function computeDividends(
+async function computeDividends(
   db: Db,
 ): Promise<Record<string, Dividend[]>> {
   const [filed, general, securities] = await Promise.all([

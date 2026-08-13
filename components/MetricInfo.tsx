@@ -11,7 +11,7 @@ import { CloseIcon, InfoIcon } from "./icons";
  * learned it. Each one says what it measures, how to read a high or a low
  * one, and — where it matters — what a negative one means.
  */
-export const METRIC_TERMS = {
+const METRIC_TERMS = {
   pe: {
     title: "P/E — Үнэ / Ашгийн харьцаа",
     body:

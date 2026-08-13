@@ -6,6 +6,7 @@ import {
   countNewSince,
   getMarketNews,
   markNewsSeen,
+  WINDOW_DAYS,
   type MarketNewsItem,
 } from "@/lib/marketNews";
 import NewsRefresher from "@/components/NewsRefresher";
@@ -203,7 +204,7 @@ export default async function NewsPage() {
         <div>
           <h1 className="text-xl font-bold text-app-text">Зах зээлийн мэдээ</h1>
           <p className="text-xs text-app-muted mt-0.5">
-            Сүүлийн 30 хоног
+            Сүүлийн {WINDOW_DAYS} хоног
             {fresh > 0 && ` · ${fresh} шинэ мэдээ`}
           </p>
         </div>
@@ -216,7 +217,7 @@ export default async function NewsPage() {
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-muted space-y-2">
-          <p>{stale ? "Мэдээ бэлдэж байна." : "Сүүлийн 30 хоногт мэдээ олдсонгүй."}</p>
+          <p>{stale ? "Мэдээ бэлдэж байна." : `Сүүлийн ${WINDOW_DAYS} хоногт мэдээ олдсонгүй.`}</p>
           <Link href="/settings" className="text-brand font-semibold">
             Мэдээллийн сайт нэмэх
           </Link>

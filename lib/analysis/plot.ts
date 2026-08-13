@@ -199,7 +199,7 @@ export function rocSeries(closes: number[], period = 12): (number | null)[] {
 }
 
 /** Moving-average periods the chart can lay over the price. */
-export const OVERLAY_MA_PERIODS = [5, 10, 20, 50, 100, 200] as const;
+const OVERLAY_MA_PERIODS = [5, 10, 20, 50, 100, 200] as const;
 
 /**
  * One row per bar carrying every indicator, ready to hand to the chart.
