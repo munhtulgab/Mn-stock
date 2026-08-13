@@ -1,0 +1,54 @@
+name: App cron
+
+# Single scheduler for everything the app needs run on a timer, instead of
+# splitting the work between Vercel's own crons (capped at once/day on the
+# Hobby plan) and a separate workflow for price-tick. One trigger, every 5
+# minutes; each step below decides for itself whether it's actually due,
+# so /api/sync and /api/news/refresh still only do their expensive work at
+# roughly their original once-a-day / weekdays-only times.
+#
+# Requires an APP_CRON_SECRET repo secret matching the CRON_SECRET
+# environment variable set on the Vercel project.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+env:
+  BASE_URL: https://mn-stock.vercel.app
+  AUTH: Bearer ${{ secrets.APP_CRON_SECRET }}
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Price tick — every run
+        run: |
+          status=$(curl -s -o /tmp/body -w "%{http_code}" -X POST \
+            "$BASE_URL/api/prices/tick" -H "Authorization: $AUTH")
+          echo "tick: HTTP $status"; cat /tmp/body; echo
+          [ "$status" -lt 300 ]
+
+      - name: Daily sync — ~05:10-05:14 UTC
+        run: |
+          h=$(date -u +%H); m=$(date -u +%M)
+          if [ "$h" = "05" ] && [ "$m" -ge 10 ] && [ "$m" -le 14 ]; then
+            status=$(curl -s -o /tmp/body -w "%{http_code}" -X POST \
+              "$BASE_URL/api/sync" -H "Authorization: $AUTH")
+            echo "sync: HTTP $status"; cat /tmp/body; echo
+            [ "$status" -lt 300 ]
+          else
+            echo "sync: skipped ($h:$m UTC not in window)"
+          fi
+
+      - name: Weekday news refresh — Mon-Fri ~04:30-04:34 UTC
+        run: |
+          h=$(date -u +%H); m=$(date -u +%M); dow=$(date -u +%u)
+          if [ "$dow" -le 5 ] && [ "$h" = "04" ] && [ "$m" -ge 30 ] && [ "$m" -le 34 ]; then
+            status=$(curl -s -o /tmp/body -w "%{http_code}" -X POST \
+              "$BASE_URL/api/news/refresh" -H "Authorization: $AUTH")
+            echo "news: HTTP $status"; cat /tmp/body; echo
+            [ "$status" -lt 300 ]
+          else
+            echo "news: skipped ($dow $h:$m UTC not in window)"
+          fi
