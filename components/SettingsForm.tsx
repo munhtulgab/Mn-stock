@@ -17,6 +17,7 @@ interface MaskedSettings {
   apifyToken: string | null;
   facebookToken: string | null;
   facebookCookie: string | null;
+  marketinfoToken: string | null;
   extraCaCount: number;
   apiKeys: {
     anthropic: string | null;
@@ -141,6 +142,8 @@ export default function SettingsForm({
   const [apifyCurrent, setApifyCurrent] = useState(initial.apifyToken);
   const [fbCookieInput, setFbCookieInput] = useState("");
   const [fbCookieCurrent, setFbCookieCurrent] = useState(initial.facebookCookie);
+  const [miInput, setMiInput] = useState("");
+  const [miCurrent, setMiCurrent] = useState(initial.marketinfoToken);
   const [caInput, setCaInput] = useState("");
   const [cfAccountInput, setCfAccountInput] = useState("");
   const [cfAccountCurrent, setCfAccountCurrent] = useState(initial.cloudflareAccountId);
@@ -338,6 +341,7 @@ export default function SettingsForm({
       if (smsKeyInput.trim()) body.smsApiKey = smsKeyInput.trim();
       if (fbTokenInput.trim()) body.facebookToken = fbTokenInput.trim();
       if (fbCookieInput.trim()) body.facebookCookie = fbCookieInput.trim();
+      if (miInput.trim()) body.marketinfoToken = miInput.trim();
       if (apifyInput.trim()) body.apifyToken = apifyInput.trim();
       if (caInput.trim()) body.extraCaCerts = caInput.trim();
       if (cfAccountInput.trim()) body.cloudflareAccountId = cfAccountInput.trim();
@@ -356,6 +360,7 @@ export default function SettingsForm({
       setApifyCurrent(data.apifyToken);
       setApifyInput("");
       setFbCookieCurrent(data.facebookCookie);
+      setMiCurrent(data.marketinfoToken);
       setFbCookieInput("");
       setCaCount(data.extraCaCount);
       setCfAccountCurrent(data.cloudflareAccountId);
@@ -621,6 +626,44 @@ export default function SettingsForm({
             placeholder={fbCookieCurrent ? `Одоогийн: ${fbCookieCurrent}` : "c_user=...; xs=..."}
             value={fbCookieInput}
             onChange={(e) => setFbCookieInput(e.target.value)}
+            className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
+          />
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-app-border space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-app-text">
+              marketinfo.mn токен
+            </label>
+            <span
+              className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${
+                miCurrent
+                  ? "bg-app-positive-bg text-app-positive"
+                  : "bg-app-bg text-app-muted"
+              }`}
+            >
+              {miCurrent ? "Идэвхтэй" : "Тохируулаагүй"}
+            </span>
+          </div>
+          <p className="text-[11px] text-app-muted">
+            Худалдах/авах цонхонд захиалгын сангийн шатлалыг (үнэ бүрийн ширхэг)
+            харуулахад хэрэглэнэ. marketinfo.mn-д нэвтэрсэн байхдаа DevTools
+            (F12) → Network → аль нэг хувьцааны захиалгын санг нээгээд{" "}
+            <code>orders/...</code> хүсэлт дээр дарж{" "}
+            <b>Request Headers → Authorization</b> мөрийг хуулна.{" "}
+            <code>Bearer</code> угтварыг хамт хуулж болно. Цэвэрлэхийн тулд{" "}
+            <code>-</code> бичнэ.
+          </p>
+          <p className="text-[11px] text-app-negative">
+            Анхаар: энэ токен нэг цагийн дараа хүчингүй болдог тул захиалгын сан
+            тэр үед автоматаар алга болж, цонх ердийн авах/зарах үнээ харуулна.
+            Байнга харуулах бол цагаар дахин хуулах шаардлагатай.
+          </p>
+          <input
+            type="password"
+            placeholder={miCurrent ? `Одоогийн: ${miCurrent}` : "Bearer eyJ..."}
+            value={miInput}
+            onChange={(e) => setMiInput(e.target.value)}
             className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
           />
         </div>

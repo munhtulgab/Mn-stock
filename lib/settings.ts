@@ -43,6 +43,17 @@ export interface AppSettings {
    */
   facebookCookie?: string;
   /**
+   * Bearer token for marketinfo.mn's order-book endpoint.
+   *
+   * Everything else this app reads from marketinfo is public; the ladder of
+   * standing orders is not, and answers `WWW-Authenticate: Bearer`. The token
+   * their site carries is the signed-in reader's Google ID token, which lasts
+   * an hour and cannot be refreshed outside their sign-in flow — so this is
+   * an enhancement that lapses rather than a source to depend on. The trade
+   * modal draws the book while it is valid and does without when it is not.
+   */
+  marketinfoToken?: string;
+  /**
    * PEM bundle of intermediate certificates that sources fail to send
    * themselves (marketinfo.mn is one). Added to the trust list so those
    * sites verify — not a secret, and not a way around verification.
@@ -95,6 +106,7 @@ export async function getSettings(db: Db): Promise<AppSettings> {
     apifyToken: doc.apifyToken,
     facebookToken: doc.facebookToken,
     facebookCookie: doc.facebookCookie,
+    marketinfoToken: doc.marketinfoToken,
     extraCaCerts: doc.extraCaCerts,
     apiKeys: doc.apiKeys ?? {},
     cloudflareAccountId: doc.cloudflareAccountId,
@@ -123,6 +135,7 @@ export function maskSettings(settings: AppSettings) {
     apifyToken: mask(settings.apifyToken),
     facebookToken: mask(settings.facebookToken),
     facebookCookie: mask(settings.facebookCookie),
+    marketinfoToken: mask(settings.marketinfoToken),
     // A certificate is public, but sending the whole bundle to the browser on
     // every settings load is pointless — the form only needs to know it's set.
     extraCaCount: settings.extraCaCerts
@@ -156,6 +169,7 @@ export async function updateSettings(
     apifyToken?: string;
     facebookToken?: string;
     facebookCookie?: string;
+    marketinfoToken?: string;
     extraCaCerts?: string;
     apiKeys?: Partial<AppSettings["apiKeys"]>;
     cloudflareAccountId?: string;

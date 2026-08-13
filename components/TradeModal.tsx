@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Num from "./Num";
 import { useToast } from "./Toast";
@@ -23,6 +23,88 @@ import type { OrderSide } from "@/lib/types";
  * pressed. Shown on both buy and sell: a seller wants to see what is bid, and
  * also what the queue they are joining looks like.
  */
+interface BookLevel {
+  price: number;
+  size: number;
+  orders: number;
+}
+
+/**
+ * The book moves on every order, not on every trade, so it is refreshed
+ * faster than the quote above it — but this is a call to marketinfo made
+ * from the server on the operator's token, and a modal left open should not
+ * sit there spending it every second.
+ */
+const BOOK_REFRESH_MS = 10_000;
+
+/**
+ * The ladder: every price with the shares standing at it.
+ *
+ * Deepest row first on the offers and best-first on the bids, so the two
+ * sides meet in the middle at the spread — the way an exchange screen reads,
+ * and the way the gap between them is legible as a gap. The bar behind each
+ * row is that level against the largest on either side, which is what makes
+ * one big order at a price distinguishable from a thin queue at a glance.
+ */
+function Ladder({ book, side }: { book: { bids: BookLevel[]; asks: BookLevel[] }; side: OrderSide }) {
+  const largest = Math.max(
+    ...book.bids.map((l) => l.size),
+    ...book.asks.map((l) => l.size),
+    1,
+  );
+
+  const row = (level: BookLevel, kind: "bid" | "ask") => (
+    <div
+      key={`${kind}-${level.price}`}
+      className="relative grid grid-cols-[1fr_auto] items-center gap-3 px-2 py-1"
+    >
+      <div
+        aria-hidden="true"
+        className={`absolute inset-y-0 right-0 rounded-sm ${
+          kind === "bid" ? "bg-app-positive/10" : "bg-app-negative/10"
+        }`}
+        style={{ width: `${(level.size / largest) * 100}%` }}
+      />
+      <span
+        className={`relative tabular-nums ${
+          kind === "bid" ? "text-app-positive" : "text-app-negative"
+        }`}
+      >
+        <Num value={level.price} digits={2} />
+      </span>
+      <span className="relative tabular-nums text-app-text">
+        <Num value={level.size} digits={0} />
+        {level.orders > 1 && (
+          <span className="text-app-muted"> ×{level.orders}</span>
+        )}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="rounded-2xl bg-app-bg p-2 text-[11px]">
+      <div className="grid grid-cols-[1fr_auto] gap-3 px-2 pb-1 text-[10px] text-app-muted">
+        <span>Захиалгын сан · Үнэ</span>
+        <span className="text-right">Ширхэг</span>
+      </div>
+
+      {/* Offers descend to the best one, which sits against the best bid. */}
+      <div className={side === "BUY" ? "" : "opacity-60"}>
+        {[...book.asks].reverse().map((level) => row(level, "ask"))}
+      </div>
+      <div className="my-1 border-t border-app-border" />
+      <div className={side === "SELL" ? "" : "opacity-60"}>
+        {book.bids.map((level) => row(level, "bid"))}
+      </div>
+
+      <p className="px-2 pt-1.5 text-[9px] text-app-muted">
+        {side === "BUY" ? "Худалдан авалт дээд талын" : "Худалдаа доод талын"}{" "}
+        захиалгуудтай тулж биелнэ. ×N нь тухайн үнэд байгаа захиалгын тоо.
+      </p>
+    </div>
+  );
+}
+
 function OrderBook({ quote, side }: { quote: Quote; side: OrderSide }) {
   const rows = [
     {
@@ -114,6 +196,36 @@ export default function TradeModal({
   const [quantity, setQuantity] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [book, setBook] = useState<{ bids: BookLevel[]; asks: BookLevel[] } | null>(null);
+
+  // Asked for only while the modal is open, and dropped when it closes: it
+  // costs a request to a third party against a token that expires hourly,
+  // and it is of no use to a page nobody is trading from. Refreshed on the
+  // same beat as the quote above it, so the ladder and the price agree.
+  useEffect(() => {
+    // Cleared by `close` rather than here: the book is the same for both
+    // sides, so switching between them keeps what is already on screen
+    // instead of blanking it for the length of a request.
+    if (!open) return;
+    let live = true;
+    const load = () =>
+      fetch(`/api/securities/${symbol}/orderbook`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (live) setBook(data?.book ?? null);
+        })
+        .catch(() => {
+          // The modal has the quote feed's own figures to fall back on.
+          if (live) setBook(null);
+        });
+
+    load();
+    const timer = setInterval(load, BOOK_REFRESH_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [open, symbol]);
 
   const qty = Number(quantity) || 0;
   const fillPrice =
@@ -124,6 +236,7 @@ export default function TradeModal({
     setOpen(null);
     setQuantity("");
     setError(null);
+    setBook(null);
   }
 
   async function submit() {
@@ -251,7 +364,11 @@ export default function TradeModal({
                 </div>
               )}
 
-              <OrderBook quote={quote} side={open} />
+              {book ? (
+                <Ladder book={book} side={open} />
+              ) : (
+                <OrderBook quote={quote} side={open} />
+              )}
 
               <div>
                 <label className="text-xs text-app-muted mb-1 block">Тоо ширхэг</label>

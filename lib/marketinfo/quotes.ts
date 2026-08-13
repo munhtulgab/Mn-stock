@@ -87,19 +87,29 @@ export interface LiveQuote {
   bid: number | null;
   ask: number | null;
   /**
-   * The book behind those two prices: how many shares are queued on each
-   * side, and what the orders on it average out at.
+   * The feed's own order quantities, and what the orders average out at.
    *
-   * The feed states totals rather than the ladder — one figure for every buy
-   * order standing, not a row per price — so this says how deep each side is
-   * without saying where. That is still the thing a reader wants before
-   * placing an order: a best offer of 348.98 with nine hundred shares behind
-   * it and one with nine are the same price and not the same market.
+   * What these count is not stated and does not reconcile to one rule.
+   * Checked against the ladder at the same moment, `buyOrderQty` was the size
+   * standing at the best bid on all three securities tried — 216, 1,135, 20,
+   * each exactly the top level. `sellOrderQty` matched the best offer on one
+   * and neither the best offer nor the side's total on the other two, where
+   * it came to more than the whole book.
+   *
+   * So they are carried as the feed states them and used as an indication of
+   * depth, not as a total. {@link fetchOrderBook} is the ladder itself where
+   * a token for it is configured.
    */
   bidQty: number | null;
   askQty: number | null;
   bidVwap: number | null;
   askVwap: number | null;
+  /**
+   * The exchange's order-book code — "APU-O-0000" — which is what the book
+   * endpoint is keyed by. Kept because it cannot be rebuilt from the ticker:
+   * one of the 52 securities trading today is `-O-0001`.
+   */
+  bookSymbol: string | null;
   /** Exchange timestamp of the entry, e.g. 2026-08-05T12:58:19+08:00. */
   at: string | null;
 }
@@ -202,6 +212,7 @@ function parseQuotes(payload: unknown): Map<number, LiveQuote> {
       askQty: num(row.sellOrderQty),
       bidVwap: positive(row.buyOrderVWAP),
       askVwap: positive(row.sellOrderVWAP),
+      bookSymbol: row.symbol,
       at: row.mdEntryTime ?? null,
     });
   }
@@ -427,6 +438,7 @@ function fromBoard(
     askQty: null,
     bidVwap: null,
     askVwap: null,
+    bookSymbol: null,
     at,
   };
 }
@@ -477,6 +489,7 @@ function fromTdb(tdb: NonNullable<Awaited<ReturnType<typeof fetchTdbQuote>>>, at
     askQty: null,
     bidVwap: null,
     askVwap: null,
+    bookSymbol: null,
     at,
   };
 }

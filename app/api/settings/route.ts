@@ -74,6 +74,15 @@ export async function POST(req: NextRequest) {
         : normaliseCookie(body.facebookCookie)
       : undefined;
 
+  // Same rule as the cookie, and for the same reason: this one expires
+  // within the hour, so replacing and clearing both have to be easy.
+  const marketinfoToken =
+    typeof body.marketinfoToken === "string" && body.marketinfoToken.trim()
+      ? body.marketinfoToken.trim() === "-"
+        ? ""
+        : body.marketinfoToken.trim().replace(/^Bearer\s+/i, "")
+      : undefined;
+
   // Empty means "keep what's stored"; "-" clears it.
   const extraCaCerts =
     typeof body.extraCaCerts === "string" && body.extraCaCerts.trim()
@@ -114,6 +123,7 @@ export async function POST(req: NextRequest) {
     apifyToken,
     facebookToken,
     facebookCookie,
+    marketinfoToken,
     extraCaCerts,
     apiKeys,
     cloudflareAccountId,
