@@ -11,6 +11,22 @@ export interface SyncState {
   key: "main";
   priceCursor: number;
   financialsCursor: number;
+  /**
+   * The session each company was last caught up for, keyed by company code.
+   *
+   * A company is "behind" when the live feed quotes it for a day the stored
+   * history does not reach, and the fix is to re-read its history. Sometimes
+   * that does not help: the exchange publishes a session to its open-data
+   * portal only once it has closed, and for the thin end of the market it
+   * can be later still or not at all. Those companies stay behind, and
+   * without this they were re-read on every run for the same session
+   * forever — four of them were taking the entire price budget, so the
+   * rotation below never ran and its cursor sat on 83 of 162 indefinitely.
+   *
+   * Recording the session attempted rather than the attempt means a retry
+   * happens exactly when there is something new to retry for.
+   */
+  caughtUpFor?: Record<string, string>;
   lastSecuritiesSyncAt?: Date;
   lastFullPriceSyncCompletedAt?: Date;
   lastFullFinancialsSyncCompletedAt?: Date;
@@ -96,6 +112,42 @@ async function syncFinancialsForCompany(
   return true;
 }
 
+/**
+ * How much of a run's price budget the catch-up list may take.
+ *
+ * The catch-up is the more urgent half — those are the companies that
+ * actually traded today — so it goes first and gets the larger share. What
+ * it must not have is all of it, or a company it can never satisfy leaves
+ * the rotation with nothing.
+ */
+const CATCH_UP_SHARE = 0.4;
+
+/**
+ * Whether re-reading this company's history could tell us anything new.
+ *
+ * It could not if it was already read for the session it is behind on: the
+ * exchange had not published that day then and will not have published it
+ * since, so the same request returns the same history. A different session —
+ * the next day's trade — is a new reason to ask.
+ */
+function needsCatchUp(
+  company: BehindCompany,
+  caughtUpFor: Record<string, string>,
+): boolean {
+  return caughtUpFor[company.companyCode] !== company.quotedDate;
+}
+
+/** The catch-up record, less any company no longer on the active list. */
+function prune(
+  record: Record<string, string>,
+  active: { companyCode: number }[],
+): Record<string, string> {
+  const listed = new Set(active.map((c) => String(c.companyCode)));
+  return Object.fromEntries(
+    Object.entries(record).filter(([code]) => listed.has(code)),
+  );
+}
+
 async function getSyncState(db: Db): Promise<SyncState> {
   const state = await db
     .collection<SyncState>("syncState")
@@ -110,6 +162,10 @@ async function getSyncState(db: Db): Promise<SyncState> {
     financialsCursor: Number.isFinite(state?.financialsCursor)
       ? state!.financialsCursor
       : 0,
+    caughtUpFor:
+      state?.caughtUpFor && typeof state.caughtUpFor === "object"
+        ? state.caughtUpFor
+        : {},
     lastSecuritiesSyncAt: state?.lastSecuritiesSyncAt,
     lastFullPriceSyncCompletedAt: state?.lastFullPriceSyncCompletedAt,
     lastFullFinancialsSyncCompletedAt: state?.lastFullFinancialsSyncCompletedAt,
@@ -122,10 +178,17 @@ async function getSyncState(db: Db): Promise<SyncState> {
  * query for four hundred companies would cost more than the sync it is meant
  * to save.
  */
+interface BehindCompany {
+  companyCode: number;
+  symbol: string;
+  /** The session the live feed quotes it for, which the store has not got. */
+  quotedDate: string;
+}
+
 async function companiesBehindTheSession(
   db: Db,
   active: { companyCode: number; symbol: string }[],
-): Promise<{ companyCode: number; symbol: string }[]> {
+): Promise<BehindCompany[]> {
   let live: Map<number, LiveQuote>;
   try {
     live = await fetchLiveQuotes({ budgetMs: 9_000 });
@@ -143,12 +206,16 @@ async function companiesBehindTheSession(
     .toArray();
   const storedLatest = new Map(latest.map((r) => [r._id, r.date]));
 
-  return active.filter((company) => {
-    const quoted = live.get(company.companyCode)?.at?.slice(0, 10);
-    if (!quoted) return false;
+  const behind: BehindCompany[] = [];
+  for (const company of active) {
+    const quotedDate = live.get(company.companyCode)?.at?.slice(0, 10);
+    if (!quotedDate) continue;
     const stored = storedLatest.get(company.companyCode);
-    return !stored || stored < quoted;
-  });
+    if (!stored || stored < quotedDate) {
+      behind.push({ ...company, quotedDate });
+    }
+  }
+  return behind;
 }
 
 export interface SyncBatchResult {
@@ -234,13 +301,27 @@ export async function runSyncBatch(
   const priceDeadline = start + maxMs * 0.6;
   const financialsDeadline = start + maxMs;
 
+
   // The catch-up list first, then the rotation picks up where it left off
   // and keeps the dormant end of the exchange from going stale forever.
+  //
+  // The catch-up gets a share of the price budget rather than all of it. It
+  // used to run to the full deadline, and where it could not empty itself
+  // there was nothing left: four companies the exchange had not published a
+  // session for took the whole twelve seconds every run, the rotation below
+  // never executed, and its cursor stayed on 83 of 162 across every run
+  // measured. A list that cannot be finished must not be able to starve the
+  // one that can.
+  const caughtUpFor = { ...(state.caughtUpFor ?? {}) };
+  const catchUpDeadline = start + maxMs * CATCH_UP_SHARE;
+
   for (const company of behind) {
-    if (Date.now() >= priceDeadline) break;
+    if (Date.now() >= catchUpDeadline) break;
+    if (!needsCatchUp(company, caughtUpFor)) continue;
     try {
       await syncPricesForCompany(db, company.companyCode);
       pricesProcessed.push(company.symbol);
+      caughtUpFor[company.companyCode] = company.quotedDate;
     } catch (err) {
       console.error(`price sync failed for ${company.symbol}`, err);
     }
@@ -300,6 +381,9 @@ export async function runSyncBatch(
   const update: Partial<SyncState> = {
     priceCursor,
     financialsCursor,
+    // Pruned to the companies still listed, so a delisting does not leave a
+    // record behind for a code that will never be quoted again.
+    caughtUpFor: prune(caughtUpFor, active),
   };
   if (fullPricePassCompleted) update.lastFullPriceSyncCompletedAt = new Date();
   if (fullFinancialsPassCompleted)
@@ -320,3 +404,5 @@ export async function runSyncBatch(
     tookMs: Date.now() - start,
   };
 }
+
+export const __testing = { needsCatchUp, prune, CATCH_UP_SHARE };
