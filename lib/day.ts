@@ -80,20 +80,6 @@ export function dayHeading(date: string, today: string, yesterday: string): stri
   return `${weekday}, ${MONTHS[m - 1]} ${d}`;
 }
 
-/**
- * The same day in the possessive, to sit in front of a noun: "Өчигдрийн зах
- * зээлийн тойм". Mongolian inflects the word rather than adding a particle,
- * so the two named days are spelled out instead of being built from
- * {@link dayHeading}.
- */
-export function dayPossessive(date: string, today: string, yesterday: string): string {
-  const day = date.slice(0, 10);
-  if (day === today) return "Өнөөдрийн";
-  if (day === yesterday) return "Өчигдрийн";
-  const [, m, d] = day.split("-").map(Number);
-  return `${MONTHS[m - 1]} ${d}-ны`;
-}
-
 /** Ulaanbaatar's today and yesterday, for the two named headings. */
 export function todayAndYesterday(): { today: string; yesterday: string } {
   const now = Date.now();

@@ -17,7 +17,7 @@ import ReportSlider from "@/components/ReportSlider";
 import { getMarketReviews, weeklyReviewTitle } from "@/lib/marketReview";
 import { getTradeReports, type TradeReport } from "@/lib/tradeReports";
 import type { MarketReview } from "@/lib/marketReview";
-import { dayHeading, dayPossessive } from "@/lib/day";
+import { dayHeading } from "@/lib/day";
 
 export const dynamic = "force-dynamic";
 
@@ -162,11 +162,13 @@ export default async function NewsPage() {
   // same chip every day, where "Өчигдөр" became "Өнөөдөр" and moved under
   // the reader; the dated heading inside each panel says which day it is.
   const tabs = [
+    // Named for the period, not the date. The card covers the last session
+    // that has closed, which is yesterday's on most days and Friday's on a
+    // Monday — "Өчигдрийн" would be wrong on the second of those, and the
+    // dated line inside the card says which day it is either way.
     reviewTab(
       "Сүүлийн өдөр",
-      `${
-        reviews.day ? dayPossessive(reviews.day.to, today, yesterday) : "Өдрийн"
-      } зах зээлийн тойм`,
+      "Сүүлийн өдрийн зах зээлийн тойм",
       reviews.day,
       reports.daily,
     ),

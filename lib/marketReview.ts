@@ -89,7 +89,7 @@ const TOP = 3;
 const SNAPSHOT_KEY = "marketReviews";
 const CACHE_MS = 30 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 interface ReviewSnapshot {
   key: string;
@@ -161,6 +161,37 @@ function buildReview(
       .reverse(),
     indices,
   };
+}
+
+/**
+ * The newest session held that is not today's.
+ *
+ * The day's card is about a finished session with a report to sit beside.
+ * The exchange writes up a day's trading the morning after it, so the
+ * article on the day's tab is always about the session before today — and a
+ * card about today put two different days side by side under one heading:
+ * the summary said 2026-08-13 while the report next to it said 2026-08-12.
+ *
+ * Today's prices are not lost by this. They are what the home and market
+ * pages are for, and what a reader opens those for; this page is the
+ * published record of sessions that have closed.
+ *
+ * It reads the sessions rather than counting back a day, so a Monday shows
+ * Friday and the morning after a holiday shows the day before it.
+ */
+function lastSessionBefore(byCompany: Map<number, Close[]>, day: string): string | null {
+  let latest: string | null = null;
+  for (const series of byCompany.values()) {
+    // Ascending, so the first one from the end that is early enough is this
+    // company's newest before `day`.
+    for (let i = series.length - 1; i >= 0; i--) {
+      const date = series[i].date;
+      if (date >= day) continue;
+      if (!latest || date > latest) latest = date;
+      break;
+    }
+  }
+  return latest;
 }
 
 type IndexSeries = Awaited<ReturnType<typeof fetchIndexSeries>>;
@@ -297,13 +328,12 @@ export async function computeMarketReviews(
   /**
    * The exchange's running quotes, folded in as the newest session.
    *
-   * The exchange publishes a day's closes only after it shuts, and the app's
-   * own price store fills in behind that on a time-boxed cursor, so on the
-   * afternoon of a trading day the stored history can still stop on
-   * yesterday — which is how a review headed "8 сарын 6" sat under the
-   * exchange's own report for the 7th. The live feed carries exactly the
-   * companies that traded, which is exactly the set a review is about, and
-   * after the close its figures are that session's finals.
+   * Not for today's figures — no window here reaches today. It is for the
+   * session before it: the exchange publishes a day's closes only after it
+   * shuts, and the app's own price store fills in behind that on a
+   * time-boxed cursor, so the store can still be a session short of what has
+   * actually closed. Where the feed carries that session and the store does
+   * not, this is what the day's card is built from.
    */
   live?: Map<number, LiveQuote>,
 ): Promise<MarketReviews> {
@@ -381,10 +411,22 @@ export async function computeMarketReviews(
     liveDate,
   );
 
+  // Not `to`: that is the newest session held, which during and after a
+  // trading day is today's. See {@link lastSessionBefore}.
+  const daySession = lastSessionBefore(byCompany, ulaanbaatarDay(new Date()));
+
   return {
-    // The last session on its own: measured from the close before it, which
-    // is what makes it the day's change rather than the day's level.
-    day: buildReview(byCompany, names, to, to, indexMoves(series, to, to)),
+    // The session on its own: measured from the close before it, which is
+    // what makes it the day's change rather than the day's level.
+    day: daySession
+      ? buildReview(
+          byCompany,
+          names,
+          daySession,
+          daySession,
+          indexMoves(series, daySession, daySession),
+        )
+      : null,
     week: buildReview(
       byCompany,
       names,
@@ -401,3 +443,5 @@ export async function computeMarketReviews(
     ),
   };
 }
+
+export const __testing = { lastSessionBefore };
