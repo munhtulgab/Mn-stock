@@ -27,6 +27,7 @@ import {
   fetchWithToken,
   pageSlug,
   type FacebookFetch,
+  type FacebookSpend,
 } from "./facebook";
 import {
   FEED_PATHS,
@@ -117,8 +118,8 @@ interface FacebookCredentials {
   cookie?: string;
   token?: string;
   db?: Db;
-  /** Scheduled refresh only: take fresh posts rather than the stored ones. */
-  force?: boolean;
+  /** What this read may cost. See {@link FacebookSpend}. */
+  spend?: FacebookSpend;
 }
 
 function hostOf(url: string): string | null {
@@ -266,7 +267,7 @@ async function fetchFacebook(
   if (!pageSlug(url)) {
     return fail(url, "error", "Facebook хуудасны нэрийг линкээс уншиж чадсангүй.");
   }
-  const { apifyToken, cookie, token, db, force } = credentials;
+  const { apifyToken, cookie, token, db, spend = "stored" } = credentials;
   if (!apifyToken && !cookie && !token) {
     return fail(
       url,
@@ -281,9 +282,16 @@ async function fetchFacebook(
   // Cheapest to set up first; each is only tried if the one before it came
   // back with nothing, so a working route costs a single request.
   const routes: (() => Promise<FacebookFetch>)[] = [];
-  if (apifyToken) routes.push(() => fetchWithApify(url, apifyToken, db, force));
-  if (cookie) routes.push(() => fetchWithCookie(url, cookie));
-  if (token) routes.push(() => fetchWithToken(url, token));
+  if (apifyToken) routes.push(() => fetchWithApify(url, apifyToken, db, spend));
+  // The frequent run reads Facebook out of storage and nowhere else. These
+  // two cost no Apify credits, but they are still a request to Facebook from
+  // the operator's own account, and one every few minutes from a scraped
+  // session is how an account gets locked. The weekday run is what this app
+  // takes posts with.
+  if (spend !== "cached") {
+    if (cookie) routes.push(() => fetchWithCookie(url, cookie));
+    if (token) routes.push(() => fetchWithToken(url, token));
+  }
 
   for (const route of routes) {
     const attempt = await route();
@@ -743,10 +751,10 @@ export async function fetchNewsSources(
      */
     searchTerms?: string[];
     /**
-     * Scheduled refresh only. Facebook costs credits per scrape, so ordinary
-     * reads take the stored posts and one run a day takes new ones.
+     * What the Facebook sources in this list may cost. Defaults to reusing
+     * the stored posts; see {@link FacebookSpend}.
      */
-    forceFacebook?: boolean;
+    facebook?: FacebookSpend;
   } = {},
 ): Promise<NewsSourceResult[]> {
   const extraCerts = options.extraCaCerts
@@ -757,7 +765,7 @@ export async function fetchNewsSources(
     cookie: options.facebookCookie,
     token: options.facebookToken,
     db: options.db,
-    force: options.forceFacebook,
+    spend: options.facebook,
   };
   return Promise.all(
     urls.map((url) => extractOne(url, facebook, extraCerts, options.searchTerms ?? [])),

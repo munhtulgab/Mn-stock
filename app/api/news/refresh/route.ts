@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { refreshMarketNews } from "@/lib/marketNews";
+import type { FacebookSpend } from "@/lib/mse/facebook";
 
 export const maxDuration = 300;
 
@@ -37,6 +38,19 @@ function isScheduled(req: NextRequest): boolean {
   return /vercel-cron/i.test(req.headers.get("user-agent") ?? "");
 }
 
+/**
+ * How much this run may spend on Facebook.
+ *
+ * Two scheduled runs, not one. The free sources are polled through the day so
+ * a story is announced near when it went up; Facebook is billed per post and
+ * is taken once a weekday. `?facebook=skip` is what the frequent one calls
+ * itself, and without it a scheduled run still means the weekday scrape.
+ */
+function spend(req: NextRequest, scheduled: boolean): FacebookSpend {
+  if (req.nextUrl.searchParams.get("facebook") === "skip") return "cached";
+  return scheduled ? "fresh" : "stored";
+}
+
 async function handle(req: NextRequest) {
   const db = await getDb();
 
@@ -45,9 +59,10 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const facebook = spend(req, scheduled);
   try {
-    const { total, added } = await refreshMarketNews(db, { force: scheduled });
-    return NextResponse.json({ ok: total > 0, total, added, scheduled });
+    const { total, added } = await refreshMarketNews(db, { facebook });
+    return NextResponse.json({ ok: total > 0, total, added, scheduled, facebook });
   } catch (err) {
     console.error("market news refresh failed", err);
     return NextResponse.json(

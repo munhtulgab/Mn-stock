@@ -502,24 +502,49 @@ async function lastRunPosts(
   }
 }
 
+/**
+ * What a Facebook read is allowed to cost.
+ *
+ * `fresh`  the weekday run: spend the credits and take new posts.
+ * `stored` a reader's tab: reuse the stored posts, and scrape only when there
+ *          is nothing stored recent enough to reuse.
+ * `cached` the frequent run: never scrape, whatever state the cache is in.
+ *
+ * The third exists because the other sources are free to read and are polled
+ * every few minutes, while Facebook is billed per post. `stored` is not
+ * enough on its own to keep that apart: it falls through to a billed run
+ * once the stored copy ages past its window, so a cache that went cold —
+ * one failed weekday run — would turn every poll after it into a scrape and
+ * spend the month's allowance a few minutes at a time.
+ */
+export type FacebookSpend = "fresh" | "stored" | "cached";
+
 export async function fetchWithApify(
   pageUrl: string,
   token: string,
   db?: Db,
-  /** Set by the scheduled refresh: spend the credits and take fresh posts. */
-  force = false,
+  spend: FacebookSpend = "stored",
 ): Promise<FacebookFetch> {
   const key = `apify:${pageUrl}`;
   const cached = db ? await readCache(db, key) : null;
-  if (!force && cached && Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS) {
-    return { posts: cached.posts };
+  if (spend !== "fresh" && cached) {
+    const current = Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS;
+    // Asked for cached-only, the stored posts stand at whatever age they
+    // have: the alternative is not a newer answer but no Facebook in the
+    // feed until the next weekday run, and a post does not stop having been
+    // published because the copy of it is a day older than usual.
+    if (current || spend === "cached") return { posts: cached.posts };
   }
 
-  const recovered = force ? null : await lastRunPosts(pageUrl, token);
+  const recovered = spend === "fresh" ? null : await lastRunPosts(pageUrl, token);
   if (recovered) {
     if (db) await writeCache(db, key, recovered);
     return { posts: recovered };
   }
+
+  // Nothing stored and nothing to read back off a finished run. A read that
+  // is not allowed to scrape stops here rather than starting a billed one.
+  if (spend === "cached") return { posts: [] };
 
   const since = new Date(Date.now() - APIFY_MAX_AGE_DAYS * 86_400_000)
     .toISOString()

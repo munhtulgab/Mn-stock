@@ -1,6 +1,7 @@
 import type { Db } from "mongodb";
 import { getSettings } from "@/lib/settings";
 import { fetchNewsSources, type NewsHeadline } from "@/lib/mse/newsSources";
+import type { FacebookSpend } from "@/lib/mse/facebook";
 import { fetchArticleTimes, fetchExchangeNews } from "@/lib/mse/exchangeNews";
 import { todayAndYesterday, ulaanbaatarDaysAgo, ulaanbaatarTime } from "@/lib/day";
 import { recordNotifications } from "@/lib/notifications";
@@ -228,8 +229,8 @@ export interface RefreshResult {
  */
 export async function refreshMarketNews(
   db: Db,
-  /** Scheduled run: spend Facebook credits for fresh posts. */
-  options: { force?: boolean } = {},
+  /** What the Facebook sources may cost this run. See {@link FacebookSpend}. */
+  options: { facebook?: FacebookSpend } = {},
 ): Promise<RefreshResult> {
   const cutoff = ulaanbaatarDaysAgo(WINDOW_DAYS);
 
@@ -259,7 +260,7 @@ export async function refreshMarketNews(
           facebookCookie: settings.facebookCookie,
           db,
           extraCaCerts: settings.extraCaCerts,
-          forceFacebook: options.force,
+          facebook: options.facebook,
         }).catch((err) => {
           console.error("news sources fetch failed", err);
           return [];
@@ -278,10 +279,24 @@ export async function refreshMarketNews(
       date: n.date,
     }));
 
-  const items = [
+  const fetched = [
     ...(await withStatedTimes(exchangeItems, cached)),
     ...collect(results, cutoff, symbols),
-  ]
+  ];
+
+  // A run that was told not to read Facebook has not seen the whole feed, so
+  // replacing the stored feed with what it fetched would drop every Facebook
+  // story off the page until the next weekday run put them back. Merging
+  // instead keeps them, and costs the frequent run nothing: a story it did
+  // fetch wins over the stored copy of itself, and anything that has aged out
+  // of the window is dropped here the same as it would have been.
+  const items = (
+    options.facebook === "cached"
+      ? dedupe([...fetched, ...(cached?.items ?? [])]).filter(
+          (item) => item.date >= cutoff,
+        )
+      : fetched
+  )
     .sort(byNewest)
     .slice(0, MAX_ITEMS);
 
@@ -372,6 +387,17 @@ async function withStatedTimes(
  */
 function storyKey(item: MarketNewsItem): string {
   return `${item.url}|${item.title.slice(0, 80)}`;
+}
+
+/** First copy of each story wins, so a fetched row beats a carried one. */
+function dedupe(items: MarketNewsItem[]): MarketNewsItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = storyKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**
