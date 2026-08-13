@@ -1,54 +1,103 @@
 name: App cron
 
 # Single scheduler for everything the app needs run on a timer, instead of
-# splitting the work between Vercel's own crons (capped at once/day on the
-# Hobby plan) and a separate workflow for price-tick. One trigger, every 5
-# minutes; each step below decides for itself whether it's actually due,
-# so /api/sync and /api/news/refresh still only do their expensive work at
-# roughly their original once-a-day / weekdays-only times.
+# splitting the work between Vercel's own crons (capped at two per project
+# and once a day on the Hobby plan) and the client-side timer the price tick
+# used to stand on.
+#
+# Three triggers rather than one, and each run is told which of them woke it.
+# The first version of this had a single */5 trigger and each step compared
+# the clock against a five-minute window — 05:10-05:14 for the sync. GitHub's
+# own documentation is explicit that this cannot be relied on: "The schedule
+# event can be delayed during periods of high loads of GitHub Actions
+# workflow runs... If the load is sufficiently high enough, some queued jobs
+# may be dropped." A run queued for 05:10 that starts at 05:17 fails that
+# comparison, prints "skipped", and goes green — so the daily sync silently
+# does not happen and the app serves the previous day's closes until somebody
+# notices. Reading `github.event.schedule` instead means a late run still
+# does the job it was queued for, whenever it actually gets to it.
 #
 # Requires an APP_CRON_SECRET repo secret matching the CRON_SECRET
 # environment variable set on the Vercel project.
 on:
   schedule:
+    # Every five minutes — the price tick. One call to the quote feed, and no
+    # further work unless a price actually moved.
     - cron: "*/5 * * * *"
-  workflow_dispatch: {}
+    # 13:10 Ulaanbaatar, daily — the full sync, ten minutes after the close.
+    - cron: "10 5 * * *"
+    # 12:30 Ulaanbaatar, weekdays — the news refresh.
+    - cron: "30 4 * * 1-5"
+  # For running one by hand, which is how the secret gets proved without
+  # waiting for a schedule.
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Which endpoint to call
+        required: true
+        default: tick
+        type: choice
+        options: [tick, sync, news]
 
 env:
   BASE_URL: https://mn-stock.vercel.app
   AUTH: Bearer ${{ secrets.APP_CRON_SECRET }}
 
+# A late tick is dropped rather than queued behind the one already running:
+# the next is five minutes away and wants the same thing.
+concurrency:
+  group: app-cron-${{ github.event.schedule || inputs.job }}
+  cancel-in-progress: false
+
 jobs:
   cron:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Price tick — every run
+      - name: Call the endpoint this run was queued for
         run: |
-          status=$(curl -s -o /tmp/body -w "%{http_code}" -X POST \
-            "$BASE_URL/api/prices/tick" -H "Authorization: $AUTH")
-          echo "tick: HTTP $status"; cat /tmp/body; echo
-          [ "$status" -lt 300 ]
+          set -uo pipefail
 
-      - name: Daily sync — ~05:10-05:14 UTC
-        run: |
-          h=$(date -u +%H); m=$(date -u +%M)
-          if [ "$h" = "05" ] && [ "$m" -ge 10 ] && [ "$m" -le 14 ]; then
-            status=$(curl -s -o /tmp/body -w "%{http_code}" -X POST \
-              "$BASE_URL/api/sync" -H "Authorization: $AUTH")
-            echo "sync: HTTP $status"; cat /tmp/body; echo
-            [ "$status" -lt 300 ]
-          else
-            echo "sync: skipped ($h:$m UTC not in window)"
+          if [ -z "${APP_CRON_SECRET:-}" ]; then
+            echo "::error::APP_CRON_SECRET is not set. Add it under Settings →"
+            echo "Secrets and variables → Actions with the same value as"
+            echo "CRON_SECRET in the Vercel project."
+            exit 1
           fi
 
-      - name: Weekday news refresh — Mon-Fri ~04:30-04:34 UTC
-        run: |
-          h=$(date -u +%H); m=$(date -u +%M); dow=$(date -u +%u)
-          if [ "$dow" -le 5 ] && [ "$h" = "04" ] && [ "$m" -ge 30 ] && [ "$m" -le 34 ]; then
-            status=$(curl -s -o /tmp/body -w "%{http_code}" -X POST \
-              "$BASE_URL/api/news/refresh" -H "Authorization: $AUTH")
-            echo "news: HTTP $status"; cat /tmp/body; echo
-            [ "$status" -lt 300 ]
-          else
-            echo "news: skipped ($dow $h:$m UTC not in window)"
+          case "${SCHEDULE:-}" in
+            "*/5 * * * *")  job=tick ;;
+            "10 5 * * *")   job=sync ;;
+            "30 4 * * 1-5") job=news ;;
+            *)              job="${MANUAL:-tick}" ;;
+          esac
+
+          case "$job" in
+            tick) path="/api/prices/tick"; budget=120 ;;
+            # The sync walks every listing for prices and financial reports
+            # and the route allows itself five minutes, so the caller has to
+            # be at least as patient.
+            sync) path="/api/sync?maxMs=250000"; budget=600 ;;
+            news) path="/api/news/refresh"; budget=300 ;;
+          esac
+
+          echo "→ $job  ${BASE_URL}${path}"
+          status=$(curl -s -o /tmp/body -w "%{http_code}" --max-time "$budget" \
+            -X POST "${BASE_URL}${path}" -H "Authorization: $AUTH")
+
+          echo "$job: HTTP $status"
+          # The sync's reply names every symbol it touched, which is far too
+          # long for a log line but worth seeing the start of.
+          head -c 600 /tmp/body; echo
+
+          # The way this breaks quietly is the two secrets drifting apart:
+          # the schedule keeps firing and nothing ever updates.
+          if [ "$status" = "401" ]; then
+            echo "::error::Rejected. APP_CRON_SECRET does not match CRON_SECRET in Vercel."
+            exit 1
           fi
+          [ "$status" -ge 200 ] && [ "$status" -lt 300 ]
+        env:
+          APP_CRON_SECRET: ${{ secrets.APP_CRON_SECRET }}
+          SCHEDULE: ${{ github.event.schedule }}
+          MANUAL: ${{ inputs.job }}
