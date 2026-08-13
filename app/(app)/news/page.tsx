@@ -89,9 +89,37 @@ function reviewTab(
   title: string,
   review: MarketReview | null,
   reports: TradeReport[],
-  options: { hash?: string } = {},
+  options: { hash?: string; slideReview?: boolean } = {},
 ): ReviewTab | null {
   if (!review && reports.length === 0) return null;
+
+  // The week's own summary rides in the slider rather than beside it, as a
+  // slide of the same kind as the exchange's review of the same five days.
+  // Its heading carries the range, because in a slider a card has to say
+  // which period it is about without a neighbour to compare against.
+  if (options.slideReview && review) {
+    const heading = weeklyReviewTitle(review);
+    return {
+      label,
+      hash: options.hash,
+      content: (
+        <ReportSlider
+          labels={[heading, ...reports.map((report) => report.title)]}
+          slides={[
+            <MarketReviewCard
+              key="summary"
+              title={heading}
+              review={review}
+              dates={false}
+            />,
+            ...reports.map((report) => (
+              <TradeReportCard key={report.url} report={report} />
+            )),
+          ]}
+        />
+      ),
+    };
+  }
 
   return {
     label,
@@ -170,22 +198,18 @@ export default async function NewsPage() {
       reviews.day,
       reports.daily,
     ),
-    // Named for the five days it covers, and sliding: the app's summary and
-    // the exchange's own review of the same week are two accounts of one
-    // thing and share a slot.
-    // Laid out like the day's: the summary, and the exchange's own review of
-    // the same week beside it on a wide screen and under it on a phone.
-    //
-    // It was a single slider for a while, the two as slides in one slot. That
-    // read well on paper and badly in the hand — the exchange's article was
-    // behind a swipe nobody knew was there, so the week looked as though it
-    // had no report at all while the day plainly did.
+    // The app's summary and the exchange's own review of the same week are
+    // two accounts of one thing, so they share a slot and it swipes. The
+    // summary's slide is titled with the week it covers — which is the whole
+    // point of putting it here: the exchange's article is headed "ДОЛОО
+    // ХОНОГИЙН АРИЛЖААНЫ ТОЙМ МЭДЭЭ" and names no dates at all, so the week's
+    // tab said nothing about which week a reader was looking at.
     reviewTab(
       "Өнгөрсөн долоо хоног",
       "Долоо хоногийн тойм",
       reviews.week,
       reports.weekly,
-      { hash: WEEKLY_HASH },
+      { hash: WEEKLY_HASH, slideReview: true },
     ),
     reviewTab("Сүүлийн сар", "Өнгөрсөн сарын зах зээлийн тойм", reviews.month, []),
   ].filter((tab): tab is ReviewTab => tab !== null);
