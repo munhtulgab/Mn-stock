@@ -123,7 +123,28 @@ function idsOf(items: Headline[]): number[] {
 }
 
 /**
- * The latest session's trading reports, and only those.
+ * The day the daily tab is about.
+ *
+ * `session` is the day the summary card beside the slider covers, and it wins
+ * wherever the exchange has published a report on it. The exchange puts a
+ * session's report out a couple of hours after it closes, not the morning
+ * after, so from mid afternoon its newest report is today's while the card is
+ * still about the session before — and the tab carried "8 ДУГААР САРЫН 13-НЫ
+ * ӨДРИЙН АРИЛЖААНЫ МЭДЭЭ" over a summary of the 12th.
+ *
+ * Without a session, or where nothing has been published on it yet, the
+ * newest day that has a report — which is what a reader arriving at a tab
+ * called "the last day" expects to find in it.
+ */
+function dailyDay(items: Headline[], session?: string): string | null {
+  const feed = exchangeItems(items).filter((item) => PATTERNS.daily.test(item.title));
+  const day = (item: Headline) => item.date.slice(0, 10);
+  if (session && feed.some((item) => day(item) === session)) return session;
+  return feed[0] ? day(feed[0]) : null;
+}
+
+/**
+ * That day's trading reports, and only those.
  *
  * Every slide in this period is a report of the same day: the dated one and
  * the review of it, where the exchange published both. It used to carry
@@ -131,20 +152,13 @@ function idsOf(items: Headline[]): number[] {
  * a training course — which made a slider labelled "the day's trading" mostly
  * about other things.
  */
-function selectDaily(items: Headline[]): number[] {
-  const feed = exchangeItems(items).filter((item) => PATTERNS.daily.test(item.title));
-  const lead = feed[0];
-  if (!lead) return [];
-  // The newest day that has one, so a session with two reports shows both and
-  // yesterday's does not follow them.
-  const day = lead.date.slice(0, 10);
-  return idsOf(feed.filter((item) => item.date.slice(0, 10) === day));
-}
-
-/** The day the daily slider is showing, so nothing older is added to it. */
-function dailyDay(items: Headline[]): string | null {
-  const lead = exchangeItems(items).find((item) => PATTERNS.daily.test(item.title));
-  return lead ? lead.date.slice(0, 10) : null;
+function selectDaily(items: Headline[], day: string | null): number[] {
+  if (!day) return [];
+  return idsOf(
+    exchangeItems(items).filter(
+      (item) => PATTERNS.daily.test(item.title) && item.date.slice(0, 10) === day,
+    ),
+  );
 }
 
 /**
@@ -227,6 +241,11 @@ async function readArticle(id: number): Promise<TradeReport | null> {
 export async function getTradeReports(
   db: Db,
   items: MarketNewsItem[],
+  /**
+   * The session the day's summary card covers, so the report beside it is
+   * about the same day. See {@link dailyDay}.
+   */
+  session?: string,
 ): Promise<TradeReports> {
   // Which headlines to look through.
   //
@@ -272,8 +291,12 @@ export async function getTradeReports(
     return kept.length > 0 ? kept : previous;
   };
 
+  // Worked out once and used for both the reports and the index summary, so
+  // every slide in the tab is about the day the tab is headed by.
+  const day = dailyDay(headlines, session);
+
   const [daily, weekly] = await Promise.all([
-    resolve(selectDaily(headlines), stored.daily),
+    resolve(selectDaily(headlines, day), stored.daily),
     resolve(selectWeekly(headlines), stored.weekly),
   ]);
 
@@ -309,7 +332,7 @@ export async function getTradeReports(
   // second account of the same day.
   const top20 = selectTop20(
     items.map((i) => ({ title: i.title, date: i.date, url: i.url })),
-    dailyDay(headlines),
+    day,
   );
   return top20 ? { daily: [...daily, top20], weekly } : reports;
 }

@@ -136,8 +136,13 @@ export default async function NewsPage() {
   // after, which left the card describing the previous week on the Friday of
   // a full one. They are slides in one slot now, each carrying its own dates,
   // and the app's summary describes the week it has the prices for.
-  const reports = await getTradeReports(db, items);
+  // The reviews first: the day's card decides which session the tab is about,
+  // and the reports beside it are chosen to match rather than the other way
+  // round. The exchange publishes a session's report a couple of hours after
+  // it closes, so by the evening its newest is today's while the card is
+  // still about the session before.
   const reviews = await getMarketReviews(db);
+  const reports = await getTradeReports(db, items, reviews.day?.to);
   // Placed by its own timestamp among the day's headlines, like every other
   // row: groupByDay sorts each day newest first.
   const feed = reviews.week

@@ -94,3 +94,58 @@ test("no summary in the feed is not an error", () => {
     null,
   );
 });
+
+/**
+ * The day's tab has two sides — the app's summary of a session and the
+ * exchange's report on it — and they have to name the same day. The exchange
+ * publishes a session's report a couple of hours after it closes, so from mid
+ * afternoon its newest report is today's while the summary card is still
+ * about the session before.
+ */
+
+test("the report follows the session the card covers", () => {
+  const feed = [
+    {
+      title: "8 ДУГААР САРЫН 13-НЫ ӨДРИЙН АРИЛЖААНЫ МЭДЭЭ",
+      date: "2026-08-13",
+      url: "https://mse.mn/news/14900",
+    },
+    {
+      title: "8 ДУГААР САРЫН 12-НЫ ӨДРИЙН АРИЛЖААНЫ МЭДЭЭ",
+      date: "2026-08-12",
+      url: "https://mse.mn/news/14890",
+    },
+  ];
+  assert.equal(dailyDay(feed, "2026-08-12"), "2026-08-12");
+});
+
+test("nothing published on that session yet falls back to the newest", () => {
+  // Before the exchange posts the 13th's report, the tab is the 13th's — a
+  // tab called "the last day" with nothing in it is worse than a day older.
+  assert.equal(dailyDay(exchangeFeed, "2026-08-13"), "2026-08-07");
+});
+
+test("no session asked for is the newest day that has a report", () => {
+  assert.equal(dailyDay(exchangeFeed), "2026-08-07");
+});
+
+test("the index summary is held to the session, not to the newest report", () => {
+  const reports = [
+    {
+      title: "8 ДУГААР САРЫН 13-НЫ ӨДРИЙН АРИЛЖААНЫ МЭДЭЭ",
+      date: "2026-08-13",
+      url: "https://mse.mn/news/14900",
+    },
+    {
+      title: "8 ДУГААР САРЫН 12-НЫ ӨДРИЙН АРИЛЖААНЫ МЭДЭЭ",
+      date: "2026-08-12",
+      url: "https://mse.mn/news/14890",
+    },
+  ];
+  const summaries = [
+    { title: "ТОП-20 индекс 0.13 хувиар өслөө", date: "2026-08-12", url: "https://news.mn/r/a" },
+  ];
+  // Dated to the 12th, which is the session — under the old rule the day came
+  // from the newest report, the 13th, and this slide was dropped as stale.
+  assert.ok(selectTop20(summaries, dailyDay(reports, "2026-08-12")));
+});
