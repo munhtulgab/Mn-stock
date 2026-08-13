@@ -86,6 +86,20 @@ export interface LiveQuote {
   trades: number | null;
   bid: number | null;
   ask: number | null;
+  /**
+   * The book behind those two prices: how many shares are queued on each
+   * side, and what the orders on it average out at.
+   *
+   * The feed states totals rather than the ladder — one figure for every buy
+   * order standing, not a row per price — so this says how deep each side is
+   * without saying where. That is still the thing a reader wants before
+   * placing an order: a best offer of 348.98 with nine hundred shares behind
+   * it and one with nine are the same price and not the same market.
+   */
+  bidQty: number | null;
+  askQty: number | null;
+  bidVwap: number | null;
+  askVwap: number | null;
   /** Exchange timestamp of the entry, e.g. 2026-08-05T12:58:19+08:00. */
   at: string | null;
 }
@@ -106,6 +120,10 @@ interface RawQuote {
   trades?: number | null;
   highestBidPrice?: number | null;
   lowestOfferPrice?: number | null;
+  buyOrderQty?: number | null;
+  sellOrderQty?: number | null;
+  buyOrderVWAP?: number | null;
+  sellOrderVWAP?: number | null;
   mdEntryTime?: string | null;
   securityType?: string | null;
 }
@@ -178,6 +196,12 @@ function parseQuotes(payload: unknown): Map<number, LiveQuote> {
       // The book's top of each side: 0 means nobody is offering there.
       bid: positive(row.highestBidPrice),
       ask: positive(row.lowestOfferPrice),
+      // Quantities are counts, so nothing queued is a true zero rather than
+      // an absence — `num`, not `positive`. The averages are prices again.
+      bidQty: num(row.buyOrderQty),
+      askQty: num(row.sellOrderQty),
+      bidVwap: positive(row.buyOrderVWAP),
+      askVwap: positive(row.sellOrderVWAP),
       at: row.mdEntryTime ?? null,
     });
   }
@@ -398,6 +422,11 @@ function fromBoard(
     trades: null,
     bid: null,
     ask: null,
+    // Neither the movers board nor Datalab publishes the order book.
+    bidQty: null,
+    askQty: null,
+    bidVwap: null,
+    askVwap: null,
     at,
   };
 }
@@ -443,6 +472,11 @@ function fromTdb(tdb: NonNullable<Awaited<ReturnType<typeof fetchTdbQuote>>>, at
     trades: null,
     bid: null,
     ask: null,
+    // Neither the movers board nor Datalab publishes the order book.
+    bidQty: null,
+    askQty: null,
+    bidVwap: null,
+    askVwap: null,
     at,
   };
 }

@@ -33,6 +33,11 @@ export interface Quote {
   bid?: number | null;
   /** Lowest standing sell order; what a purchase would fill at. */
   ask?: number | null;
+  /** Shares queued on each side, and what those orders average out at. */
+  bidQty?: number | null;
+  askQty?: number | null;
+  bidVwap?: number | null;
+  askVwap?: number | null;
 }
 
 /**

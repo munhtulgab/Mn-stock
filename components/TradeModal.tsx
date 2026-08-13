@@ -1,13 +1,90 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { createPortal } from "react-dom";
 import Num from "./Num";
 import { useToast } from "./Toast";
 import { ArrowDownIcon, ArrowUpIcon, CloseIcon } from "./icons";
 import { useLiveQuote, type Quote } from "./useLiveQuote";
 import type { OrderSide } from "@/lib/types";
+
+/**
+ * The book as two rows: a price and the shares standing behind it.
+ *
+ * The feed publishes totals per side rather than the ladder — every buy order
+ * counted together, not a row per price — so this is how deep each side is
+ * rather than where. That is still what decides whether an order fills: a
+ * best offer of 348.98 with nine hundred shares behind it and one with nine
+ * are the same price and not the same market.
+ *
+ * The side this order would fill against is marked, because the two rows are
+ * otherwise symmetrical and the one that matters depends on which button was
+ * pressed. Shown on both buy and sell: a seller wants to see what is bid, and
+ * also what the queue they are joining looks like.
+ */
+function OrderBook({ quote, side }: { quote: Quote; side: OrderSide }) {
+  const rows = [
+    {
+      label: "Авах",
+      price: quote.bid ?? null,
+      qty: quote.bidQty ?? null,
+      average: quote.bidVwap ?? null,
+      tone: "text-app-positive",
+      /** A sale fills against the bids. */
+      fills: side === "SELL",
+    },
+    {
+      label: "Зарах",
+      price: quote.ask ?? null,
+      qty: quote.askQty ?? null,
+      average: quote.askVwap ?? null,
+      tone: "text-app-negative",
+      fills: side === "BUY",
+    },
+  ];
+
+  // The movers board and Datalab both stand in for marketinfo when it is
+  // down, and neither publishes a book. Nothing to show is not a row of
+  // dashes; it is no panel.
+  if (rows.every((row) => row.price === null && row.qty === null)) return null;
+
+  return (
+    <div className="rounded-2xl bg-app-bg p-3">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1.5 text-[11px] tabular-nums">
+        <span className="text-app-muted">Захиалгын сан</span>
+        <span className="text-app-muted text-right">Үнэ</span>
+        <span className="text-app-muted text-right">Ширхэг</span>
+
+        {rows.map((row) => (
+          <Fragment key={row.label}>
+            <span className={row.fills ? "text-app-text font-medium" : "text-app-muted"}>
+              {row.label}
+              {row.fills && <span className="text-app-muted"> · энэ талд биелнэ</span>}
+            </span>
+            <span className={`text-right font-medium ${row.tone}`}>
+              {row.price !== null ? <Num value={row.price} digits={2} /> : "—"}
+            </span>
+            <span className="text-right text-app-text">
+              {row.qty !== null ? <Num value={row.qty} digits={0} /> : "—"}
+            </span>
+          </Fragment>
+        ))}
+      </div>
+
+      {rows.some((row) => row.average !== null) && (
+        <div className="mt-2 flex justify-between border-t border-app-border pt-2 text-[10px] text-app-muted">
+          <span>Захиалгын дундаж үнэ</span>
+          <span className="tabular-nums">
+            {rows[0].average !== null ? <Num value={rows[0].average} digits={2} /> : "—"}
+            {" / "}
+            {rows[1].average !== null ? <Num value={rows[1].average} digits={2} /> : "—"}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * An order fills against the book, not against the last price: buying takes
@@ -173,6 +250,8 @@ export default function TradeModal({
                   Эзэмшиж буй: <span className="text-app-text font-medium">{ownedQuantity} ширхэг</span>
                 </div>
               )}
+
+              <OrderBook quote={quote} side={open} />
 
               <div>
                 <label className="text-xs text-app-muted mb-1 block">Тоо ширхэг</label>

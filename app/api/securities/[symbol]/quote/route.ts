@@ -107,6 +107,10 @@ export async function GET(
       trades: live.trades,
       bid: live.bid,
       ask: live.ask,
+      bidQty: live.bidQty,
+      askQty: live.askQty,
+      bidVwap: live.bidVwap,
+      askVwap: live.askVwap,
       date: live.at?.slice(0, 10) ?? today,
       // In session, when this security last moved; once shut, when the
       // session itself ended — the same for every security.
