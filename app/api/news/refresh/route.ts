@@ -41,14 +41,20 @@ function isScheduled(req: NextRequest): boolean {
 /**
  * How much this run may spend on Facebook.
  *
- * Two scheduled runs, not one. The free sources are polled through the day so
- * a story is announced near when it went up; Facebook is billed per post and
- * is taken once a weekday. `?facebook=skip` is what the frequent one calls
- * itself, and without it a scheduled run still means the weekday scrape.
+ * Two scheduled runs, not one. The free sources are polled every five minutes
+ * so a story is announced near when it went up; Facebook is billed per post
+ * and is taken once a weekday, at 12:45. `?facebook=skip` is what the
+ * frequent one calls itself.
+ *
+ * This is the only place `fresh` is returned anywhere in the app, and it
+ * takes both a cron secret and the absence of that parameter to get it — so
+ * the weekday job is the one caller that can start a scrape. A reader's own
+ * tab asking for a refresh gets the stored posts and does not scrape:
+ * refreshing a page is not a decision to spend the month's allowance.
  */
 function spend(req: NextRequest, scheduled: boolean): FacebookSpend {
   if (req.nextUrl.searchParams.get("facebook") === "skip") return "cached";
-  return scheduled ? "fresh" : "stored";
+  return scheduled ? "fresh" : "cached";
 }
 
 async function handle(req: NextRequest) {

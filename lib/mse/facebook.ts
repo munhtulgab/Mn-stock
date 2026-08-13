@@ -410,11 +410,14 @@ const APIFY_MAX_AGE_DAYS = 30;
 const APIFY_MAX_CHARGE_USD = 0.04;
 
 /**
- * How long a scrape stands. Long, because it costs credits: the scheduled
- * refresh takes one set of posts each weekday and everything else — company
- * pages, the market feed, the AI prompt — reads that. The window is a little
- * over a day so a missed run degrades to a second fetch rather than to
- * silence.
+ * How recently a finished run must have ended for its dataset to be read
+ * back instead of a scrape being started. A little over a day, so the run
+ * this is looking for is the last weekday one.
+ *
+ * It is not how long stored posts stand — those stand until the next
+ * weekday run replaces them, however long that takes. Expiring them would
+ * mean the app either scraping off-schedule or showing no Facebook at all,
+ * and the second is not better than posts that are a day older than usual.
  */
 const CACHE_TTL_MS = 26 * 60 * 60 * 1000;
 
@@ -503,39 +506,47 @@ async function lastRunPosts(
 }
 
 /**
- * What a Facebook read is allowed to cost.
+ * Whether a Facebook read may scrape.
  *
- * `fresh`  the weekday run: spend the credits and take new posts.
- * `stored` a reader's tab: reuse the stored posts, and scrape only when there
- *          is nothing stored recent enough to reuse.
- * `cached` the frequent run: never scrape, whatever state the cache is in.
+ * `cached` the default, and what every path in the app gets bar one: never
+ *          scrape, whatever state the cache is in.
+ * `fresh`  the weekday run at 12:45: spend the credits and take new posts.
  *
- * The third exists because the other sources are free to read and are polled
- * every few minutes, while Facebook is billed per post. `stored` is not
- * enough on its own to keep that apart: it falls through to a billed run
- * once the stored copy ages past its window, so a cache that went cold —
- * one failed weekday run — would turn every poll after it into a scrape and
- * spend the month's allowance a few minutes at a time.
+ * Two states rather than a scale, because the useful question is not how
+ * stale a copy may be but how many runs a day this is worth, and the answer
+ * is one. Facebook is billed per post against an allowance that has run out
+ * mid-month before.
+ *
+ * There used to be a third, `stored`, which was the default: reuse the
+ * stored posts and scrape only where there is nothing recent enough. It
+ * reads as the cautious option and is not — it falls through to a billed run
+ * as soon as the stored copy ages past its twenty-six hours. Seven callers
+ * took that default, among them the home page when the feed is stale, the
+ * daily sync, a company's news and the AI prompt, and the five-minute poll
+ * of the free sources runs through the same code. One failed weekday run
+ * would have left every one of them able to start a scrape.
+ *
+ * Only `app/api/news/refresh` returns `fresh`, and only for a caller that
+ * has the cron secret and did not ask to skip Facebook. A scrape on demand
+ * is that call, made by hand.
  */
-export type FacebookSpend = "fresh" | "stored" | "cached";
+export type FacebookSpend = "fresh" | "cached";
 
 export async function fetchWithApify(
   pageUrl: string,
   token: string,
   db?: Db,
-  spend: FacebookSpend = "stored",
+  spend: FacebookSpend = "cached",
 ): Promise<FacebookFetch> {
   const key = `apify:${pageUrl}`;
   const cached = db ? await readCache(db, key) : null;
-  if (spend !== "fresh" && cached) {
-    const current = Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS;
-    // Asked for cached-only, the stored posts stand at whatever age they
-    // have: the alternative is not a newer answer but no Facebook in the
-    // feed until the next weekday run, and a post does not stop having been
-    // published because the copy of it is a day older than usual.
-    if (current || spend === "cached") return { posts: cached.posts };
-  }
+  // At whatever age it has: the alternative is not a newer answer but no
+  // Facebook in the feed until the next weekday run, and a post does not
+  // stop having been published because the copy of it is a day old.
+  if (spend === "cached" && cached) return { posts: cached.posts };
 
+  // Free — it reads a finished run's dataset rather than starting one — so
+  // it is worth trying before giving up on a cold cache.
   const recovered = spend === "fresh" ? null : await lastRunPosts(pageUrl, token);
   if (recovered) {
     if (db) await writeCache(db, key, recovered);

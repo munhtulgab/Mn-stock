@@ -267,7 +267,7 @@ async function fetchFacebook(
   if (!pageSlug(url)) {
     return fail(url, "error", "Facebook хуудасны нэрийг линкээс уншиж чадсангүй.");
   }
-  const { apifyToken, cookie, token, db, spend = "stored" } = credentials;
+  const { apifyToken, cookie, token, db, spend = "cached" } = credentials;
   if (!apifyToken && !cookie && !token) {
     return fail(
       url,
