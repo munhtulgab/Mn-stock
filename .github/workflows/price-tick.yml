@@ -1,0 +1,29 @@
+name: Price tick
+
+# Vercel's Hobby plan only runs crons once a day, so /api/prices/tick — the
+# endpoint that watches the market and fires signal-change push
+# notifications — has been driven entirely by whoever happens to have the
+# app open. This pings it every 5 minutes independent of that, so
+# notifications go out even when nobody is signed in and browsing.
+#
+# Requires a PRICE_TICK_CRON_SECRET repo secret matching the CRON_SECRET
+# environment variable set on the Vercel project.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/prices/tick
+        run: |
+          status=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "https://mn-stock.vercel.app/api/prices/tick" \
+            -H "Authorization: Bearer ${{ secrets.PRICE_TICK_CRON_SECRET }}")
+          echo "HTTP $status"
+          cat /tmp/body
+          if [ "$status" -ge 300 ]; then
+            exit 1
+          fi
