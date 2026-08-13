@@ -25,6 +25,8 @@ import MetricInfo, { type MetricTerm } from "@/components/MetricInfo";
 import TechnicalScorecard from "@/components/TechnicalScorecard";
 import FundamentalPanel from "@/components/FundamentalPanel";
 import RiskPanel from "@/components/RiskPanel";
+import ReturnDistribution from "@/components/ReturnDistribution";
+import YearPanel from "@/components/YearPanel";
 import DividendHistory from "@/components/DividendHistory";
 import PeerTable from "@/components/PeerTable";
 import CombinedSignalCard from "@/components/CombinedSignalCard";
@@ -335,9 +337,25 @@ export default async function StockDetailPage({
             <DividendHistory dividends={analysis.dividends} />
           </div>
 
+          {/* Beside the fundamentals it belongs with: the year's range, its
+              return and what usually changes hands. */}
+          {analysis.profile && (
+            <div className="md:order-7 md:col-span-2">
+              <YearPanel profile={analysis.profile} price={currentPrice} />
+            </div>
+          )}
+
           <div className="md:order-8 md:col-span-2">
             <RiskPanel risk={analysis.risk} years={analysis.riskYears} />
           </div>
+
+          {/* Directly under the risk figures, which state a spread where this
+              draws its shape. */}
+          {analysis.distribution && (
+            <div className="md:order-8 md:col-span-2">
+              <ReturnDistribution distribution={analysis.distribution} />
+            </div>
+          )}
 
           <div className="md:order-9 md:self-start">
             <PeerTable

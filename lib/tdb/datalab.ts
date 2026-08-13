@@ -71,6 +71,81 @@ export interface TdbDividend {
   payoutRatio: number | null;
 }
 
+/**
+ * What the overview says about a company beyond its running price.
+ *
+ * The same call the live quote already makes carries a dozen figures it does
+ * not read: the year's range and return, the year's standard deviation, the
+ * shares in issue and the share of them in public hands, the average day's
+ * volume. They are stated by the source rather than worked out here, which
+ * is the point — a 52-week high computed from the candles this app holds is
+ * only as complete as those candles.
+ */
+export interface TdbProfile {
+  companyCode: number;
+  symbol: string;
+  /** Highest and lowest close of the last year, as Datalab states them. */
+  high52w: number | null;
+  low52w: number | null;
+  /** The last year's price return, as a percentage. */
+  yearlyReturn: number | null;
+  /** Annualised standard deviation of daily returns, as a percentage. */
+  yearlyStdDev: number | null;
+  /** Shares traded on an average session, and over the whole year. */
+  avgVolume: number | null;
+  yearVolume: number | null;
+  marketCap: number | null;
+  sharesOutstanding: number | null;
+  /**
+   * The percentage of shares not held by the controlling owners — the free
+   * float, and the part of a listing that can actually change hands.
+   */
+  freeFloatPct: number | null;
+  /**
+   * Market capitalisation plus net debt.
+   *
+   * Left as stated, including where that is negative: a bank funded by
+   * deposits has more cash than debt and the figure comes out below zero,
+   * which is arithmetic rather than an error, but it is also not a number
+   * worth showing next to an industrial company's. Whoever displays this has
+   * to decide that; this only reports what Datalab said.
+   */
+  enterpriseValue: number | null;
+}
+
+/** One column of the histogram: sessions whose return landed in this bucket. */
+export interface TdbReturnBucket {
+  /** The bucket's lower edge, as a daily percentage return. */
+  bucket: number;
+  count: number;
+}
+
+/**
+ * How a company's daily returns were distributed over the last trading year.
+ *
+ * The app works out its own volatility over three years, against the index,
+ * to price risk. This is a different question and a shorter window: what one
+ * day in this share has actually looked like lately, from the source's own
+ * arithmetic. The histogram is the part worth having — a standard deviation
+ * says how wide the spread is and nothing about its shape, and these are not
+ * symmetrical. KHAN's worst session in the year was -15.5% against a best of
+ * +3.8%, around a daily deviation of 1.26%.
+ */
+export interface TdbReturnDistribution {
+  companyCode: number;
+  /** Sessions the distribution is built from. 243 across every company. */
+  sessions: number;
+  meanPct: number | null;
+  dailyStdDev: number | null;
+  annualStdDev: number | null;
+  minPct: number | null;
+  maxPct: number | null;
+  /** The band a session lands in two times in three. */
+  best1Sigma: number | null;
+  worst1Sigma: number | null;
+  histogram: TdbReturnBucket[];
+}
+
 export interface TdbDividendSummary {
   companyCode: number;
   history: TdbDividend[];
@@ -205,6 +280,110 @@ export async function fetchTdbYear(year: number): Promise<TdbYear[]> {
     .filter((row) => typeof row.stockcode === "number" && typeof row.symbol === "string")
     .map((row) => toYear(row, row.stockcode!, row.symbol!, year));
 }
+
+/**
+ * The overview's non-price fields.
+ *
+ * Separate from `fetchTdbQuote`, which reads the same endpoint for the
+ * running session. That one is on the hot path — it answers a page render
+ * when marketinfo is down — and drops any company that has not traded today;
+ * these figures are about the year and are wanted whether it traded or not.
+ */
+export async function fetchTdbProfile(
+  companyCode: number,
+): Promise<TdbProfile | null> {
+  interface RawOverview {
+    stockcode?: number;
+    symbol?: string;
+    high52w?: number | null;
+    low52w?: number | null;
+    yearlyreturn?: number | null;
+    yearlystddev?: number | null;
+    avgvolume?: number | null;
+    totalvolume?: number | null;
+    marketcap?: number | null;
+    stockcnt?: number | null;
+    minoritysharesperc?: number | null;
+    companyev?: number | null;
+  }
+  const row = (await request(`/stock/${companyCode}/overview`)) as RawOverview;
+  if (typeof row.stockcode !== "number" || !row.symbol) return null;
+
+  return {
+    companyCode: row.stockcode,
+    symbol: row.symbol.trim().toUpperCase(),
+    high52w: num(row.high52w),
+    low52w: num(row.low52w),
+    yearlyReturn: num(row.yearlyreturn),
+    yearlyStdDev: num(row.yearlystddev),
+    avgVolume: num(row.avgvolume),
+    yearVolume: num(row.totalvolume),
+    marketCap: num(row.marketcap),
+    sharesOutstanding: num(row.stockcnt),
+    freeFloatPct: num(row.minoritysharesperc),
+    enterpriseValue: num(row.companyev),
+  };
+}
+
+/**
+ * The spread of this company's daily returns over the last trading year.
+ */
+export async function fetchTdbReturnDistribution(
+  companyCode: number,
+): Promise<TdbReturnDistribution | null> {
+  interface RawBucket {
+    bucket?: number;
+    count?: number;
+  }
+  interface RawDistribution {
+    n_days?: number;
+    mean?: number | null;
+    daily_std?: number | null;
+    annual_std?: number | null;
+    min?: number | null;
+    max?: number | null;
+    best_1sigma?: number | null;
+    worst_1sigma?: number | null;
+    histogram?: RawBucket[];
+  }
+  const row = (await request(
+    `/stock/${companyCode}/return-distribution`,
+  )) as RawDistribution;
+
+  const sessions = num(row.n_days) ?? 0;
+  // A distribution of nothing is not a distribution. Companies that have
+  // barely traded come back with a handful of sessions and a shape that says
+  // more about the gaps than about the share.
+  if (sessions < MIN_DISTRIBUTION_SESSIONS) return null;
+
+  // Empty buckets are kept. They are what makes the row of bars a shape:
+  // drop the sessions nobody traded at -4% and the bar for -8% slides up
+  // against the bar for -1%, which draws a fat tail as a narrow one.
+  const histogram = (row.histogram ?? [])
+    .filter((b) => num(b.bucket) !== null && num(b.count) !== null)
+    .map<TdbReturnBucket>((b) => ({ bucket: b.bucket!, count: b.count! }))
+    .sort((a, b) => a.bucket - b.bucket);
+
+  return {
+    companyCode,
+    sessions,
+    meanPct: num(row.mean),
+    dailyStdDev: num(row.daily_std),
+    annualStdDev: num(row.annual_std),
+    minPct: num(row.min),
+    maxPct: num(row.max),
+    best1Sigma: num(row.best_1sigma),
+    worst1Sigma: num(row.worst_1sigma),
+    histogram,
+  };
+}
+
+/**
+ * Below this a histogram is a scatter of single sessions rather than a
+ * shape. Datalab answers with a full trading year — 243 sessions — for
+ * every company checked, so this only guards the thin end of the exchange.
+ */
+const MIN_DISTRIBUTION_SESSIONS = 30;
 
 /**
  * What this company has paid, year by year.

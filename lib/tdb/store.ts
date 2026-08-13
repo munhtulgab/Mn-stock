@@ -1,10 +1,14 @@
 import type { Db } from "mongodb";
 import {
   fetchTdbDividends,
+  fetchTdbProfile,
+  fetchTdbReturnDistribution,
   fetchTdbYear,
   usable,
   TDB_FIRST_YEAR,
   type TdbDividend,
+  type TdbProfile,
+  type TdbReturnDistribution,
   type TdbYear,
 } from "./datalab";
 
@@ -19,14 +23,55 @@ import {
 
 const COLLECTION = "tdbAnnual";
 const DIVIDENDS = "tdbDividends";
+const PROFILES = "tdbProfiles";
 const META_KEY = "tdbSync";
 /** Annual figures; a week between refreshes is already generous. */
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Companies asked about at once.
+ *
+ * Three calls each — dividends, profile, distribution — across the eighty-odd
+ * companies Datalab covers. One at a time that is a few hundred sequential
+ * round trips inside a sync whose caller gives it twenty seconds; six at a
+ * time it is a handful of rounds. Small enough not to read as a flood at
+ * their end, which matters for an API being used without being asked.
+ */
+const COMPANY_CONCURRENCY = 6;
 
 interface TdbDividendDoc {
   companyCode: number;
   history: TdbDividend[];
   fetchedAt: Date;
+}
+
+/**
+ * A company's year at a glance, and the shape of its daily moves.
+ *
+ * One document rather than two: they come from the same sweep, are read
+ * together by the page that shows them, and neither is worth a collection of
+ * its own.
+ */
+interface TdbProfileDoc {
+  companyCode: number;
+  profile: TdbProfile | null;
+  distribution: TdbReturnDistribution | null;
+  fetchedAt: Date;
+}
+
+/** Runs `work` over `items`, at most `limit` of them in flight at a time. */
+export async function pooled<T>(
+  items: T[],
+  limit: number,
+  work: (item: T) => Promise<void>,
+): Promise<void> {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
+      await work(next);
+    }
+  });
+  await Promise.all(workers);
 }
 
 interface SyncMeta {
@@ -42,6 +87,7 @@ export async function syncTdb(db: Db, today: string): Promise<{
   years: number;
   rows: number;
   dividends: number;
+  profiles: number;
 }> {
   const thisYear = Number(today.slice(0, 4));
   let rows = 0;
@@ -74,16 +120,39 @@ export async function syncTdb(db: Db, today: string): Promise<{
   }
 
   let dividends = 0;
-  for (const companyCode of companies) {
-    const summary = await fetchTdbDividends(companyCode, thisYear).catch(() => null);
-    if (!summary) continue;
-    await db.collection<TdbDividendDoc>(DIVIDENDS).updateOne(
-      { companyCode },
-      { $set: { companyCode, history: summary.history, fetchedAt: new Date() } },
-      { upsert: true },
-    );
-    dividends++;
-  }
+  let profiles = 0;
+
+  await pooled([...companies], COMPANY_CONCURRENCY, async (companyCode) => {
+    // Three independent reads of the same company. One failing says nothing
+    // about the other two — a company with no dividend history still has a
+    // year's range — so each is caught on its own rather than the set being
+    // abandoned on the first error.
+    const [summary, profile, distribution] = await Promise.all([
+      fetchTdbDividends(companyCode, thisYear).catch(() => null),
+      fetchTdbProfile(companyCode).catch(() => null),
+      fetchTdbReturnDistribution(companyCode).catch(() => null),
+    ]);
+
+    if (summary) {
+      await db.collection<TdbDividendDoc>(DIVIDENDS).updateOne(
+        { companyCode },
+        { $set: { companyCode, history: summary.history, fetchedAt: new Date() } },
+        { upsert: true },
+      );
+      dividends++;
+    }
+
+    // Written even where one half is missing, so the other half is still
+    // read; a document with both null is not worth storing.
+    if (profile || distribution) {
+      await db.collection<TdbProfileDoc>(PROFILES).updateOne(
+        { companyCode },
+        { $set: { companyCode, profile, distribution, fetchedAt: new Date() } },
+        { upsert: true },
+      );
+      profiles++;
+    }
+  });
 
   await db
     .collection<SyncMeta>("marketSnapshots")
@@ -93,7 +162,7 @@ export async function syncTdb(db: Db, today: string): Promise<{
       { upsert: true },
     );
 
-  return { years, rows, dividends };
+  return { years, rows, dividends, profiles };
 }
 
 /** True when Datalab has not been read for a week. */
@@ -140,4 +209,38 @@ export async function getTdbDividends(
     .collection<TdbDividendDoc>(DIVIDENDS)
     .findOne({ companyCode });
   return doc?.history ?? [];
+}
+
+/** One company's year figures and return distribution, as last stored. */
+export async function getTdbProfile(
+  db: Db,
+  companyCode: number,
+): Promise<{
+  profile: TdbProfile | null;
+  distribution: TdbReturnDistribution | null;
+}> {
+  const doc = await db
+    .collection<TdbProfileDoc>(PROFILES)
+    .findOne({ companyCode }, { projection: { _id: 0 } });
+  return {
+    profile: doc?.profile ?? null,
+    distribution: doc?.distribution ?? null,
+  };
+}
+
+/**
+ * Every company's year figures, for the lists and the sector comparisons.
+ *
+ * The distribution is left out: it is twenty buckets per company and only
+ * ever read one company at a time.
+ */
+export async function getTdbProfiles(db: Db): Promise<Map<number, TdbProfile>> {
+  const docs = await db
+    .collection<TdbProfileDoc>(PROFILES)
+    .find({ profile: { $ne: null } }, { projection: { _id: 0, distribution: 0 } })
+    .toArray();
+
+  const out = new Map<number, TdbProfile>();
+  for (const doc of docs) if (doc.profile) out.set(doc.companyCode, doc.profile);
+  return out;
 }

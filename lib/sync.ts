@@ -192,7 +192,8 @@ export async function runSyncBatch(
     if (await tdbIsStale(db)) {
       const result = await syncTdb(db, ulaanbaatarDay(new Date()));
       console.log(
-        `runSyncBatch: TDB ${result.rows} company-years across ${result.years} years, ${result.dividends} dividend histories`,
+        `runSyncBatch: TDB ${result.rows} company-years across ${result.years} years, ` +
+          `${result.dividends} dividend histories, ${result.profiles} profiles`,
       );
     }
   } catch (err) {

@@ -3,7 +3,8 @@ import type { Financials, PricePoint, Security } from "@/lib/types";
 import { fetchIndexSeries } from "@/lib/mse/indices";
 import { getDividendHistory, type Dividend } from "@/lib/dividends";
 import { classifySector, resolveSector, type SectorKey } from "./sectors";
-import { getTdbDividends, getTdbLatest } from "@/lib/tdb/store";
+import { getTdbDividends, getTdbLatest, getTdbProfile } from "@/lib/tdb/store";
+import type { TdbProfile, TdbReturnDistribution } from "@/lib/tdb/datalab";
 import type { TdbDividend, TdbYear } from "@/lib/tdb/datalab";
 import {
   buildRatioViews,
@@ -83,6 +84,17 @@ export interface StockAnalysis {
   scorecards: Record<Timeframe, Scorecard>;
   risk: RiskMetrics;
   riskYears: number;
+  /**
+   * Datalab's own account of the year, where it covers this company.
+   *
+   * Beside rather than instead of the figures above: the risk metrics here
+   * are three years against the index, these are one year on their own, and
+   * two windows disagreeing is not either of them being wrong. The
+   * distribution is the part that has no equivalent — a histogram of what a
+   * single session in this share has actually looked like.
+   */
+  profile: TdbProfile | null;
+  distribution: TdbReturnDistribution | null;
   combined: CombinedSignal;
   dividends: DividendRow[];
   peers: PeerRow[];
@@ -583,12 +595,17 @@ export async function buildAnalysis(
 ): Promise<StockAnalysis> {
   const from = `${Number(today.slice(0, 4)) - HISTORY_YEARS}${today.slice(4)}`;
 
-  const [storedCandles, context, noticeDividends, tdbDividends] = await Promise.all([
-    getCandles(db, security.companyCode, from),
-    loadMarketContext(db),
-    getDividendHistory(db, security.companyCode, price).catch(() => []),
-    getTdbDividends(db, security.companyCode).catch(() => []),
-  ]);
+  const [storedCandles, context, noticeDividends, tdbDividends, tdb] =
+    await Promise.all([
+      getCandles(db, security.companyCode, from),
+      loadMarketContext(db),
+      getDividendHistory(db, security.companyCode, price).catch(() => []),
+      getTdbDividends(db, security.companyCode).catch(() => []),
+      getTdbProfile(db, security.companyCode).catch(() => ({
+        profile: null,
+        distribution: null,
+      })),
+    ]);
 
   // Today's bar goes on before anything is computed from the series, so the
   // scorecards, the risk figures and the chart all describe the same market.
@@ -598,6 +615,8 @@ export async function buildAnalysis(
   return {
     ...analysis,
     riskYears: RISK_YEARS,
+    profile: tdb.profile,
+    distribution: tdb.distribution,
     dividends: mergeDividends(noticeDividends, tdbDividends, price),
     candles,
     enoughHistory: candles.length >= MIN_CANDLES,
