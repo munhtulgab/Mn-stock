@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getSettings } from "@/lib/settings";
 import { isSettingsRequestAuthorized } from "@/lib/settingsAuth";
-import { getDashboardRows } from "@/lib/data";
+import { getDashboardRows, type DashboardRow } from "@/lib/data";
 import type { Signal } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -43,8 +43,16 @@ export async function GET(req: NextRequest) {
     ]);
 
   // What the next sync would find, without sending anything.
-  const rows = await getDashboardRows(db).catch(() => []);
-  const priced = rows.filter((r) => r.lastPrice !== null);
+  // Typed, so the narrowing below survives: a bare `[]` makes this
+  // `DashboardRow[] | never[]`, and a type predicate does not apply cleanly
+  // through a union of array types.
+  const rows = await getDashboardRows(db).catch((): DashboardRow[] => []);
+  // The same rule the notifier itself applies, so this diagnostic reports
+  // what would actually be sent rather than a longer list.
+  const priced = rows.filter(
+    (r): r is DashboardRow & { signal: Signal } =>
+      r.lastPrice !== null && r.signal !== null,
+  );
   const stored = await db
     .collection<{ companyCode: number; signal: Signal }>("signalHistory")
     .find({}, { projection: { _id: 0, companyCode: 1, signal: 1 } })

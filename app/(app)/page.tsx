@@ -85,8 +85,11 @@ export default async function HomePage() {
         lastDate: session,
         changePct: m.changePct,
         volume: row?.volume ?? null,
-        signal: row?.signal ?? "HOLD",
-        score: row?.score ?? 0,
+        // The board says what moved, not what to do about it. Where the
+        // stored row has no verdict this has none either, rather than
+        // inventing a HOLD that nothing computed.
+        signal: row?.signal ?? null,
+        score: row?.score ?? null,
         sparkline: row?.sparkline ?? [],
       };
     });
@@ -111,7 +114,12 @@ export default async function HomePage() {
   // would just surface whatever sorts first alphabetically. A long-dormant
   // listing is excluded for the same reason its indicators are meaningless.
   const topPicks = pricedRecently(rows, TOP_PICK_MAX_AGE_DAYS)
-    .filter((r) => r.lastPrice !== null && r.score !== 0)
+    .filter(
+      // A company with no verdict cannot be a pick: there is nothing to rank
+      // it by and nothing to badge it with.
+      (r): r is typeof r & { score: number; signal: NonNullable<typeof r.signal> } =>
+        r.lastPrice !== null && r.score !== null && r.score !== 0 && r.signal !== null,
+    )
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 

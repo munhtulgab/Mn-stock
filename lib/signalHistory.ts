@@ -75,7 +75,15 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
   pushErrors?: string[];
 }> {
   const rows = await getDashboardRows(db);
-  const priced = rows.filter((r) => r.lastPrice !== null);
+  // A row with no verdict is not a company whose verdict has changed. These
+  // used to carry the older rule engine's answer instead of nothing, so a
+  // run where the combined analysis failed announced its opinion of the whole
+  // market — forty-six alerts, none of them matching the pages they linked
+  // to. Nothing to compare is nothing to announce.
+  const priced = rows.filter(
+    (r): r is typeof r & { signal: NonNullable<typeof r.signal> } =>
+      r.lastPrice !== null && r.signal !== null,
+  );
 
   const historyCollection = db.collection<SignalHistoryDoc>("signalHistory");
   const existing = await historyCollection.find({}).toArray();

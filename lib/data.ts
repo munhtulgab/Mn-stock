@@ -24,8 +24,20 @@ export interface DashboardRow {
   lastDate: string | null;
   changePct: number | null;
   volume: number | null;
-  signal: Recommendation["signal"];
-  score: number;
+  /**
+   * The combined verdict, and null where it could not be built.
+   *
+   * Null rather than a second opinion. This field used to fall back to the
+   * older single-company rule engine whenever the combined analysis was
+   * missing, which meant a row — and the alert sent off the back of it —
+   * could carry a verdict the company's own page never showed. TGI was
+   * announced as АВАХ at 09:35 while its page read ХҮЛЭЭХ on a score of 2,
+   * and forty-six other alerts went out in the same run.
+   *
+   * A row with nothing to say now says nothing, and the notifier skips it.
+   */
+  signal: Recommendation["signal"] | null;
+  score: number | null;
   /** Recent closing prices, oldest first, for the dashboard-row mini chart. */
   sparkline: number[];
 }
@@ -176,21 +188,16 @@ function recentSparkline(prices: PricePoint[]): number[] {
 function buildRow(
   security: Security,
   prices: PricePoint[],
-  financials: Financials | null,
-  marketMedianPe: number | null,
   /**
    * The company's combined verdict, from the same analysis its own page
-   * shows. Absent only where that analysis could not be built, in which case
-   * the older rule engine stands in rather than leaving the row blank.
+   * shows — and the only thing this row will report. Absent where that
+   * analysis could not be built.
    */
   combined: CombinedSignal | undefined,
 ): DashboardRow {
   const last = prices.at(-1) ?? null;
   const prev = prices.length > 1 ? prices[prices.length - 2] : null;
   const changePct = sessionChangePct(last, prev);
-  const fallback = combined
-    ? null
-    : computeRecommendation(prices, financials, marketMedianPe);
 
   return {
     symbol: security.symbol,
@@ -201,8 +208,8 @@ function buildRow(
     lastDate: last?.date ?? null,
     changePct,
     volume: last?.volume ?? null,
-    signal: combined?.signal ?? fallback!.signal,
-    score: combined?.score ?? fallback!.score,
+    signal: combined?.signal ?? null,
+    score: combined?.score ?? null,
     sparkline: recentSparkline(prices),
   };
 }
@@ -250,27 +257,29 @@ async function computeDashboardRows(
   db: Db,
   options: { live?: Map<number, LiveQuote> } = {},
 ): Promise<DashboardRow[]> {
-  const [securities, financialsByCompany, pricesByCompany, combined] =
+  // No financials read here any more. They were fetched to work out a market
+  // median P/E for the rule engine that used to fill in a row's verdict, and
+  // with that gone this is one fewer full-collection read on every rebuild.
+  const [securities, pricesByCompany, combined] =
     await Promise.all([
       db
         .collection<Security>("securities")
         .find({ status: "active" })
         .sort({ symbol: 1 })
         .toArray(),
-      getLatestFinancialsByCompany(db),
       getRecentPricesForAll(db),
       // The verdict every row carries, from the analysis a company's own page
-      // shows. Never fatal: a failure here drops the whole market back to the
-      // rule engine rather than serving no list at all.
+      // shows. Never fatal: a failure here leaves the rows without a verdict
+      // rather than serving no list at all — the prices, the changes and the
+      // sparklines are still worth showing, and a second engine's answer in
+      // that column is not.
       buildCombinedSignals(db, ulaanbaatarDay(new Date()), options.live).catch(
         (err) => {
-          console.error("combined signals failed, falling back to the rule engine", err);
+          console.error("combined signals failed; rows will carry no verdict", err);
           return new Map<number, CombinedSignal>();
         },
       ),
     ]);
-
-  const marketMedianPe = getMarketMedianPe(financialsByCompany);
 
   return securities.map((security) =>
     buildRow(
@@ -280,8 +289,6 @@ async function computeDashboardRows(
         options.live?.get(security.companyCode),
         security.companyCode,
       ),
-      financialsByCompany.get(security.companyCode) ?? null,
-      marketMedianPe,
       combined.get(security.companyCode),
     ),
   );
@@ -673,3 +680,5 @@ export async function getStockDetailFresh(
   await ensurePricesCurrent(db, symbol);
   return getStockDetail(db, symbol, live);
 }
+
+export const __testing = { buildRow };

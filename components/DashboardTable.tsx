@@ -133,7 +133,7 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
                 <span className="font-semibold text-app-text text-sm">
                   {row.symbol}
                 </span>
-                <SignalBadge signal={row.signal} size="sm" />
+                {row.signal && <SignalBadge signal={row.signal} size="sm" />}
               </div>
               <div className="text-xs text-app-muted truncate">{row.name}</div>
             </div>
@@ -141,7 +141,7 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
                 the score behind the badge, the day's turnover, and a longer
                 trend line than a 56px stub. */}
             <div className="hidden lg:block shrink-0 w-20 text-right text-sm tabular-nums text-app-text">
-              {row.score}
+              {row.score ?? "—"}
             </div>
             <div className="hidden lg:block shrink-0 w-28 text-right text-sm tabular-nums text-app-text">
               {row.volume === null ? "—" : <Num value={row.volume} digits={0} />}
