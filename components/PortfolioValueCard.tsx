@@ -33,16 +33,20 @@ export default function PortfolioValueCard({
           The card changes shape between a phone and a laptop, and the animals
           need different room in each. Narrow, it is tall enough to stand them
           on the floor below the figures — hence the deep bottom padding, which
-          is what keeps the change pill off the bull's horns. Wide, it is only
+          is what keeps the change pill off the bull's back. Wide, it is only
           about 130px tall, so anything on the floor is also behind the total;
           there the side padding hands each animal a column of its own and the
           figures sit between them.
 
+          They are sized by height rather than width: the bull is a long
+          charging profile and the bear a tall rearing one, so matching their
+          widths would leave one of them half the size of the other.
+
           The middle mark would sit behind the total on a phone, where the card
           is narrow and the text fills it, so it waits for a screen with room. */}
-      <BullMark className="pointer-events-none absolute bottom-0 left-0 w-24 sm:w-28 lg:w-32 opacity-[0.15]" />
+      <BullMark className="pointer-events-none absolute bottom-1 left-1 h-16 w-auto sm:h-20 lg:h-24 opacity-[0.15]" />
       <CandlesMark className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block sm:w-28 lg:w-36 opacity-[0.12]" />
-      <BearMark className="pointer-events-none absolute bottom-0 right-0 w-24 sm:w-28 lg:w-32 opacity-[0.15]" />
+      <BearMark className="pointer-events-none absolute bottom-1 right-1 h-16 w-auto sm:h-20 lg:h-24 opacity-[0.15]" />
 
       <div className="relative flex items-center justify-between mb-1">
         <div className="text-xs font-medium opacity-70">Багцын үнэ цэнэ</div>

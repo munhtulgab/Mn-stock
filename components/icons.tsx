@@ -366,45 +366,45 @@ export function NewsIcon({ size = 18 }: IconProps) {
    already state, so they are `aria-hidden` and drawn from `currentColor` at
    whatever opacity the caller sets.
 
-   Each animal is a mask rather than a stack of filled shapes. The card sits
-   on a gradient, so an eye painted in the background colour would only match
-   at one point across it; masking punches a real hole and lets whatever is
-   behind show through.
+   The two animals are traced from the silhouettes the operator supplied
+   rather than drawn here, so they are one path each with `evenodd` filling —
+   which is what keeps the gap the bull's tucked foreleg leaves open rather
+   than filling it in. `scripts/traceSilhouette.py` is what produced them.
    ------------------------------------------------------------------------- */
 
-/** The bull: horns sweeping up and out, which is what makes it read as one. */
+/**
+ * The bull, charging: the silhouette the operator supplied, traced.
+ *
+ * Not drawn here — the outline is the reference image's own, walked pixel by
+ * pixel and simplified until it was short enough to inline. It renders within
+ * about 4% (IoU 0.95) of the original, which at a watermark's size and opacity
+ * is the original.
+ */
 export function BullMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 64 64" className={className} fill="currentColor" aria-hidden="true">
-      <mask id="mark-bull">
-        <rect width="64" height="64" fill="#000" />
-        <path fill="#fff" d="M22 27C13 26 5 18 2 6c4 4 10 9 16 12 2 2 3 5 4 9z" />
-        <path fill="#fff" d="M42 27c9-1 17-9 20-21-4 4-10 9-16 12-2 2-3 5-4 9z" />
-        <path fill="#fff" d="M32 22c9 0 15 5 15 13 0 10-7 19-15 19s-15-9-15-19c0-8 6-13 15-13z" />
-        <circle cx="26" cy="33" r="2.5" fill="#000" />
-        <circle cx="38" cy="33" r="2.5" fill="#000" />
-        <path fill="#000" d="M32 40c5 0 8 3 8 6s-3 5-8 5-8-2-8-5 3-6 8-6z" />
-      </mask>
-      <rect width="64" height="64" mask="url(#mark-bull)" />
+    <svg
+      viewBox="0 0 100.0 63.3"
+      className={className}
+      fill="currentColor"
+      fillRule="evenodd"
+      aria-hidden="true"
+    >
+      <path d="M3.7 0.0L4.3 0.3L5.2 2.0L5.2 4.2L5.7 5.2L6.0 5.5L6.4 4.9L6.4 6.6L5.6 7.6L5.5 10.0L3.4 12.9L2.5 13.4L2.4 13.9L3.3 15.7L5.8 18.2L7.2 19.1L9.7 19.9L15.8 19.5L18.5 20.3L20.6 20.3L22.8 19.1L24.1 18.7L25.3 18.7L26.0 18.3L34.5 18.3L42.7 14.0L43.8 13.9L45.9 12.8L46.6 12.7L51.8 10.0L55.9 8.8L57.3 8.7L57.9 8.4L62.8 8.4L63.5 8.8L66.5 9.2L71.8 11.1L75.6 11.6L78.8 12.8L80.2 13.7L83.2 16.7L85.6 17.2L87.0 17.9L87.9 17.9L88.6 17.5L90.3 17.5L91.6 18.0L94.1 19.2L99.0 22.9L99.5 23.4L99.3 23.5L91.9 20.3L89.8 20.3L89.4 20.6L89.2 22.2L89.6 22.9L89.4 26.4L90.8 27.8L92.5 28.7L93.8 29.1L95.9 29.1L95.1 29.5L91.0 29.5L87.9 28.4L86.9 30.0L86.9 32.9L86.1 35.2L86.0 37.0L85.7 37.4L85.2 37.2L83.7 38.1L80.5 37.4L79.7 36.3L77.2 35.8L75.4 33.6L73.3 32.3L72.8 32.4L69.9 35.7L67.6 39.2L65.0 41.9L64.9 43.0L63.7 45.6L63.7 49.3L63.3 50.0L63.3 52.0L62.6 52.9L61.6 53.4L59.1 53.0L55.6 54.6L50.0 54.2L49.3 53.8L47.2 53.8L46.4 53.4L44.6 54.6L43.8 54.7L42.6 55.8L41.4 55.9L40.2 56.9L39.1 56.9L38.7 56.6L39.0 56.0L39.0 54.7L39.9 52.5L41.4 51.1L43.0 51.0L43.8 50.3L45.6 50.8L47.8 48.2L48.6 44.3L46.9 42.2L44.9 43.0L42.0 43.0L41.3 43.4L37.2 43.4L34.6 42.3L33.9 42.3L32.9 42.8L30.8 44.9L29.3 48.0L27.3 49.2L25.6 50.9L28.0 55.1L33.8 61.4L33.8 62.1L33.0 62.5L30.4 62.5L28.2 61.7L27.6 61.0L26.7 58.4L27.0 57.3L26.6 56.5L25.5 55.7L24.6 53.7L23.4 52.0L22.0 51.0L23.5 46.4L22.9 45.6L20.9 44.2L17.8 46.0L16.0 48.1L14.6 48.6L12.1 48.6L11.6 49.0L11.2 50.0L11.2 51.2L11.6 51.9L11.6 55.2L11.3 55.8L13.9 60.6L14.3 62.4L13.0 62.9L10.1 62.9L9.2 62.5L8.0 59.2L8.0 58.6L9.2 56.4L9.2 55.5L8.8 54.8L8.8 52.3L9.2 51.6L9.2 50.0L8.4 48.0L8.9 46.9L10.3 45.5L11.2 43.7L11.2 41.6L10.8 40.9L10.8 33.6L12.4 29.8L17.0 23.5L16.0 22.4L14.3 21.5L10.1 21.5L9.5 21.1L8.4 21.1L4.7 19.0L2.9 17.2L1.6 14.3L1.6 13.2L0.0 10.7L0.0 8.5L0.5 7.4L2.3 5.6L2.4 4.9L2.1 4.4L3.0 4.8L3.6 4.3L3.6 3.6L2.9 2.9L3.2 3.1L3.6 2.5L2.9 1.6L3.6 1.3L4.2 2.2L4.8 1.9L4.7 1.1L3.7 0.0ZM53.5 47.0L54.4 47.0L55.1 47.4L56.6 47.1L58.1 48.6L58.2 49.5L59.3 50.6L59.2 51.0L56.6 51.4L55.9 51.0L54.7 49.6L53.9 49.8L51.9 49.0L53.4 47.0Z" />
     </svg>
   );
 }
 
-/** The bear: round ears and a snout, which is what makes it read as one. */
+/** The bear, reared up: the operator's second silhouette, traced the same way. */
 export function BearMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 64 64" className={className} fill="currentColor" aria-hidden="true">
-      <mask id="mark-bear">
-        <rect width="64" height="64" fill="#000" />
-        <circle cx="15" cy="17" r="9" fill="#fff" />
-        <circle cx="49" cy="17" r="9" fill="#fff" />
-        <path fill="#fff" d="M32 11c12 0 21 9 21 21s-9 21-21 21-21-9-21-21 9-21 21-21z" />
-        <circle cx="24" cy="29" r="2.5" fill="#000" />
-        <circle cx="40" cy="29" r="2.5" fill="#000" />
-        <ellipse cx="32" cy="42" rx="10" ry="7.5" fill="#000" />
-        <ellipse cx="32" cy="38.5" rx="3.6" ry="2.6" fill="#fff" />
-      </mask>
-      <rect width="64" height="64" mask="url(#mark-bear)" />
+    <svg
+      viewBox="0 0 100.0 95.1"
+      className={className}
+      fill="currentColor"
+      fillRule="evenodd"
+      aria-hidden="true"
+    >
+      <path d="M26.2 0.0L26.9 0.1L26.9 1.3L27.5 1.8L29.9 1.8L32.0 0.9L33.9 0.9L34.6 1.8L37.6 1.8L38.1 2.6L39.4 2.7L41.8 4.5L43.9 5.0L47.1 6.7L51.5 7.7L58.4 10.8L59.8 11.8L63.1 15.1L63.7 17.9L64.9 20.1L64.7 21.1L67.5 24.0L69.7 27.5L73.4 31.2L76.0 35.1L83.3 42.1L83.1 42.7L83.4 43.2L83.4 44.7L84.3 46.2L84.8 47.7L84.8 49.2L85.2 49.9L85.2 50.6L84.7 50.3L84.3 50.8L84.3 55.0L84.8 55.9L83.9 56.6L83.9 58.1L83.4 58.9L83.9 64.5L85.6 66.3L87.0 68.7L86.6 70.3L89.1 74.4L88.9 74.9L90.2 79.4L90.6 79.8L92.2 79.8L93.3 80.4L94.9 81.9L95.7 82.2L96.8 83.4L97.8 86.2L99.5 88.4L99.6 90.4L99.0 91.5L96.8 93.2L94.3 93.3L91.3 94.6L89.0 94.6L87.8 93.8L86.2 93.4L85.7 93.6L85.4 93.0L84.8 93.1L84.8 91.6L86.8 90.3L87.0 89.9L86.6 89.3L85.1 89.6L83.5 89.2L81.6 88.3L80.1 87.3L79.7 86.4L77.3 84.0L76.5 84.1L75.5 82.7L74.5 82.9L72.7 81.3L72.1 81.5L71.5 81.2L70.6 81.6L69.0 80.7L66.4 80.2L65.3 79.7L62.6 77.1L59.8 77.1L59.2 77.5L58.7 77.2L58.2 78.0L55.8 78.0L55.0 78.5L52.4 77.7L51.5 79.3L51.1 79.0L50.7 79.4L51.1 80.5L50.2 83.6L50.7 84.6L49.0 87.3L45.9 87.4L44.7 88.3L40.9 88.3L40.5 87.6L39.9 87.8L39.6 87.2L38.7 86.7L39.1 85.6L42.1 84.4L42.8 84.6L44.8 82.3L44.8 80.9L44.4 79.4L43.6 78.5L43.5 77.6L41.3 73.4L41.3 72.3L42.2 70.7L41.8 69.9L43.9 67.8L45.2 65.1L45.0 64.4L46.5 62.9L46.4 62.2L47.9 60.6L45.5 58.0L45.1 57.2L44.0 56.6L43.5 54.8L42.0 52.3L41.2 51.7L40.8 52.4L40.3 51.1L39.7 50.7L35.6 50.7L32.6 51.6L31.2 51.1L30.0 51.5L28.6 50.8L26.4 52.0L22.9 52.5L21.9 53.3L19.8 53.4L19.2 54.6L18.4 53.9L17.6 53.8L17.2 52.6L16.6 52.8L16.7 52.0L18.3 49.9L23.5 47.4L24.6 45.7L22.4 44.4L19.0 44.4L17.3 43.5L16.5 43.6L13.5 46.1L11.9 46.6L10.5 46.6L8.5 45.8L7.3 45.7L5.3 47.1L3.5 47.2L2.7 48.3L1.7 47.1L1.2 47.3L0.9 47.9L0.6 46.4L0.3 46.4L0.0 47.0L0.0 46.2L1.4 44.0L2.9 43.3L5.2 40.5L7.8 38.8L10.6 35.6L14.4 33.7L17.0 33.2L19.3 31.9L20.1 31.8L24.3 30.0L28.1 25.7L28.0 25.3L27.4 25.1L23.7 27.3L21.6 27.4L18.8 29.1L17.7 29.1L16.7 28.7L16.7 27.7L18.4 26.4L18.5 24.6L21.4 20.9L20.2 19.8L19.1 19.3L15.3 19.8L13.8 20.3L13.4 21.0L12.9 20.7L12.3 21.1L10.8 20.6L9.9 20.2L9.4 19.2L9.4 17.7L9.9 16.8L9.0 15.1L9.1 14.4L11.3 13.4L12.1 12.6L17.7 10.1L18.4 7.2L19.5 5.7L21.7 4.3L23.0 2.2L24.0 1.1L26.1 0.0Z" />
     </svg>
   );
 }
