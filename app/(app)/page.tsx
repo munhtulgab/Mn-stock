@@ -20,6 +20,7 @@ import SignalBadge from "@/components/SignalBadge";
 import Sparkline from "@/components/Sparkline";
 import Num, { Pct } from "@/components/Num";
 import PageHeader from "@/components/PageHeader";
+import { ArrowUpIcon, ArrowDownIcon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -134,14 +135,30 @@ export default async function HomePage() {
       <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
       <div className="lg:col-span-2 rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-black">
         <div className="text-xs font-medium opacity-70 mb-1">Багцын үнэ цэнэ</div>
-        <div className="text-3xl">
+        <div className="text-3xl font-semibold tracking-tight tabular-nums">
           <Num value={portfolio.totalValue} digits={2} suffix="₮" />
         </div>
-        <div className="flex items-center gap-2 mt-3 text-sm">
-          <span className="rounded-full bg-black/15 px-2.5 py-1 text-xs">
+        <div className="flex items-center gap-2 mt-3">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${
+              portfolio.todayGain >= 0
+                ? "bg-black/15 text-black"
+                : "bg-black/20 text-app-negative"
+            }`}
+          >
+            {portfolio.todayGain >= 0 ? (
+              <ArrowUpIcon size={12} />
+            ) : (
+              <ArrowDownIcon size={12} />
+            )}
             <Num value={portfolio.todayGain} digits={2} suffix="₮" showSign />
+            {portfolio.todayGainPct !== null && (
+              <span className="opacity-75 font-medium">
+                (<Num value={portfolio.todayGainPct} digits={2} suffix="%" showSign />)
+              </span>
+            )}
           </span>
-          <span className="opacity-70 text-xs">өнөөдөр</span>
+          <span className="opacity-60 text-xs">өнөөдөр</span>
         </div>
       </div>
 
