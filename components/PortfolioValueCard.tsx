@@ -24,29 +24,24 @@ export default function PortfolioValueCard({
   const gained = todayGain >= 0;
 
   return (
-    <div className="lg:col-span-2 relative overflow-hidden rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 pb-20 lg:pb-5 lg:px-40 text-black">
-      {/* The two animals the market argues in, one at each end, with the
-          candles they are arguing about between them. Watermarks: they say
+    <div className="lg:col-span-2 relative overflow-hidden rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-black">
+      {/* The two animals the market argues in, a half of the card each, with
+          the candles they are arguing about between them. Watermarks: they say
           nothing the figures do not, so they are hidden from a screen reader
           and kept faint enough that the number stays the loudest thing here.
 
-          The card changes shape between a phone and a laptop, and the animals
-          need different room in each. Narrow, it is tall enough to stand them
-          on the floor below the figures — hence the deep bottom padding, which
-          is what keeps the change pill off the bull's back. Wide, it is only
-          about 130px tall, so anything on the floor is also behind the total;
-          there the side padding hands each animal a column of its own and the
-          figures sit between them.
-
-          They are sized by height rather than width: the bull is a long
-          charging profile and the bear a tall rearing one, so matching their
-          widths would leave one of them half the size of the other.
+          Half the width each and a ceiling of the card's own height. Which of
+          the two bounds binds depends on the shape of the card, and the SVG
+          settles it: the bull is a long charging profile, the bear a tall
+          rearing one, so on a phone the bull is held by the width and the bear
+          by the height. Either way each one fills its half as far as it can
+          without distorting, and the card is split down the middle.
 
           The middle mark would sit behind the total on a phone, where the card
           is narrow and the text fills it, so it waits for a screen with room. */}
-      <BullMark className="pointer-events-none absolute bottom-1 left-1 h-16 w-auto sm:h-20 lg:h-24 opacity-[0.15]" />
+      <BullMark className="pointer-events-none absolute left-0 top-1/2 w-1/2 max-h-full -translate-y-1/2 opacity-[0.13]" />
       <CandlesMark className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block sm:w-28 lg:w-36 opacity-[0.12]" />
-      <BearMark className="pointer-events-none absolute bottom-1 right-1 h-16 w-auto sm:h-20 lg:h-24 opacity-[0.15]" />
+      <BearMark className="pointer-events-none absolute right-0 top-1/2 w-1/2 max-h-full -translate-y-1/2 opacity-[0.13]" />
 
       <div className="relative flex items-center justify-between mb-1">
         <div className="text-xs font-medium opacity-70">Багцын үнэ цэнэ</div>
