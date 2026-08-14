@@ -16,6 +16,7 @@ import { checkSignalChangesIfDue } from "@/lib/signalHistory";
 import { getMarketNews, refreshMarketNews } from "@/lib/marketNews";
 import { getSettings } from "@/lib/settings";
 import StockAvatar from "@/components/StockAvatar";
+import { BearMark, BullMark, CandlesMark } from "@/components/icons";
 import SignalBadge from "@/components/SignalBadge";
 import Sparkline from "@/components/Sparkline";
 import Num, { Pct } from "@/components/Num";
@@ -132,16 +133,30 @@ export default async function HomePage() {
           depending on the screen. Sections that carry a row of cards or a
           full-width list keep both columns; the two short lists pair up. */}
       <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
-      <div className="lg:col-span-2 rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-black">
-        <div className="text-xs font-medium opacity-70 mb-1">Багцын үнэ цэнэ</div>
-        <div className="text-3xl">
-          <Num value={portfolio.totalValue} digits={2} suffix="₮" />
-        </div>
-        <div className="flex items-center gap-2 mt-3 text-sm">
-          <span className="rounded-full bg-black/15 px-2.5 py-1 text-xs">
-            <Num value={portfolio.todayGain} digits={2} suffix="₮" showSign />
-          </span>
-          <span className="opacity-70 text-xs">өнөөдөр</span>
+      {/* The two animals the market argues in, one at each end, with the
+          candles they are arguing about between them. Watermarks: they say
+          nothing the figures do not, so they are hidden from a screen reader
+          and kept faint enough that the number stays the loudest thing here.
+
+          The middle mark is the one that would sit behind the total on a
+          phone, where the card is narrow and the text fills it — so it waits
+          for a screen with room for it. */}
+      <div className="relative overflow-hidden lg:col-span-2 rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 pb-20 sm:pb-5 text-black">
+        <BullMark className="pointer-events-none absolute bottom-0 left-0 w-24 sm:w-28 lg:w-36 opacity-[0.15]" />
+        <CandlesMark className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block sm:w-28 lg:w-36 opacity-[0.12]" />
+        <BearMark className="pointer-events-none absolute bottom-0 right-0 w-24 sm:w-28 lg:w-36 opacity-[0.15]" />
+
+        <div className="relative">
+          <div className="text-xs font-medium opacity-70 mb-1">Багцын үнэ цэнэ</div>
+          <div className="text-3xl">
+            <Num value={portfolio.totalValue} digits={2} suffix="₮" />
+          </div>
+          <div className="flex items-center gap-2 mt-3 text-sm">
+            <span className="rounded-full bg-black/15 px-2.5 py-1 text-xs">
+              <Num value={portfolio.todayGain} digits={2} suffix="₮" showSign />
+            </span>
+            <span className="opacity-70 text-xs">өнөөдөр</span>
+          </div>
         </div>
       </div>
 

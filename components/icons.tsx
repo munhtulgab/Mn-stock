@@ -358,3 +358,69 @@ export function NewsIcon({ size = 18 }: IconProps) {
     </svg>
   );
 }
+
+/* -------------------------------------------------------------------------
+   Background marks for the portfolio card.
+
+   Watermarks rather than icons: they carry no meaning the text does not
+   already state, so they are `aria-hidden` and drawn from `currentColor` at
+   whatever opacity the caller sets.
+
+   Each animal is a mask rather than a stack of filled shapes. The card sits
+   on a gradient, so an eye painted in the background colour would only match
+   at one point across it; masking punches a real hole and lets whatever is
+   behind show through.
+   ------------------------------------------------------------------------- */
+
+/** The bull: horns sweeping up and out, which is what makes it read as one. */
+export function BullMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} fill="currentColor" aria-hidden="true">
+      <mask id="mark-bull">
+        <rect width="64" height="64" fill="#000" />
+        <path fill="#fff" d="M22 27C13 26 5 18 2 6c4 4 10 9 16 12 2 2 3 5 4 9z" />
+        <path fill="#fff" d="M42 27c9-1 17-9 20-21-4 4-10 9-16 12-2 2-3 5-4 9z" />
+        <path fill="#fff" d="M32 22c9 0 15 5 15 13 0 10-7 19-15 19s-15-9-15-19c0-8 6-13 15-13z" />
+        <circle cx="26" cy="33" r="2.5" fill="#000" />
+        <circle cx="38" cy="33" r="2.5" fill="#000" />
+        <path fill="#000" d="M32 40c5 0 8 3 8 6s-3 5-8 5-8-2-8-5 3-6 8-6z" />
+      </mask>
+      <rect width="64" height="64" mask="url(#mark-bull)" />
+    </svg>
+  );
+}
+
+/** The bear: round ears and a snout, which is what makes it read as one. */
+export function BearMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} fill="currentColor" aria-hidden="true">
+      <mask id="mark-bear">
+        <rect width="64" height="64" fill="#000" />
+        <circle cx="15" cy="17" r="9" fill="#fff" />
+        <circle cx="49" cy="17" r="9" fill="#fff" />
+        <path fill="#fff" d="M32 11c12 0 21 9 21 21s-9 21-21 21-21-9-21-21 9-21 21-21z" />
+        <circle cx="24" cy="29" r="2.5" fill="#000" />
+        <circle cx="40" cy="29" r="2.5" fill="#000" />
+        <ellipse cx="32" cy="42" rx="10" ry="7.5" fill="#000" />
+        <ellipse cx="32" cy="38.5" rx="3.6" ry="2.6" fill="#fff" />
+      </mask>
+      <rect width="64" height="64" mask="url(#mark-bear)" />
+    </svg>
+  );
+}
+
+/** Four candles on a rising trend, between the two animals arguing about it. */
+export function CandlesMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} fill="currentColor" aria-hidden="true">
+      <rect x="7" y="38" width="9" height="16" rx="2.5" />
+      <rect x="10.5" y="32" width="2" height="28" />
+      <rect x="22" y="28" width="9" height="20" rx="2.5" />
+      <rect x="25.5" y="21" width="2" height="33" />
+      <rect x="37" y="32" width="9" height="15" rx="2.5" />
+      <rect x="40.5" y="26" width="2" height="27" />
+      <rect x="52" y="14" width="9" height="24" rx="2.5" />
+      <rect x="55.5" y="7" width="2" height="37" />
+    </svg>
+  );
+}
