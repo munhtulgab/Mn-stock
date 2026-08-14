@@ -37,6 +37,10 @@ export default function PortfolioValueCard({
           by the height. Either way each one fills its half as far as it can
           without distorting, and the card is split down the middle.
 
+          Whichever bound binds, each is pushed hard against its own end of the
+          card — the marks themselves carry the anchoring, so the half that is
+          left over opens towards the middle rather than the edge.
+
           The middle mark would sit behind the total on a phone, where the card
           is narrow and the text fills it, so it waits for a screen with room. */}
       <BullMark className="pointer-events-none absolute left-0 top-1/2 w-1/2 max-h-full -translate-y-1/2 opacity-[0.13]" />

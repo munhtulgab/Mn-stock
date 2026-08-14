@@ -370,6 +370,12 @@ export function NewsIcon({ size = 18 }: IconProps) {
    rather than drawn here, so they are one path each with `evenodd` filling —
    which is what keeps the gap the bull's tucked foreleg leaves open rather
    than filling it in. `scripts/traceSilhouette.py` is what produced them.
+
+   Each is anchored to the side of the box it is meant to be pinned against:
+   the bull left, the bear right. Without that, a box wider than the animal
+   centres it and leaves a margin against the edge — which is the one thing
+   these two are not allowed to have, since the card's whole arrangement is
+   them pushed out to its two ends.
    ------------------------------------------------------------------------- */
 
 /**
@@ -384,6 +390,7 @@ export function BullMark({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 100.0 63.3"
+      preserveAspectRatio="xMinYMid meet"
       className={className}
       fill="currentColor"
       fillRule="evenodd"
@@ -399,6 +406,7 @@ export function BearMark({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 100.0 95.1"
+      preserveAspectRatio="xMaxYMid meet"
       className={className}
       fill="currentColor"
       fillRule="evenodd"
