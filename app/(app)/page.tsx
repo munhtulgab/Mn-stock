@@ -19,8 +19,8 @@ import StockAvatar from "@/components/StockAvatar";
 import SignalBadge from "@/components/SignalBadge";
 import Sparkline from "@/components/Sparkline";
 import Num, { Pct } from "@/components/Num";
+import PortfolioValueCard from "@/components/PortfolioValueCard";
 import PageHeader from "@/components/PageHeader";
-import { ArrowUpIcon, ArrowDownIcon } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -133,55 +133,11 @@ export default async function HomePage() {
           depending on the screen. Sections that carry a row of cards or a
           full-width list keep both columns; the two short lists pair up. */}
       <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
-      <div className="lg:col-span-2 relative overflow-hidden rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-black">
-        <svg
-          aria-hidden
-          viewBox="0 0 160 160"
-          className="pointer-events-none absolute -right-6 -bottom-8 h-40 w-40 text-black/10"
-        >
-          <path
-            d="M8 118 L40 84 L62 100 L96 48 L128 66 L152 20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="9"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M8 118 L40 84 L62 100 L96 48 L128 66 L152 20 L152 150 L8 150 Z"
-            fill="currentColor"
-            fillOpacity="0.35"
-            stroke="none"
-          />
-          <circle cx="152" cy="20" r="9" fill="currentColor" />
-        </svg>
-        <div className="relative text-xs font-medium opacity-70 mb-1">Багцын үнэ цэнэ</div>
-        <div className="relative text-3xl font-semibold tracking-tight tabular-nums">
-          <Num value={portfolio.totalValue} digits={2} suffix="₮" />
-        </div>
-        <div className="relative flex items-center gap-2 mt-3">
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${
-              portfolio.todayGain >= 0
-                ? "bg-black/15 text-black"
-                : "bg-black/20 text-app-negative"
-            }`}
-          >
-            {portfolio.todayGain >= 0 ? (
-              <ArrowUpIcon size={12} />
-            ) : (
-              <ArrowDownIcon size={12} />
-            )}
-            <Num value={portfolio.todayGain} digits={2} suffix="₮" showSign />
-            {portfolio.todayGainPct !== null && (
-              <span className="opacity-75 font-medium">
-                (<Num value={portfolio.todayGainPct} digits={2} suffix="%" showSign />)
-              </span>
-            )}
-          </span>
-          <span className="opacity-60 text-xs">өнөөдөр</span>
-        </div>
-      </div>
+      <PortfolioValueCard
+        totalValue={portfolio.totalValue}
+        todayGain={portfolio.todayGain}
+        todayGainPct={portfolio.todayGainPct}
+      />
 
       {indices.length > 0 && (
         <div className="lg:col-span-2 grid grid-cols-3 gap-2 lg:gap-4">
