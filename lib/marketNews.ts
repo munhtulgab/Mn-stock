@@ -121,10 +121,33 @@ interface MarketNewsSnapshot {
   schemaVersion?: number;
   items: MarketNewsItem[];
   computedAt: Date;
+  /**
+   * Stories the announcer has already dealt with, newest first.
+   *
+   * Kept apart from `items` because the two answer different questions.
+   * `items` is the page, and it is capped and windowed: a story falls off it
+   * when eighty newer ones exist, and a story that falls off and later comes
+   * back looks, to anything comparing against `items` alone, like a story
+   * nobody has ever seen. This list is the announcer's own memory, and it
+   * outlives the page by several times over.
+   */
+  announced?: string[];
 }
 
 function withinWindow(date: string, from: string): boolean {
   return date.slice(0, 10) >= from;
+}
+
+/** The exchange's own newsroom: a source, but not one that is configured. */
+const EXCHANGE_SOURCE = "mse.mn";
+
+/** `https://www.example.mn/news` → `example.mn`, or the string as given. */
+function hostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }
 
 function collect(
@@ -137,12 +160,7 @@ function collect(
 
   for (const result of results) {
     if (result.status !== "ok") continue;
-    let source: string;
-    try {
-      source = new URL(result.url).hostname.replace(/^www\./, "");
-    } catch {
-      source = result.url;
-    }
+    const source = hostname(result.url);
 
     for (const headline of result.headlines) {
       if (!headline.date || !withinWindow(headline.date, from)) continue;
@@ -213,7 +231,11 @@ export async function getMarketNews(db: Db): Promise<MarketNews> {
 export interface RefreshResult {
   /** Stories the feed now holds. */
   total: number;
-  /** Of those, ones it did not hold before this run. */
+  /**
+   * Of those, ones this run met for the first time — never fetched before and
+   * never announced before, which is not the same as "not on the page a moment
+   * ago": the page is capped, and stories move off it and back.
+   */
   added: number;
 }
 
@@ -275,7 +297,7 @@ export async function refreshMarketNews(
     .map((n) => ({
       title: n.title,
       url: n.url,
-      source: "mse.mn",
+      source: EXCHANGE_SOURCE,
       date: n.date,
     }));
 
@@ -284,19 +306,19 @@ export async function refreshMarketNews(
     ...collect(results, cutoff, symbols),
   ];
 
-  // A run that was told not to read Facebook has not seen the whole feed, so
-  // replacing the stored feed with what it fetched would drop every Facebook
-  // story off the page until the next weekday run put them back. Merging
-  // instead keeps them, and costs the frequent run nothing: a story it did
-  // fetch wins over the stored copy of itself, and anything that has aged out
-  // of the window is dropped here the same as it would have been.
-  const items = (
-    options.facebook === "cached"
-      ? dedupe([...fetched, ...(cached?.items ?? [])]).filter(
-          (item) => item.date >= cutoff,
-        )
-      : fetched
-  )
+  // Merged with what is already stored rather than replacing it, on every run
+  // and not only the ones that skipped Facebook.
+  //
+  // A run only ever sees the sources that answered it. Replacing the feed with
+  // that made every timeout a deletion: one slow site during a rebuild and its
+  // stories left the page, then came back on the next run looking new — which
+  // is how a fortnight-old headline ended up being announced as it happened.
+  // A story that was fetched wins over the stored copy of itself, one that has
+  // aged out of the window is dropped here as it would have been anyway, and
+  // one from a source the operator has since removed is dropped with it.
+  const kept = new Set([EXCHANGE_SOURCE, ...settings.newsSources.map(hostname)]);
+  const items = dedupe([...fetched, ...(cached?.items ?? [])])
+    .filter((item) => item.date >= cutoff && kept.has(item.source))
     .sort(byNewest)
     .slice(0, MAX_ITEMS);
 
@@ -304,8 +326,8 @@ export async function refreshMarketNews(
   if (items.length === 0) return { total: 0, added: 0 };
 
   const stamped = stampArrivals(cached, items);
-  const added = newStories(cached, items).length;
-  await announce(db, cached, items);
+  const unseen = newStories(cached, items);
+  await announce(db, unseen);
 
   await db.collection<MarketNewsSnapshot>("marketNewsSnapshots").updateOne(
     { key: CACHE_KEY },
@@ -315,11 +337,17 @@ export async function refreshMarketNews(
         items: stamped,
         computedAt: new Date(),
         schemaVersion: SCHEMA_VERSION,
+        // Everything this run considered, announced or not — see
+        // ANNOUNCE_MAX_AGE_DAYS for why those are not the same set.
+        announced: [
+          ...unseen.map(storyKey),
+          ...(cached?.announced ?? []),
+        ].slice(0, ANNOUNCED_MEMORY),
       },
     },
     { upsert: true },
   );
-  return { total: items.length, added };
+  return { total: items.length, added: unseen.length };
 }
 
 /**
@@ -435,9 +463,43 @@ function newStories(
   items: MarketNewsItem[],
 ): MarketNewsItem[] {
   if (!previous || previous.items.length === 0) return [];
-  const known = new Set(previous.items.map(storyKey));
+  const known = new Set([
+    ...previous.items.map(storyKey),
+    ...(previous.announced ?? []),
+  ]);
   return items.filter((item) => !known.has(storyKey(item)));
 }
+
+/**
+ * How old a story may be and still be announced.
+ *
+ * Being new to the feed and being news are not the same thing. A source that
+ * has just been added, or one that failed for a run and came back, hands over
+ * everything it has — a month of it — and none of that happened just now. The
+ * reader's phone should only go off for something that did.
+ *
+ * Yesterday still counts: a story filed late in the evening is reasonably
+ * announced the next morning, and a publisher that states a day without an
+ * hour is dated to midnight.
+ */
+const ANNOUNCE_MAX_AGE_DAYS = 1;
+
+function recentEnoughToAnnounce(
+  items: MarketNewsItem[],
+  from: string,
+): MarketNewsItem[] {
+  return items.filter((item) => item.date.slice(0, 10) >= from);
+}
+
+/**
+ * How many story keys the announcer remembers.
+ *
+ * Several times the page's own cap, which is the point: the memory has to
+ * outlast the churn of stories moving off the page and back onto it. At a
+ * hundred-odd bytes a key this is a few tens of kilobytes beside a feed
+ * document that already carries eighty full headlines.
+ */
+const ANNOUNCED_MEMORY = 600;
 
 /** Headlines to name in one push before it becomes a list nobody reads. */
 const ANNOUNCE_LIMIT = 5;
@@ -445,17 +507,20 @@ const ANNOUNCE_LIMIT = 5;
 /**
  * Tells the reader what has just been published.
  *
- * A story is new if it was not in the feed last time this ran — matched on
- * the same key the feed dedupes by, so the same story arriving from a second
- * publisher is not announced twice. The very first build announces nothing:
- * thirty days of headlines are not news to somebody opening the app.
+ * Takes the stories this run found that the announcer has not dealt with
+ * before and announces the ones that are actually recent. The others are
+ * silently accepted as dealt with: the caller records every story passed in
+ * here, announced or not, which is what stops the next run reconsidering
+ * them one by one for the rest of the month.
  */
 async function announce(
   db: Db,
-  previous: MarketNewsSnapshot | null,
-  items: MarketNewsItem[],
+  unseen: MarketNewsItem[],
 ): Promise<void> {
-  const fresh = newStories(previous, items);
+  const fresh = recentEnoughToAnnounce(
+    unseen,
+    ulaanbaatarDaysAgo(ANNOUNCE_MAX_AGE_DAYS),
+  );
   if (fresh.length === 0) return;
 
   await recordNotifications(
@@ -512,3 +577,13 @@ export async function markNewsSeen(db: Db, userId: string): Promise<void> {
     .collection<User>("users")
     .updateOne({ _id: userId } as never, { $set: { newsSeenAt: new Date() } });
 }
+
+export const __testing = {
+  newStories,
+  recentEnoughToAnnounce,
+  storyKey,
+  dedupe,
+  hostname,
+  ANNOUNCE_MAX_AGE_DAYS,
+  ANNOUNCED_MEMORY,
+};
