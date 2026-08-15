@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/mongodb";
 import { getSettings, maskSettings } from "@/lib/settings";
 import SettingsForm from "@/components/SettingsForm";
+import StatementImport from "@/components/StatementImport";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,9 @@ export default async function SettingsPage() {
   return (
     <div className="px-4 pt-6 pb-4">
       <h1 className="text-xl font-bold text-app-text mb-4">Тохиргоо</h1>
+      <div className="mb-4">
+        <StatementImport />
+      </div>
       <SettingsForm initial={masked} />
     </div>
   );

@@ -47,15 +47,19 @@ async function main() {
 
   const statement = JSON.parse(readFileSync(file, "utf8")) as {
     source?: string;
+    excluded?: string[];
     transactions: StatementFill[];
   };
   const fills = statement.transactions;
-  const positions = positionsFrom(fills);
+  const positions = positionsFrom(fills, statement.excluded ?? []);
   const summary = summarise(fills, positions);
 
   console.log(`${file}: ${summary.fills} fills (${summary.bought} buys, ${summary.sold} sells)`);
   console.log(`  ${positions.length} positions, ${money(summary.costBasis)} ₮ cost basis`);
-  console.log(`  ${money(summary.fees)} ₮ in commission over the statement's life`);
+  console.log(`  ${money(summary.fees)} ₮ in commission, which the cost above includes`);
+  if (statement.excluded?.length) {
+    console.log(`  held but not valued: ${statement.excluded.join(", ")}`);
+  }
   if (summary.closed.length > 0) {
     console.log(`  closed out and not imported: ${summary.closed.join(", ")}`);
   }

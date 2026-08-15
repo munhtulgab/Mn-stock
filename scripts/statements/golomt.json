@@ -4,6 +4,66 @@
   "2022-06-08",
   "2026-08-12"
  ],
+ "excluded": [
+  "ETT"
+ ],
+ "excludedReason": "ETT: төрөөс хуваарилсан, ХБ-ийн самбар дээр арилжаалагддаггүй тул брокерын үнэлгээнд ч ордоггүй",
+ "holdings": [
+  {
+   "symbol": "APU",
+   "companyCode": 90,
+   "quantity": 1500,
+   "avgCost": 1035.7997
+  },
+  {
+   "symbol": "ETT",
+   "companyCode": 535,
+   "quantity": 1072,
+   "avgCost": 0.0
+  },
+  {
+   "symbol": "GLMT",
+   "companyCode": 562,
+   "quantity": 151,
+   "avgCost": 1132.5762
+  },
+  {
+   "symbol": "KHAN",
+   "companyCode": 563,
+   "quantity": 520,
+   "avgCost": 1123.2558
+  },
+  {
+   "symbol": "MFC",
+   "companyCode": 551,
+   "quantity": 5300,
+   "avgCost": 80.534
+  },
+  {
+   "symbol": "MLG",
+   "companyCode": 569,
+   "quantity": 2717,
+   "avgCost": 153.9495
+  },
+  {
+   "symbol": "NEH",
+   "companyCode": 71,
+   "quantity": 4385,
+   "avgCost": 11.3835
+  },
+  {
+   "symbol": "SUU",
+   "companyCode": 135,
+   "quantity": 326,
+   "avgCost": 608.4785
+  },
+  {
+   "symbol": "TUM",
+   "companyCode": 549,
+   "quantity": 1132,
+   "avgCost": 370.8477
+  }
+ ],
  "transactions": [
   {
    "date": "2022-06-08",
@@ -1414,62 +1474,6 @@
    "price": 25.99,
    "settled": 183.75,
    "fee": 1.82
-  }
- ],
- "holdings": [
-  {
-   "symbol": "APU",
-   "companyCode": 90,
-   "quantity": 1500,
-   "avgCost": 1035.7997
-  },
-  {
-   "symbol": "ETT",
-   "companyCode": 535,
-   "quantity": 1072,
-   "avgCost": 0.0
-  },
-  {
-   "symbol": "GLMT",
-   "companyCode": 562,
-   "quantity": 151,
-   "avgCost": 1132.5762
-  },
-  {
-   "symbol": "KHAN",
-   "companyCode": 563,
-   "quantity": 520,
-   "avgCost": 1123.2558
-  },
-  {
-   "symbol": "MFC",
-   "companyCode": 551,
-   "quantity": 5300,
-   "avgCost": 80.534
-  },
-  {
-   "symbol": "MLG",
-   "companyCode": 569,
-   "quantity": 2717,
-   "avgCost": 153.9495
-  },
-  {
-   "symbol": "NEH",
-   "companyCode": 71,
-   "quantity": 4385,
-   "avgCost": 11.3835
-  },
-  {
-   "symbol": "SUU",
-   "companyCode": 135,
-   "quantity": 326,
-   "avgCost": 608.4785
-  },
-  {
-   "symbol": "TUM",
-   "companyCode": 549,
-   "quantity": 1132,
-   "avgCost": 370.8477
   }
  ]
 }
