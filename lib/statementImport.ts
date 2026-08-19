@@ -41,7 +41,24 @@ export interface StatementPosition {
   avgCost: number;
 }
 
-export class StatementError extends Error {}
+/**
+ * A statement that cannot be read, said in words the uploader can act on.
+ *
+ * Told apart by name as well as by prototype. `instanceof` is the obvious
+ * check and it is one module instance away from silently failing — a bundler
+ * that loads this file twice would turn every "this file is not a PDF" into
+ * an unexplained 500. The name survives that.
+ */
+export class StatementError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StatementError";
+  }
+}
+
+export function isStatementError(err: unknown): err is StatementError {
+  return err instanceof StatementError || (err as Error)?.name === "StatementError";
+}
 
 /**
  * Runs the fills in order and returns what is left holding.
