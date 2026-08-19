@@ -80,8 +80,17 @@ const RULES: Rule[] = [
       `${p}: Хариу токений хязгаараас давж таслагдсан. Дахин оролдоход ихэвчлэн засагдана.`,
   },
   {
+    // Above the 503 rule: a retired model also answers "not found", and
+    // telling the reader to wait for a model that is never coming back sends
+    // them to press the button until they give up.
+    test: (m) => /model_not_found|байхгүй болсон|does not exist or you do not have access/i.test(m),
+    message: (p) =>
+      `${p}: Тохируулсан загвар үйлчилгээнд байхгүй болжээ. Систем боломжит загварыг өөрөө сонгож дахин оролдох ба энэ нь давтагдвал API түлхүүрийн эрхээ шалгана уу.`,
+  },
+  {
     test: (m) => /503|Service Unavailable|overloaded/i.test(m),
-    message: (p) => `${p}: Сервер түр завгүй байна (503). Түр хүлээгээд дахин оролдоно уу.`,
+    message: (p) =>
+      `${p}: Сервер завгүй байна (503). Хэдэн удаа дахин оролдсон ч завгүй хэвээр байна — түр хүлээгээд дахин үзнэ үү.`,
   },
   {
     test: (m) => /timed?.?out|AbortError|ETIMEDOUT/i.test(m),

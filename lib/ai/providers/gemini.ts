@@ -1,6 +1,7 @@
 import { MSE_ANALYST_SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
 import { parseAiSignal } from "@/lib/ai/schema";
 import { withRetryAfter } from "@/lib/ai/retryAfter";
+import { TRANSIENT_RETRIES, isTransientStatus, retryDelayMs, sleep } from "./transient";
 import type { ProviderResult } from "./types";
 
 interface GeminiErrorDetail {
@@ -28,27 +29,35 @@ export async function callGemini(
 ): Promise<ProviderResult> {
   try {
     const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: MSE_ANALYST_SYSTEM_PROMPT }] },
-          contents: [{ role: "user", parts: [{ text: userMessage }] }],
-          generationConfig: {
-            temperature: 0.3,
-            // Generous headroom: this model spends an unpredictable chunk of
-            // this same budget on hidden "thinking" tokens before writing
-            // any output (observed 800-1500+ tokens), so a tight limit here
-            // silently truncates the JSON output mid-string on longer runs.
-            maxOutputTokens: 8192,
-            responseMimeType: "application/json",
-          },
-        }),
-        signal: AbortSignal.timeout(45_000),
-      },
-    );
+    let res: Response;
+    // Google answers 503 "The model is overloaded" often enough that treating
+    // it as an answer cost the panel an analyst on a regular basis. It clears
+    // in about a second; see `transient` for why 429 is not retried here.
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: MSE_ANALYST_SYSTEM_PROMPT }] },
+            contents: [{ role: "user", parts: [{ text: userMessage }] }],
+            generationConfig: {
+              temperature: 0.3,
+              // Generous headroom: this model spends an unpredictable chunk of
+              // this same budget on hidden "thinking" tokens before writing
+              // any output (observed 800-1500+ tokens), so a tight limit here
+              // silently truncates the JSON output mid-string on longer runs.
+              maxOutputTokens: 8192,
+              responseMimeType: "application/json",
+            },
+          }),
+          signal: AbortSignal.timeout(45_000),
+        },
+      );
+      if (res.ok || !isTransientStatus(res.status) || attempt >= TRANSIENT_RETRIES) break;
+      await sleep(retryDelayMs(attempt + 1));
+    }
 
     if (!res.ok) {
       const body = await res.text();
