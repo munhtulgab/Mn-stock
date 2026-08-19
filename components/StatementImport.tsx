@@ -47,14 +47,31 @@ export default function StatementImport() {
   const [busy, setBusy] = useState<"preview" | "import" | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
+  /**
+   * Added to what is already chosen, not swapped for it.
+   *
+   * Four years of statements are four files, and they are rarely all in one
+   * folder — one comes out of Files, the next off a mail attachment. A picker
+   * that replaces the selection each time makes gathering them impossible,
+   * and gathering them is the requirement: a statement that starts mid-life
+   * cannot say what the shares it opens with cost.
+   */
   function choose(list: FileList | null) {
-    setFiles(list ? [...list] : []);
+    if (!list || list.length === 0) return;
+    setFiles((current) => {
+      const seen = new Set(current.map((f) => `${f.name}:${f.size}`));
+      const added = [...list].filter((f) => !seen.has(`${f.name}:${f.size}`));
+      return [...current, ...added];
+    });
     setResult(null);
     setError(null);
+    // Chosen again is chosen again, even if it is the same file: without this
+    // the picker fires nothing the second time and the button looks dead.
+    if (input.current) input.current.value = "";
   }
 
-  function remove(name: string) {
-    setFiles((current) => current.filter((f) => f.name !== name));
+  function remove(file: File) {
+    setFiles((current) => current.filter((f) => f !== file));
     setResult(null);
   }
 
@@ -107,19 +124,19 @@ export default function StatementImport() {
       >
         {files.length === 0
           ? "PDF файл сонгох"
-          : `${files.length} файл сонгосон — өөрчлөх`}
+          : `${files.length} файл сонгосон — өөр файл нэмэх`}
       </button>
 
       {files.length > 0 && (
         <ul className="mt-2 divide-y divide-app-border rounded-xl border border-app-border text-sm">
           {files.map((file) => (
-            <li key={file.name} className="flex items-center gap-2 px-3 py-2">
+            <li key={`${file.name}:${file.size}`} className="flex items-center gap-2 px-3 py-2">
               <span className="flex-1 truncate text-app-text">{file.name}</span>
               <span className="text-xs text-app-muted tabular-nums">
                 {Math.round(file.size / 1024)}KB
               </span>
               <button
-                onClick={() => remove(file.name)}
+                onClick={() => remove(file)}
                 aria-label={`${file.name}-г хасах`}
                 className="text-app-muted hover:text-app-text"
               >
