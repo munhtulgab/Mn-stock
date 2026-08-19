@@ -114,6 +114,16 @@ export interface ParsedStatements {
   to: string;
   /** How many dealing days were checked against the broker's own balances. */
   reconciledDays: number;
+  /**
+   * Shares already held when the earliest uploaded statement opens.
+   *
+   * A statement covering one stretch of an account's life says what was held
+   * before it starts, but not what was paid for it. The quantities here are
+   * therefore known and their cost is not, which is the difference between a
+   * portfolio and a portfolio with a made-up profit — so the caller is handed
+   * this rather than left to assume the history began at zero.
+   */
+  carriedIn: { symbol: string; quantity: number }[];
 }
 
 /**
@@ -157,9 +167,29 @@ export function parseGolomtStatements(texts: string[]): ParsedStatements {
   const lastRowOfDay = new Map<string, number>();
   rows.forEach((row, index) => lastRowOfDay.set(`${row.symbol}|${row.date}`, index));
 
-  // The check that makes this parse worth trusting: the fills, added up, have
-  // to land where the broker says the account stood at the end of each day.
-  const position = new Map<string, number>();
+  // What was already held when these statements open.
+  //
+  // A statement need not be the account's first. The balance it carries in is
+  // not printed anywhere, but it follows from the first day it does print: the
+  // day closed where it says, and it got there from the fills it lists, so
+  // whatever is left over was there beforehand. Read per day rather than per
+  // row, because a row's opening is that row's fill subtracted from the close
+  // and not the morning's position.
+  const carried = new Map<string, number>();
+  const firstDate = new Map<string, string>();
+  for (const row of rows) {
+    if (!firstDate.has(row.symbol)) firstDate.set(row.symbol, row.date);
+  }
+  for (const [symbol, date] of firstDate) {
+    const day = rows.filter((r) => r.symbol === symbol && r.date === date);
+    const net = day.reduce((sum, r) => sum + (r.side === "BUY" ? 1 : -1) * r.quantity, 0);
+    carried.set(symbol, day[day.length - 1].closing - net);
+  }
+
+  // The check that makes this parse worth trusting: the fills, added up from
+  // what was carried in, have to land where the broker says the account stood
+  // at the end of each day.
+  const position = new Map(carried);
   let reconciledDays = 0;
   rows.forEach((row, index) => {
     const held = (position.get(row.symbol) ?? 0) + (row.side === "BUY" ? 1 : -1) * row.quantity;
@@ -167,9 +197,11 @@ export function parseGolomtStatements(texts: string[]): ParsedStatements {
 
     if (lastRowOfDay.get(`${row.symbol}|${row.date}`) !== index) return;
     if (Math.abs(held - row.closing) > 0.001) {
+      // Not a carried-in balance — that is accounted for above — so the run
+      // of statements has a hole in the middle, or the same one twice.
       throw new StatementError(
         `${row.symbol} ${row.date}: гүйлгээнүүд ${held} ширхэг гэж гарч байхад хуулга ` +
-          `${row.closing} гэж бичжээ. Хуулга дутуу эсвэл давхардсан байж магадгүй.`,
+          `${row.closing} гэж бичжээ. Хугацааны дунд нь хуулга дутуу эсвэл давхардсан байна.`,
       );
     }
     reconciledDays++;
@@ -192,5 +224,9 @@ export function parseGolomtStatements(texts: string[]): ParsedStatements {
     from: all.from,
     to: all.to,
     reconciledDays,
+    carriedIn: [...carried.entries()]
+      .filter(([, quantity]) => Math.round(quantity * 1e4) !== 0)
+      .map(([symbol, quantity]) => ({ symbol, quantity }))
+      .sort((a, b) => a.symbol.localeCompare(b.symbol)),
   };
 }

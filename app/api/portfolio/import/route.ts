@@ -54,7 +54,16 @@ export async function POST(req: NextRequest) {
   const cashField = Number(form.get("cash"));
   const cash = Number.isFinite(cashField) && cashField >= 0 ? cashField : 0;
 
-  const uploads = form.getAll("files").filter((f): f is File => f instanceof File);
+  // Duck-typed rather than `instanceof File`. The uploaded part arrives as
+  // whatever `File` the runtime's own FormData built, and that is not always
+  // the `File` this module closed over — a browser that plainly attached a
+  // statement was being told it had attached nothing.
+  const uploads = form
+    .getAll("files")
+    .filter(
+      (part): part is File =>
+        typeof part === "object" && part !== null && "arrayBuffer" in part,
+    );
   if (uploads.length === 0) {
     return NextResponse.json(
       { error: "Хуулгын PDF файлаа хавсаргана уу." },
@@ -64,6 +73,7 @@ export async function POST(req: NextRequest) {
 
   let fills: StatementFill[];
   let period: { from: string; to: string; reconciledDays: number };
+  let carriedIn: { symbol: string; quantity: number }[] = [];
   try {
     const texts: string[] = [];
     for (const file of uploads) {
@@ -73,12 +83,32 @@ export async function POST(req: NextRequest) {
     }
     const parsed = parseGolomtStatements(texts);
     fills = parsed.fills;
+    carriedIn = parsed.carriedIn;
     period = { from: parsed.from, to: parsed.to, reconciledDays: parsed.reconciledDays };
   } catch (err) {
     if (isStatementError(err)) {
       return NextResponse.json({ error: err.message }, { status: 422 });
     }
     throw err;
+  }
+
+  // Shares that were already held when the earliest upload opens. Their
+  // quantity is known and what was paid for them is not, so importing here
+  // would put a portfolio on screen whose profit is invented. The earlier
+  // statements are the fix, and the reader has them or does not.
+  if (carriedIn.length > 0) {
+    const missing = carriedIn
+      .map((c) => `${c.symbol} ${c.quantity.toLocaleString("en-US")}ш`)
+      .join(", ");
+    return NextResponse.json(
+      {
+        error:
+          `Энэ хуулга ${period.from}-нд аль хэдийн эзэмшиж байсан хувьцаанаас эхэлж байна ` +
+          `(${missing}). Тэдгээрийг ямар үнээр авсан нь энд бичигдээгүй тул ашиг/алдагдал ` +
+          `буруу гарна — өмнөх хугацааны хуулгуудаа хамт хавсаргана уу.`,
+      },
+      { status: 422 },
+    );
   }
 
   // The app keys on its own company code and the broker's need not agree, so

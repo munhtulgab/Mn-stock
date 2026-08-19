@@ -164,3 +164,35 @@ test("a statement whose opening column is a real running balance stops", () => {
     (err: Error) => err instanceof StatementError && /бүтэц өөрчлөгдсөн/.test(err.message),
   );
 });
+
+test("a statement that opens mid-life says what it opened holding", () => {
+  // The 2026 statement on its own: the account already held APU when it
+  // starts, and what was paid for those shares is in an earlier file.
+  const text =
+    HEADER +
+    row(1, "2026-02-25", "АПУ ХК", "APU", 90, 1156, 50, 0, 900, 45_450, 450) +
+    row(2, "2026-03-09", "АПУ ХК", "APU", 90, 1200, 44, 0, 910, 40_440, 400);
+
+  const { carriedIn, reconciledDays } = parseGolomtStatements([text]);
+  // 1,156 at the close of the first day, of which 50 were bought that day.
+  assert.deepEqual(carriedIn, [{ symbol: "APU", quantity: 1106 }]);
+  assert.equal(reconciledDays, 2);
+});
+
+test("a carried-in balance is read from the day, not from a row", () => {
+  // Two fills on the opening day. Taking the first row's stated opening would
+  // call it 1,150 carried in; the day bought 50 and 6, so it is 1,100.
+  const text =
+    HEADER +
+    row(1, "2026-02-25", "АПУ ХК", "APU", 90, 1156, 50, 0, 900, 45_450, 450) +
+    row(2, "2026-02-25", "АПУ ХК", "APU", 90, 1156, 6, 0, 900, 5_454, 54);
+
+  const { carriedIn } = parseGolomtStatements([text]);
+  assert.deepEqual(carriedIn, [{ symbol: "APU", quantity: 1100 }]);
+});
+
+test("a history that starts at zero carries nothing in", () => {
+  const text =
+    HEADER + row(1, "2022-06-08", "АПУ ХК", "APU", 90, 50, 50, 0, 1354, 68_377, 677);
+  assert.deepEqual(parseGolomtStatements([text]).carriedIn, []);
+});
