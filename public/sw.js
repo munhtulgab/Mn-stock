@@ -11,7 +11,14 @@ self.addEventListener("activate", (event) => {
 // Minimal network-first fetch handler — required for PWA installability
 // criteria (a controlling service worker with a fetch handler). We don't do
 // offline caching of dynamic/price data since it goes stale immediately.
+//
+// GET only, and deliberately so. Re-issuing `event.request` is safe for a
+// request with no body and is not safe for one that has: on iOS the body of a
+// re-fetched POST goes missing, which is how a statement PDF that was plainly
+// attached reached the server as an empty request and came back "attach a
+// statement". Anything with a body is left for the browser to send itself.
 self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request)),
   );

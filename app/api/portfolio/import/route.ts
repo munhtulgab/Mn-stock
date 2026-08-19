@@ -43,10 +43,14 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = user._id!;
 
+  // Told apart from "no file was chosen" below on purpose. The two have
+  // nothing to do with each other — this one means the upload never arrived,
+  // and answering both with "attach a statement" sent the reader to attach a
+  // statement they had already attached.
   const form = await req.formData().catch(() => null);
   if (!form) {
     return NextResponse.json(
-      { error: "Хуулгын PDF файлаа хавсаргана уу." },
+      { error: "Хүсэлт хоосон ирлээ — файл серверт хүрсэнгүй. Хуудсаа сэргээгээд дахин оролдоно уу." },
       { status: 400 },
     );
   }
@@ -66,7 +70,7 @@ export async function POST(req: NextRequest) {
     );
   if (uploads.length === 0) {
     return NextResponse.json(
-      { error: "Хуулгын PDF файлаа хавсаргана уу." },
+      { error: "Хуулгын PDF файлаа сонгоно уу." },
       { status: 400 },
     );
   }
