@@ -21,6 +21,8 @@ interface Result {
   closed: string[];
   excluded: string[];
   files: number;
+  added: number;
+  kept: number;
   from: string;
   to: string;
   reconciledDays: number;
@@ -36,9 +38,9 @@ interface Result {
  *
  * Two buttons rather than one, because the safe half of this is worth having
  * on its own: the first shows what would be written and writes nothing, and
- * only the second replaces what is there. Importing is not additive — it
- * clears the paper positions the app opened with — so it is worth seeing the
- * list before agreeing to it.
+ * only the second writes. Statements already imported are kept — a new file
+ * contributes its own period — but the positions are rebuilt from the whole
+ * history each time, so seeing the list before agreeing to it is worth a tap.
  */
 export default function StatementImport() {
   const [files, setFiles] = useState<File[]>([]);
@@ -103,9 +105,10 @@ export default function StatementImport() {
         <h2 className="font-semibold text-app-text">Багц импортлох</h2>
       </div>
       <p className="text-xs text-app-muted mb-3">
-        Голомт Капиталын гүйлгээний түүхийн PDF-ээ сонгоно уу. Хугацаа нь
-        давхцахгүй бол хэдэн ч файл болно. Одоо байгаа багцыг{" "}
-        <strong className="text-app-text">солино</strong>, бэлэн мөнгө 0 болно.
+        Голомт Капиталын гүйлгээний түүхийн PDF-ээ сонгоно уу. Өмнө оруулсан
+        хуулгууд{" "}<strong className="text-app-text">хэвээр үлдэнэ</strong> —
+        зөвхөн шинэ хугацааных нь нэмэгдэнэ. Нэг хугацааг дахин оруулбал
+        тэр хугацаа нь шинэчлэгдэнэ.
       </p>
 
       <input
@@ -201,7 +204,9 @@ export default function StatementImport() {
             </div>
           </div>
           <p className="mt-2 text-xs text-app-muted">
-            {result.from} — {result.to} · {result.fills} гүйлгээ · шимтгэл{" "}
+            {result.from} — {result.to} · шинээр {result.added}
+            {result.kept > 0 && `, өмнөхөөс ${result.kept}`} гүйлгээ · нийт{" "}
+            {result.fills} · шимтгэл{" "}
             <Num value={result.fees} digits={0} suffix="₮" /> · брокерын үлдэгдэлтэй{" "}
             {result.reconciledDays} өдөр тулгав
             {result.closed.length > 0 && ` · зарж дуусгасан: ${result.closed.join(", ")}`}
