@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   Bar,
@@ -29,14 +29,33 @@ import { buildPlotRows, type PlotRow } from "@/lib/analysis/plot";
  * with fourteen things on it at once is a chart nobody can read.
  */
 
-const UP = "#00d16c";
-const DOWN = "#ff5a5f";
-const GRID = "#252932";
-const AXIS = "#8b90a0";
+/*
+ * Taken from the theme rather than named here.
+ *
+ * SVG attributes read custom properties like any other, so the chart follows
+ * whichever palette is in force. Written out as hex, the price line was white
+ * — which on a white card in daylight is a chart with no chart in it.
+ */
+const UP = "var(--app-positive)";
+const DOWN = "var(--app-negative)";
+const GRID = "var(--app-divider)";
+const AXIS = "var(--app-muted)";
+const INK = "var(--app-text)";
 const Y_GUTTER = 46;
 
 /** Beyond this the bars are narrower than a pixel; step the interval up. */
 const MAX_BARS = 400;
+
+/**
+ * A row of chips that scrolls rather than wraps.
+ *
+ * Six moving averages and nine panes do not fit a phone, and wrapping them
+ * costs a line of height that changes with the screen — so the row keeps its
+ * height and the finger moves along it. The scrollbar is hidden because on a
+ * touch screen it is only a grey line taking a pixel from the chips.
+ */
+const ROW_SCROLL =
+  "-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 type ChartType = "candle" | "line";
 
@@ -110,7 +129,15 @@ const PANES: { key: PaneKey; label: string }[] = [
  * half of chart before the reader has asked for anything.
  */
 const DEFAULT_OVERLAYS = ["ma20", "ma50", "bb"];
-const DEFAULT_PANES: PaneKey[] = ["volume", "rsi", "macd"];
+
+/**
+ * None.
+ *
+ * Three panes opened by default, which is a page and a half of oscillator
+ * under a chart somebody opened to look at a price. An indicator is worth
+ * seeing when it has been asked for; until then the chart is the chart.
+ */
+const DEFAULT_PANES: PaneKey[] = [];
 
 function shortNumber(value: number): string {
   const magnitude = Math.abs(value);
@@ -206,12 +233,12 @@ const xAxis = {
 
 const tooltip = {
   contentStyle: {
-    background: "#171a21",
+    background: "var(--app-card)",
     border: `1px solid ${GRID}`,
     borderRadius: 12,
     fontSize: 11,
   },
-  labelStyle: { color: "#ffffff", fontWeight: 600 },
+  labelStyle: { color: INK, fontWeight: 600 },
 };
 
 function Pane({
@@ -303,7 +330,7 @@ function Pane({
               {yAxis({ domain: [0, "auto"] })}
               {/* Below 20 the ADX says there is no trend to be with. */}
               <ReferenceLine y={20} stroke={AXIS} strokeDasharray="3 3" strokeOpacity={0.5} />
-              <Line type="monotone" dataKey="adx" stroke="#ffffff" strokeWidth={1.4} dot={false} isAnimationActive={false} connectNulls name="ADX" />
+              <Line type="monotone" dataKey="adx" stroke={INK} strokeWidth={1.4} dot={false} isAnimationActive={false} connectNulls name="ADX" />
               <Line type="monotone" dataKey="plusDi" stroke={UP} strokeWidth={1} dot={false} isAnimationActive={false} connectNulls name="+DI" />
               <Line type="monotone" dataKey="minusDi" stroke={DOWN} strokeWidth={1} dot={false} isAnimationActive={false} connectNulls name="−DI" />
             </>
@@ -336,25 +363,63 @@ function Pane({
   );
 }
 
-export default function PriceChartPro({ candles }: { candles: Candle[] }) {
+export default function PriceChartPro({
+  candles,
+  symbol,
+}: {
+  candles: Candle[];
+  /** Needed only to fetch the rest of the history for the whole-life range. */
+  symbol: string;
+}) {
   // Opens on the line and on three years, as asked.
   const [type, setType] = useState<ChartType>("line");
   const [rangeIndex, setRangeIndex] = useState(DEFAULT_RANGE);
   const [overlays, setOverlays] = useState<string[]>(DEFAULT_OVERLAYS);
   const [panes, setPanes] = useState<PaneKey[]>(DEFAULT_PANES);
+  /** The full stored series, once somebody has asked to see all of it. */
+  const [everything, setEverything] = useState<Candle[] | null>(null);
 
   const range = RANGES[rangeIndex];
 
+  // The page is sent with twelve years, which is what the scorecards need.
+  // "Бүх цаг үе" means more than that for anything listed longer ago, so the
+  // rest is fetched the first time that range is picked — and kept, so
+  // moving off it and back does not ask again.
+  useEffect(() => {
+    if (range.days !== null || everything) return;
+    let cancelled = false;
+    fetch(`/api/securities/${symbol}/candles`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.candles) && data.candles.length > 0) {
+          setEverything(data.candles as Candle[]);
+        }
+      })
+      // The twelve years already on the page are a reasonable answer to fall
+      // back on, and saying so louder than that helps nobody.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [range.days, everything, symbol]);
+
   const { rows, timeframe } = useMemo(() => {
-    let windowed = candles;
+    // Whichever is longer. The stored series ends at the last close, while
+    // the page's own candles may carry today's live bar on the end, so the
+    // two are joined rather than swapped.
+    const source =
+      range.days === null && everything
+        ? [...everything, ...candles.filter((c) => c.date > (everything.at(-1)?.date ?? ""))]
+        : candles;
+    let windowed = source;
     if (range.days !== null) {
       const from = new Date();
       from.setUTCDate(from.getUTCDate() - range.days);
       const key = from.toISOString().slice(0, 10);
-      const inRange = candles.filter((c) => c.date >= key);
+      const inRange = source.filter((c) => c.date >= key);
       // A thinly traded listing can have almost nothing inside a short
       // window; its last few dozen prints beat an empty box.
-      windowed = inRange.length >= 5 ? inRange : candles.slice(-60);
+      windowed = inRange.length >= 5 ? inRange : source.slice(-60);
     }
 
     const order: Timeframe[] = ["1D", "1W", "1M"];
@@ -369,7 +434,7 @@ export default function PriceChartPro({ candles }: { candles: Candle[] }) {
     // shows weekly averages — the same figures the scorecard reports when it
     // is set to the same interval.
     return { rows: buildPlotRows(bars), timeframe: chosen };
-  }, [candles, range]);
+  }, [candles, everything, range]);
 
   const toggle = <T extends string>(list: T[], key: T, set: (next: T[]) => void) =>
     set(list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
@@ -400,7 +465,7 @@ export default function PriceChartPro({ candles }: { candles: Candle[] }) {
 
       {/* How far back, on its own line so eight ranges do not crowd the
           title on a phone. It scrolls rather than wrapping to two rows. */}
-      <div className="-mx-1 mb-2 flex gap-1 overflow-x-auto px-1 pb-1">
+      <div className={`mb-2 ${ROW_SCROLL}`}>
         {RANGES.map((option, i) => (
           <span key={option.label} className="shrink-0">
             <Chip active={i === rangeIndex} onClick={() => setRangeIndex(i)}>
@@ -459,7 +524,7 @@ export default function PriceChartPro({ candles }: { candles: Candle[] }) {
               <Line
                 type="monotone"
                 dataKey="close"
-                stroke="#ffffff"
+                stroke={INK}
                 strokeWidth={1.5}
                 dot={false}
                 isAnimationActive={false}
@@ -489,17 +554,21 @@ export default function PriceChartPro({ candles }: { candles: Candle[] }) {
         </ResponsiveContainer>
       </div>
 
-      {/* What is laid over the price. */}
-      <div className="mt-2 flex flex-wrap gap-1">
+      {/* What is laid over the price. One line that scrolls sideways rather
+          than two or three that wrap: wrapped rows push the oscillators down
+          the page by a different amount on every screen width, and the row
+          stops being something the eye can skim along. */}
+      <div className={`mt-2 ${ROW_SCROLL}`}>
         {OVERLAYS.map((overlay) => (
-          <Chip
-            key={overlay.key}
-            active={overlays.includes(overlay.key)}
-            colour={overlay.colour}
-            onClick={() => toggle(overlays, overlay.key, setOverlays)}
-          >
-            {overlay.label}
-          </Chip>
+          <span key={overlay.key} className="shrink-0">
+            <Chip
+              active={overlays.includes(overlay.key)}
+              colour={overlay.colour}
+              onClick={() => toggle(overlays, overlay.key, setOverlays)}
+            >
+              {overlay.label}
+            </Chip>
+          </span>
         ))}
       </div>
 
@@ -513,16 +582,18 @@ export default function PriceChartPro({ candles }: { candles: Candle[] }) {
         ))}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1">
+      <div className={`mt-3 ${ROW_SCROLL}`}>
         {PANES.map((pane) => (
-          <Chip
-            key={pane.key}
-            active={panes.includes(pane.key)}
-            onClick={() => toggle(panes, pane.key, setPanes)}
-          >
-            {pane.label}
-          </Chip>
+          <span key={pane.key} className="shrink-0">
+            <Chip
+              active={panes.includes(pane.key)}
+              onClick={() => toggle(panes, pane.key, setPanes)}
+            >
+              {pane.label}
+            </Chip>
+          </span>
         ))}
+        <span className="shrink-0">
         <Chip
           active={panes.length === PANES.length}
           onClick={() =>
@@ -531,6 +602,7 @@ export default function PriceChartPro({ candles }: { candles: Candle[] }) {
         >
           {panes.length === PANES.length ? "Бүгдийг хаах" : "Бүгд"}
         </Chip>
+        </span>
       </div>
     </div>
   );

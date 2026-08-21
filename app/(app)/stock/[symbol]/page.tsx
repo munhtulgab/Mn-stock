@@ -247,7 +247,7 @@ export default async function StockDetailPage({
               analysis built; the closing line is the fallback because it can
               be drawn from the two fields the page already had. */}
           {analysis && analysis.enoughHistory ? (
-            <PriceChartPro candles={analysis.candles} />
+            <PriceChartPro candles={analysis.candles} symbol={security.symbol} />
           ) : (
             <PriceChart data={chartData} title="Ханшийн график" />
           )}
