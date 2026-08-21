@@ -24,20 +24,47 @@ function format(value: number | null, digits: number, suffix?: string): string {
   return suffix ? `${text}${suffix === "%" ? "" : " "}${suffix}` : text;
 }
 
+/**
+ * Where a price sits between its own extremes, as a percentage.
+ *
+ * Null unless all three figures are known and the range has width: a company
+ * that has traded at one price all year has no position within a range, and
+ * dividing by that zero would report either infinity or a confident 0%.
+ */
+export function rangePosition(
+  price: number | null,
+  low: number | null,
+  high: number | null,
+): number | null {
+  if (price === null || low === null || high === null) return null;
+  if (!(high > low)) return null;
+  return ((price - low) / (high - low)) * 100;
+}
+
 export default function FundamentalPanel({
   ratios,
   period,
   sectorLabel,
   peerCount,
   comparedToMarket,
+  price,
+  weekHigh52,
+  weekLow52,
 }: {
   ratios: RatioView[];
   period: string | null;
   sectorLabel: string;
   peerCount: number;
   comparedToMarket: boolean;
+  /** The last traded price, for placing it within the year's range. */
+  price?: number | null;
+  weekHigh52?: number | null;
+  weekLow52?: number | null;
 }) {
   const anyYoy = ratios.some((r) => r.yoy !== null);
+  const high = weekHigh52 ?? null;
+  const low = weekLow52 ?? null;
+  const position = rangePosition(price ?? null, low, high);
 
   return (
     <div className="rounded-2xl border border-app-border bg-app-card p-4">
@@ -58,6 +85,50 @@ export default function FundamentalPanel({
             ? `Салбарын мэдээлэл хүрэлцэхгүй тул зах зээлийн ${peerCount + 1} хувьцаатай харьцуулав.`
             : `${sectorLabel} · ${peerCount + 1} харьцуулсан хувьцаа`}
       </p>
+
+      {/* The year's extremes, and what they say about today's price.
+          Moved here from the market card: a company's own trading range is
+          part of what the reader is valuing it against, and the number that
+          matters is not either end but where the price stands between them —
+          a P/E of nine reads differently at the top of the year than at the
+          bottom. */}
+      {high !== null && low !== null && (
+        <div className="mb-3 rounded-xl bg-app-bg p-3">
+          <div className="flex items-baseline justify-between gap-2 text-[11px] tabular-nums">
+            <span className="text-app-muted">{format(low, 2, "₮")}</span>
+            <span className="text-[10px] text-app-muted">
+              52 долоо хоногийн муж
+              {position !== null && (
+                <span className="text-app-text">
+                  {" · "}
+                  {position.toFixed(0)}%
+                </span>
+              )}
+            </span>
+            <span className="text-app-muted">{format(high, 2, "₮")}</span>
+          </div>
+          <div className="relative mt-1.5 h-1.5 rounded-full bg-app-elevated">
+            {position !== null && (
+              // Clamped: a price outside the stated range — the extremes are
+              // a session behind the live quote — would put the marker off
+              // the end of its own track.
+              <div
+                className="absolute top-1/2 h-3 w-1 -translate-y-1/2 rounded-full bg-brand"
+                style={{ left: `${Math.min(Math.max(position, 0), 100)}%` }}
+              />
+            )}
+          </div>
+          {position !== null && (
+            <p className="mt-1.5 text-[10px] text-app-muted">
+              {position >= 80
+                ? "Жилийн дээд хязгаартаа ойрхон арилжаалагдаж байна."
+                : position <= 20
+                  ? "Жилийн доод хязгаартаа ойрхон арилжаалагдаж байна."
+                  : "Жилийн мужийнхаа дунд хэсэгт арилжаалагдаж байна."}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="overflow-x-auto -mx-1 px-1">
         <table className="w-full text-xs">

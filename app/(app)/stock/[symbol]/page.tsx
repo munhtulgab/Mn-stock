@@ -17,7 +17,6 @@ import SignalBadge from "@/components/SignalBadge";
 import PriceChart, { type ChartPoint } from "@/components/PriceChart";
 import AiSignalPanel from "@/components/AiSignalPanel";
 import CompanyNews from "@/components/CompanyNews";
-import MarketInfoPanel from "@/components/MarketInfoPanel";
 import LivePrice from "@/components/LivePrice";
 import TradeModal from "@/components/TradeModal";
 import WatchlistButton from "@/components/WatchlistButton";
@@ -27,6 +26,7 @@ import FundamentalPanel from "@/components/FundamentalPanel";
 import RiskPanel from "@/components/RiskPanel";
 import ReturnDistribution from "@/components/ReturnDistribution";
 import YearPanel from "@/components/YearPanel";
+import DividendNotices from "@/components/DividendNotices";
 import DividendHistory from "@/components/DividendHistory";
 import PeerTable from "@/components/PeerTable";
 import CombinedSignalCard from "@/components/CombinedSignalCard";
@@ -271,38 +271,78 @@ export default async function StockDetailPage({
             Wilder's smoothing over the whole history, so the two printed
             different RSIs for the same company on the same screen. The
             52-week range it also carried is in the market panel underneath. */}
+        {/* Everything the exchange files for the quarter, in the three
+            groups it files them in — the balance sheet, the income
+            statement, then the ratios it derives from both. The card used to
+            show six of these and the other eight were stored and never
+            drawn; a reader who wanted revenue or equity had to leave for
+            open.mse.mn to read numbers this app already had. */}
         <div className="rounded-2xl border border-app-border bg-app-card p-4">
           <h2 className="text-sm font-semibold text-app-text mb-3">
             Санхүүгийн үзүүлэлт {financials ? `· ${financials.period}` : ""}
           </h2>
           {financials ? (
-            <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
-              <Metric label="P/E" value={fmt(financials.pe, 2)} info="pe" />
-              <Metric
-                label="Захын дундаж P/E"
-                value={marketMedianPe === null ? "—" : fmt(marketMedianPe, 2)}
-                info="marketPe"
-              />
-              <Metric label="EPS" value={money(financials.eps)} info="eps" />
-              <Metric label="ROE %" value={fmt(financials.roe)} info="roe" />
-              <Metric label="ROA %" value={fmt(financials.roa)} info="roa" />
-              <Metric
-                label="Цэвэр ашиг"
-                value={money(financials.netProfit, 0)}
-                info="netProfit"
-              />
-            </dl>
+            <div className="space-y-3">
+              <Group title="Санхүүгийн байдал">
+                <Metric label="Нийт хөрөнгө" value={money(financials.totalAssets, 0)} />
+                <Metric
+                  label="Өр төлбөрийн дүн"
+                  value={money(financials.totalLiabilities, 0)}
+                />
+                <Metric
+                  label="Эзэмшигчдийн өмч"
+                  value={money(financials.equity, 0)}
+                />
+                <Metric
+                  label="Гаргасан хувьцаа"
+                  value={fmt(financials.sharesOutstanding, 0)}
+                />
+              </Group>
+
+              <Group title="Орлого, үр дүн">
+                <Metric
+                  label="Борлуулалтын орлого"
+                  value={money(financials.revenue, 0)}
+                />
+                <Metric
+                  label="Борлуулсаны өртөг"
+                  value={money(financials.costOfSales, 0)}
+                />
+                <Metric label="Нийт ашиг" value={money(financials.grossProfit, 0)} />
+                <Metric
+                  label="Цэвэр ашиг"
+                  value={money(financials.netProfit, 0)}
+                  info="netProfit"
+                />
+                <Metric
+                  label="Нэгж хувьцааны дансны үнэ"
+                  value={money(financials.bookValuePerShare, 0)}
+                />
+              </Group>
+
+              <Group title="Санхүүгийн харьцаа">
+                <Metric label="ROA %" value={fmt(financials.roa)} info="roa" />
+                <Metric label="ROE %" value={fmt(financials.roe)} info="roe" />
+                <Metric label="ROTA" value={fmt(financials.rota, 4)} />
+                <Metric label="EPS" value={money(financials.eps)} info="eps" />
+                <Metric label="P/E" value={fmt(financials.pe, 2)} info="pe" />
+                <Metric
+                  label="Захын дундаж P/E"
+                  value={marketMedianPe === null ? "—" : fmt(marketMedianPe, 2)}
+                  info="marketPe"
+                />
+              </Group>
+
+              {/* Carried over from the market panel that stood beside this
+                  one. A declared dividend is a fact about the company's
+                  finances rather than about its market, and it was the one
+                  thing on that card with nowhere else to go. */}
+              <DividendNotices years={dividends} />
+            </div>
           ) : (
             <p className="text-xs text-app-muted">Мэдээлэл олдсонгүй.</p>
           )}
         </div>
-
-          <MarketInfoPanel
-            symbol={security.symbol}
-            weekHigh52={recommendation.indicators.weekHigh52}
-            weekLow52={recommendation.indicators.weekLow52}
-            dividends={dividends}
-          />
         </div>
       </div>
 
@@ -329,6 +369,9 @@ export default async function StockDetailPage({
               period={analysis.period}
               sectorLabel={analysis.sectorLabel}
               peerCount={analysis.peerCount}
+              price={currentPrice}
+              weekHigh52={recommendation.indicators.weekHigh52}
+              weekLow52={recommendation.indicators.weekLow52}
               comparedToMarket={analysis.comparedToMarket}
             />
           </div>
@@ -400,6 +443,18 @@ export default async function StockDetailPage({
  * financial ratios carry one because they are the figures on this page that
  * assume you already know what a P/E is.
  */
+/** A titled run of rows inside the financial card. */
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="text-[10px] uppercase tracking-wide text-app-muted mb-1">
+        {title}
+      </h3>
+      <dl className="grid grid-cols-2 gap-y-1.5 text-xs">{children}</dl>
+    </div>
+  );
+}
+
 function Metric({
   label,
   value,
