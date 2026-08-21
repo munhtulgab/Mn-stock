@@ -141,13 +141,40 @@ function SunIcon() {
   );
 }
 
+/**
+ * The crescent, sized and centred to match the sun.
+ *
+ * Both icons sit in a 24-unit box and neither fills it the same way. Measured:
+ * the sun's ink runs 2.5 to 21.5 and is centred on 12 exactly; the crescent's
+ * runs 3.22 to 20 — twelve per cent smaller, and centred on 11.61 rather than
+ * 12. Two icons that are the same size in markup and different sizes on screen.
+ *
+ * The consequence is the one that was reported: with both boxes inset equally
+ * from the ends of the pill, the moon still sat a pixel further from its edge
+ * than the sun did from its, because the gap a reader sees is to the ink and
+ * not to the box around it.
+ *
+ * So the path is scaled by 19/16.78 about its own centre and that centre moved
+ * to the box's. Its ink then runs 2.5 to 21.5 like the sun's, which makes the
+ * two gaps equal by construction rather than by a nudge that would have to be
+ * re-guessed if either icon were ever redrawn — and makes the moon sit
+ * concentric inside the knob in night mode, which it also was not.
+ *
+ * The stroke is divided by the same factor so it comes out at 2 after the
+ * scaling. Without that the crescent would be drawn in a heavier line than the
+ * sun and look like a different set.
+ */
+const MOON_SCALE = 19 / 16.78;
+const MOON_TRANSFORM = `translate(12 12) scale(${MOON_SCALE}) translate(-11.61 -12.39)`;
+
 function MoonIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.5 8.5 0 1 0 10.2 10.2Z"
+        transform={MOON_TRANSFORM}
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={2 / MOON_SCALE}
         strokeLinejoin="round"
       />
     </svg>
