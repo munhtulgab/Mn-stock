@@ -1,11 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { MSE_ANALYST_SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
 import { parseAiSignal } from "@/lib/ai/schema";
+import type { AnalystPrompt } from "@/lib/ai/prompt";
 import type { ProviderResult } from "./types";
 
 export async function callAnthropic(
   apiKey: string,
-  userMessage: string,
+  prompt: AnalystPrompt,
 ): Promise<ProviderResult> {
   try {
     const client = new Anthropic({ apiKey });
@@ -14,8 +14,8 @@ export async function callAnthropic(
     const response = await client.messages.create({
       model,
       max_tokens: 1200,
-      system: MSE_ANALYST_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
+      system: prompt.system,
+      messages: [{ role: "user", content: prompt.user }],
     });
 
     const textBlock = response.content.find((b) => b.type === "text");

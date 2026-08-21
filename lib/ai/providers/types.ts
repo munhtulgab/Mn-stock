@@ -10,32 +10,41 @@ export type ProviderName =
   | "cloudflare";
 
 /**
- * The room each provider leaves for one request, in tokens.
+ * What one whole request may cost each provider, in tokens.
  *
- * Groq's free tier meters tokens a minute rather than a context window, and
- * a single request counted against that allowance is refused whole with a
- * 413 — which is what happened here: llama-3.3-70b-versatile allows twelve
- * thousand a minute, and the prompt carrying the full analysis came to
- * roughly fifteen. The figure below is what is left for the user message
- * after the system prompt (~4,100 measured) and the 1,500-token completion
- * are taken out, with a further margin because every provider counts
- * differently and the estimate is only an estimate.
+ * The whole request: the instructions, the message, and the room the answer
+ * needs. That is what the providers imposing a ceiling actually meter — Groq's
+ * free tier counts tokens a minute rather than a context window, and a single
+ * request counted against that allowance is refused whole with a 413.
  *
- * The others are left out on purpose. Gemini and the models behind
- * OpenRouter take hundreds of thousands of tokens of context; giving them a
- * ceiling would trim a prompt they were perfectly happy with, and they are
- * answering well on the full one.
+ * This used to be the room left for the user message alone, with the system
+ * prompt's cost written into the comment as "~4,100 measured". It was 6,901
+ * by the time anyone looked. Two numbers that have to be subtracted from each
+ * other cannot live in two places, one of them a comment, so the figures below
+ * are now the ceilings themselves and the builder does the subtraction.
+ *
+ * The others are left out on purpose. Gemini and the models behind OpenRouter
+ * take hundreds of thousands of tokens of context; giving them a ceiling would
+ * trim a prompt they were perfectly happy with, and they are answering well on
+ * the full one.
  */
 export const PROVIDER_TOKEN_BUDGET: Partial<Record<ProviderName, number>> = {
-  groq: 5_000,
-  // Workers AI's Llama models carry a 24k context. Comfortable for the
-  // analysis, not for the analysis plus six sites' front pages.
-  cloudflare: 8_000,
+  // llama-3.3-70b-versatile on the free tier: twelve thousand a minute.
+  //
+  // Stated as the provider states it, with no margin subtracted here. The
+  // margin is already in `estimateTokens`, which charges a whole token for
+  // every Cyrillic character against a measured 1.33 characters per token —
+  // roughly a third high on a prompt that is almost all Cyrillic. Taking a
+  // second margin on top of that was costing this provider a section of the
+  // analysis it had room for.
+  groq: 12_000,
+  // Workers AI's Llama models carry a 24k context.
+  cloudflare: 24_000,
   // Cerebras advertises a wide context on gpt-oss-120b, but this one could
   // not be measured — inference is refused until the account has billing —
   // so it gets a bound rather than the benefit of the doubt. Raise it once
   // a real run has been seen.
-  cerebras: 12_000,
+  cerebras: 20_000,
 };
 
 export interface ProviderResult {

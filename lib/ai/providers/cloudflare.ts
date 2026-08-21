@@ -1,5 +1,6 @@
 import { callOpenAiCompatible } from "./openaiCompatible";
 import type { ProviderResult } from "./types";
+import type { AnalystPrompt } from "@/lib/ai/prompt";
 
 /**
  * Cloudflare Workers AI, through its OpenAI-compatible endpoint.
@@ -17,7 +18,7 @@ import type { ProviderResult } from "./types";
 export async function callCloudflare(
   apiKey: string,
   accountId: string,
-  userMessage: string,
+  prompt: AnalystPrompt,
 ): Promise<ProviderResult> {
   return callOpenAiCompatible({
     provider: "cloudflare",
@@ -25,6 +26,6 @@ export async function callCloudflare(
     apiKey,
     model:
       process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-    userMessage,
+    prompt,
   });
 }

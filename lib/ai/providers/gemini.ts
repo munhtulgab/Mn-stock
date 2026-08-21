@@ -1,4 +1,4 @@
-import { MSE_ANALYST_SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
+import type { AnalystPrompt } from "@/lib/ai/prompt";
 import { parseAiSignal } from "@/lib/ai/schema";
 import { withRetryAfter } from "@/lib/ai/retryAfter";
 import { TRANSIENT_RETRIES, isTransientStatus, retryDelayMs, sleep } from "./transient";
@@ -25,7 +25,7 @@ function extractGeminiRetrySeconds(bodyText: string): number | null {
 
 export async function callGemini(
   apiKey: string,
-  userMessage: string,
+  prompt: AnalystPrompt,
 ): Promise<ProviderResult> {
   try {
     const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
@@ -40,8 +40,8 @@ export async function callGemini(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: MSE_ANALYST_SYSTEM_PROMPT }] },
-            contents: [{ role: "user", parts: [{ text: userMessage }] }],
+            system_instruction: { parts: [{ text: prompt.system }] },
+            contents: [{ role: "user", parts: [{ text: prompt.user }] }],
             generationConfig: {
               temperature: 0.3,
               // Generous headroom: this model spends an unpredictable chunk of

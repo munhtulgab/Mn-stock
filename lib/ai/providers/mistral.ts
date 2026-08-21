@@ -1,5 +1,6 @@
 import { callOpenAiCompatible } from "./openaiCompatible";
 import type { ProviderResult } from "./types";
+import type { AnalystPrompt } from "@/lib/ai/prompt";
 
 /**
  * Mistral's own console API, which speaks the OpenAI shape.
@@ -11,13 +12,13 @@ import type { ProviderResult } from "./types";
  */
 export async function callMistral(
   apiKey: string,
-  userMessage: string,
+  prompt: AnalystPrompt,
 ): Promise<ProviderResult> {
   return callOpenAiCompatible({
     provider: "mistral",
     baseUrl: "https://api.mistral.ai/v1",
     apiKey,
     model: process.env.MISTRAL_MODEL || "mistral-large-latest",
-    userMessage,
+    prompt,
   });
 }

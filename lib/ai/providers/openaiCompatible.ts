@@ -1,4 +1,4 @@
-import { MSE_ANALYST_SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
+import type { AnalystPrompt } from "@/lib/ai/prompt";
 import { parseAiSignal } from "@/lib/ai/schema";
 import { withRetryAfter } from "@/lib/ai/retryAfter";
 import {
@@ -44,7 +44,7 @@ export async function callOpenAiCompatible(opts: {
   baseUrl: string;
   apiKey: string;
   model: string;
-  userMessage: string;
+  prompt: AnalystPrompt;
   extraHeaders?: Record<string, string>;
   /**
    * The completion allowance. Raise it for a model that reasons before it
@@ -60,7 +60,7 @@ export async function callOpenAiCompatible(opts: {
     baseUrl,
     apiKey,
     model,
-    userMessage,
+    prompt,
     extraHeaders,
     maxTokens,
     extraBody,
@@ -86,8 +86,8 @@ export async function callOpenAiCompatible(opts: {
           temperature: 0.3,
           max_tokens: maxTokens ?? DEFAULT_MAX_TOKENS,
           messages: [
-            { role: "system", content: MSE_ANALYST_SYSTEM_PROMPT },
-            { role: "user", content: userMessage },
+            { role: "system", content: prompt.system },
+            { role: "user", content: prompt.user },
           ],
           ...extraBody,
         }),

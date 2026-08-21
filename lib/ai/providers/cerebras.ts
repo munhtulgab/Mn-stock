@@ -1,5 +1,6 @@
 import { callOpenAiCompatible } from "./openaiCompatible";
 import type { ProviderResult } from "./types";
+import type { AnalystPrompt } from "@/lib/ai/prompt";
 
 /**
  * Cerebras Cloud, also the OpenAI shape.
@@ -27,14 +28,14 @@ import type { ProviderResult } from "./types";
  */
 export async function callCerebras(
   apiKey: string,
-  userMessage: string,
+  prompt: AnalystPrompt,
 ): Promise<ProviderResult> {
   return callOpenAiCompatible({
     provider: "cerebras",
     baseUrl: "https://api.cerebras.ai/v1",
     apiKey,
     model: process.env.CEREBRAS_MODEL || "gpt-oss-120b",
-    userMessage,
+    prompt,
     // Typical answers measure 430–800 tokens. The ceiling is this far above
     // them for the runs that wander: one in six went on past three thousand
     // with barely any of it reasoning, and headroom is free — a completion

@@ -1,6 +1,6 @@
 import type { AppSettings } from "@/lib/settings";
 import { resolveApiKey } from "@/lib/settings";
-import { buildUserMessage, type AnalystInput } from "@/lib/ai/prompt";
+import { buildPrompt, type AnalystInput, type AnalystPrompt } from "@/lib/ai/prompt";
 import { callAnthropic } from "@/lib/ai/providers/anthropic";
 import { callGemini } from "@/lib/ai/providers/gemini";
 import { callGroq } from "@/lib/ai/providers/groq";
@@ -86,13 +86,13 @@ export async function generateMultiProviderSignal(
   // meters tokens by the minute gets a prompt trimmed to fit it; the rest
   // get the whole thing, because trimming theirs would cost them evidence
   // they were happy to read.
-  const messages = new Map<number | undefined, string>();
-  const messageFor = (provider: ProviderName): string => {
+  const prompts = new Map<number | undefined, AnalystPrompt>();
+  const messageFor = (provider: ProviderName): AnalystPrompt => {
     const budget = PROVIDER_TOKEN_BUDGET[provider];
-    const existing = messages.get(budget);
+    const existing = prompts.get(budget);
     if (existing !== undefined) return existing;
-    const built = buildUserMessage({ ...input, budgetTokens: budget });
-    messages.set(budget, built);
+    const built = buildPrompt({ ...input, budgetTokens: budget });
+    prompts.set(budget, built);
     return built;
   };
 
