@@ -307,3 +307,38 @@ body {
     background-image: none;
   }
 }
+
+/*
+ * The two fixed-height panes on the wide layout.
+ *
+ * Scrollbars are hidden everywhere else in this app, and rightly: it is a
+ * phone app and the page scrolls under the thumb. These two are different —
+ * they are boxes of a set height with more inside them than fits, and with no
+ * scrollbar there is nothing at all to say so. The ninth watchlist card would
+ * simply not exist as far as the reader is concerned.
+ *
+ * Thin, and the same grey as a card border, so it reads as an edge rather
+ * than as furniture. It appears only when the content actually overflows,
+ * which is what makes it the right affordance: on a short list there is
+ * nothing to hide and nothing is shown.
+ */
+.pane-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-border) transparent;
+}
+
+.pane-scroll::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+  height: 6px;
+}
+
+.pane-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--app-border);
+  border-radius: 999px;
+}
+
+.pane-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

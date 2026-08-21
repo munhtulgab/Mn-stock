@@ -189,12 +189,26 @@ export default async function HomePage() {
       <Section
         title="Миний хөрөнгө"
         action={{ href: "/portfolio", label: "Бүгдийг харах" }}
+        fill
       >
         {portfolio.holdings.length === 0 ? (
           <Empty>Одоогоор хувьцаа худалдаж аваагүй байна.</Empty>
         ) : (
-          <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
-            {portfolio.holdings.slice(0, 4).map((h) => (
+          /* Every holding, not the first four. On a phone the card grows and
+             the page scrolls under it as before; on the wide layout it fills
+             its column and scrolls inside, so the two columns finish level.
+
+             Capped at the same 27.5rem as the watchlist. Without the cap a
+             portfolio of fourteen made the row 911px tall and left the
+             watchlist beside it with five hundred pixels of nothing under its
+             eighth card — the taller pane has to be bounded too, or matching
+             the heights just moves the mismatch.
+
+             No `overflow-hidden`: `.pane-scroll` sets overflow-y and the two
+             would fight over one property — a scroll container clips to its
+             own border radius anyway. */
+          <div className="pane-scroll overflow-x-hidden rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider lg:flex-1 lg:min-h-0 lg:max-h-[27.5rem]">
+            {portfolio.holdings.map((h) => (
               <Link
                 key={h.symbol}
                 href={`/stock/${h.symbol}`}
@@ -220,8 +234,20 @@ export default async function HomePage() {
       </Section>
 
       {watchlist.length > 0 && (
-        <Section title="Хяналтын жагсаалт">
-          <div className="flex gap-3 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-cols-2 lg:overflow-visible">
+        <Section title="Хяналтын жагсаалт" fill>
+          {/* Eight cards is 420px — four rows of a measured 96px plus the
+              three 12px gaps. The cap is 440px, twenty more, so that a ninth
+              card shows its top edge instead of being invisible: scrollbars
+              are hidden throughout this app and some browsers draw them as
+              an overlay that takes no space at all, so a clean cut at exactly
+              eight would give the reader nothing to say there was a ninth. A
+              partly visible row is the cue that does not depend on the
+              platform.
+
+              A cap rather than a height, so a watchlist of three does not sit
+              in a box two-thirds empty — the taller of the two columns sets
+              the row and the other fills it. */}
+          <div className="pane-scroll flex gap-3 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-cols-2 lg:max-h-[27.5rem] lg:overflow-x-hidden lg:content-start lg:flex-1 lg:min-h-0">
             {watchlist.map((w) => (
               <Link
                 key={w.symbol}
@@ -297,6 +323,7 @@ function Section({
   note,
   action,
   className = "",
+  fill = false,
   children,
 }: {
   title: string;
@@ -305,11 +332,25 @@ function Section({
   action?: { href: string; label: string };
   /** Placement in the wide-screen grid. */
   className?: string;
+  /**
+   * Stretch to the height of whatever shares this grid row, and give the body
+   * the leftover space.
+   *
+   * For the two side-by-side panels on the wide layout. The grid is
+   * `items-start`, so each section is otherwise as tall as its own contents
+   * and the two columns end at different places — which looks like one of
+   * them failed to load. Stretching both makes the taller one set the height
+   * and the shorter one fill it, rather than either being given a fixed
+   * figure that is wrong whenever the lists are short.
+   */
+  fill?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className={className}>
-      <div className="flex items-center justify-between mb-3">
+    <section
+      className={`${fill ? "lg:self-stretch lg:flex lg:flex-col" : ""} ${className}`}
+    >
+      <div className="flex items-center justify-between mb-3 lg:shrink-0">
         <h2 className="font-semibold text-app-text text-sm">
           {title}
           {note && <span className="text-app-muted font-normal ml-1.5">· {note}</span>}
@@ -320,7 +361,13 @@ function Section({
           </Link>
         )}
       </div>
-      {children}
+      {/* min-h-0 or the body refuses to shrink below its content and the
+          scroll never engages — a flex item's default minimum is its content. */}
+      {fill ? (
+        <div className="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">{children}</div>
+      ) : (
+        children
+      )}
     </section>
   );
 }

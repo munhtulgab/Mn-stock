@@ -82,11 +82,18 @@ export default function ThemeToggle() {
       role="switch"
       aria-checked={light}
       aria-label={light ? "Шөнийн горим руу шилжих" : "Өдрийн горим руу шилжих"}
-      className="relative h-10 w-[4.25rem] shrink-0 rounded-full border border-app-border bg-app-card px-1 transition-colors active:scale-95"
+      className="relative h-10 w-[4.75rem] shrink-0 rounded-full border border-app-border bg-app-card px-1 transition-colors active:scale-95"
     >
       {/* The two ends. Whichever the knob is over is covered by it, so the one
-          on show is always the mode a tap would move to. */}
-      <span className="pointer-events-none absolute inset-0 flex items-center justify-between px-2.5 text-app-muted">
+          on show is always the mode a tap would move to.
+
+          Inset by the same 0.75rem the knob's own centre sits at, so the sun
+          under the knob is concentric with it and the moon left showing is the
+          same distance from its edge as the sun is from the other. At 0.625rem
+          the icons sat two pixels outboard of the knob centres: the covered
+          one looked off-centre inside the knob, and the free one looked
+          closer to the rim than its opposite number. */}
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-between px-3 text-app-muted">
         <SunIcon />
         <MoonIcon />
       </span>
@@ -94,11 +101,11 @@ export default function ThemeToggle() {
       {/* Nothing until the theme is known, so the knob does not start at one
           end and jump to the other a frame later.
 
-          The night position is 1.625rem across, and that figure is arithmetic
-          rather than taste. The pill is 4.25rem (68px) wide including its 1px
+          The night position is 2.125rem across, and that figure is arithmetic
+          rather than taste. The pill is 4.75rem (76px) wide including its 1px
           borders, and carries 0.25rem of padding a side, so the track the knob
-          runs along is 68 − 2 − 8 = 58px. The knob is 2rem (32px). It can
-          therefore travel 58 − 32 = 26px, which is 1.625rem.
+          runs along is 76 − 2 − 8 = 66px. The knob is 2rem (32px). It can
+          therefore travel 66 − 32 = 34px, which is 2.125rem.
 
           It was 2.25rem — ten pixels too far — so in night mode the knob hung
           off the right-hand end of its own capsule. Written out because the
@@ -110,7 +117,7 @@ export default function ThemeToggle() {
           className={`pointer-events-none absolute top-1 left-1 h-8 w-8 rounded-full bg-app-elevated shadow-[0_2px_6px_rgba(0,0,0,0.35)] transition-transform duration-300 ease-out flex items-center justify-center ${
             light
               ? "translate-x-0 text-app-warn"
-              : "translate-x-[1.625rem] text-app-text"
+              : "translate-x-[2.125rem] text-app-text"
           }`}
         >
           {light ? <SunIcon /> : <MoonIcon />}
