@@ -39,7 +39,7 @@ const SNAPSHOT_KEY = "dividends";
 /** A declaration is an annual event; a day between rebuilds is plenty. */
 const CACHE_MS = 24 * 60 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 /** Notices to read back through — several years of declarations. */
 const NOTICES = 120;
 /**
@@ -49,8 +49,15 @@ const NOTICES = 120;
  * what decides whether a story is a declaration, not which tab it sat in.
  */
 const DIVIDEND_PHRASE = /ногдол\s+ашиг/i;
-/** Years kept per company; older than this is history, not a figure. */
-const KEEP_YEARS = 6;
+/**
+ * Years kept per company.
+ *
+ * Everything, in practice. This was six, which made the history card a
+ * six-year card whatever it was called — a company that has paid every year
+ * since it listed had the earlier half of that quietly cut off. A declaration
+ * is a few dozen bytes and the exchange's notices only go back so far anyway.
+ */
+const KEEP_YEARS = 40;
 
 interface DividendSnapshot {
   key: string;
@@ -308,49 +315,4 @@ export async function getDividendHistory(
       yieldPct: price && price > 0 ? (d.amount / price) * 100 : null,
     }))
     .sort((a, b) => b.year - a.year);
-}
-
-/** One year's line, whether or not anything was declared for it. */
-export interface DividendYear {
-  year: number;
-  /** Tugriks per share, or null where the exchange announced nothing. */
-  amount: number | null;
-  /** Against the current price. */
-  yieldPct: number | null;
-}
-
-/** How many years the card shows, this one included. */
-const YEARS_SHOWN = 3;
-
-/**
- * The last three years for one company, in order, with the yield each would
- * give at today's price.
- *
- * Every year gets a line whether or not it has a figure. A company that paid
- * in 2025 and not in 2024 said something by not paying, and a card that
- * simply omits the year leaves the reader unable to tell that from a year
- * this app failed to read.
- */
-export async function getDividendsFor(
-  db: Db,
-  companyCode: number,
-  price: number | null,
-  /** Today in Ulaanbaatar; passed in so nothing here reads the clock. */
-  today: string,
-): Promise<DividendYear[]> {
-  const all = await getAllDividends(db);
-  const declared = new Map(
-    (all[String(companyCode)] ?? []).map((d) => [d.year, d.amount]),
-  );
-
-  const thisYear = Number(today.slice(0, 4));
-  return Array.from({ length: YEARS_SHOWN }, (_, i) => {
-    const year = thisYear - i;
-    const amount = declared.get(year) ?? null;
-    return {
-      year,
-      amount,
-      yieldPct: amount !== null && price && price > 0 ? (amount / price) * 100 : null,
-    };
-  });
 }
