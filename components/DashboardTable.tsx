@@ -110,7 +110,7 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+      <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
         {/* Named once at the top rather than on every row, which is what a
             table is for and what the phone has no width to do. */}
         <div className="hidden lg:flex items-center gap-3 px-4 py-2 text-[10px] uppercase tracking-wide text-app-muted">

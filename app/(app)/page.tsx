@@ -187,7 +187,7 @@ export default async function HomePage() {
         {portfolio.holdings.length === 0 ? (
           <Empty>Одоогоор хувьцаа худалдаж аваагүй байна.</Empty>
         ) : (
-          <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+          <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
             {portfolio.holdings.slice(0, 4).map((h) => (
               <Link
                 key={h.symbol}
@@ -262,7 +262,7 @@ export default async function HomePage() {
         action={{ href: "/discover", label: "Бүгд" }}
         className="lg:col-span-2"
       >
-        <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+        <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
           {topPicks.map((r) => (
             <Link
               key={r.symbol}

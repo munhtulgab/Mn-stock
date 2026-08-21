@@ -19,7 +19,14 @@
   --color-app-bg: #0d0f14;
   --color-app-card: #171a21;
   --color-app-elevated: #1e222b;
-  --color-app-border: #252932;
+  /* The line around a card. Lifted well clear of the surfaces it separates:
+     at #252932 a card had no visible edge at all on a phone in daylight, and
+     the layout read as text floating on one flat sheet. */
+  --color-app-border: #3a404e;
+  /* The line between rows inside a card, which is a quieter job. Held at the
+     old border tone: a list of forty holdings drawn with the outline colour
+     reads as a grid of boxes rather than as one card with rows in it. */
+  --color-app-divider: #252932;
   --color-app-text: #ffffff;
   --color-app-muted: #8b90a0;
   --color-app-positive: #00d16c;
@@ -158,5 +165,62 @@ body {
   textarea:not([hidden]):not([disabled]),
   select:not([hidden]):not([disabled]) {
     font-size: max(1rem, 1em);
+  }
+}
+
+/*
+ * Loading placeholders.
+ *
+ * A pulse fades a block in and out on the spot, which reads as something
+ * broken as easily as something loading. A sweep travels, and travelling is
+ * what says "still working" — it also gives the eye a direction to follow
+ * while the page assembles itself behind it.
+ *
+ * The sweep is an overlay rather than an animated background-position: the
+ * block keeps its own colour, so a skeleton sitting on a card and one sitting
+ * on the page background do not need different treatments.
+ */
+@keyframes skeleton-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-app-elevated);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.07),
+    transparent
+  );
+  animation: skeleton-sweep 1.5s ease-in-out infinite;
+}
+
+/* Staggered, so a column of rows reads as one wave rather than as six blocks
+   flashing in lockstep. */
+.skeleton:nth-child(2)::after {
+  animation-delay: 0.1s;
+}
+.skeleton:nth-child(3)::after {
+  animation-delay: 0.2s;
+}
+.skeleton:nth-child(4)::after {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    background-image: none;
   }
 }

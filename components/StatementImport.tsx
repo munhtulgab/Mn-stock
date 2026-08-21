@@ -131,7 +131,7 @@ export default function StatementImport() {
       </button>
 
       {files.length > 0 && (
-        <ul className="mt-2 divide-y divide-app-border rounded-xl border border-app-border text-sm">
+        <ul className="mt-2 divide-y divide-app-divider rounded-xl border border-app-border text-sm">
           {files.map((file) => (
             <li key={`${file.name}:${file.size}`} className="flex items-center gap-2 px-3 py-2">
               <span className="flex-1 truncate text-app-text">{file.name}</span>
@@ -184,7 +184,7 @@ export default function StatementImport() {
                 : "Багц шинэчлэгдлээ"}
             </span>
           </div>
-          <div className="rounded-xl border border-app-border divide-y divide-app-border text-sm">
+          <div className="rounded-xl border border-app-border divide-y divide-app-divider text-sm">
             {result.positions.map((p) => (
               <div key={p.symbol} className="flex items-center gap-3 px-3 py-2">
                 <span className="font-semibold w-14">{p.symbol}</span>

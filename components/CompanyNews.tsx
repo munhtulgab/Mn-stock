@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import NewsList from "./NewsList";
+import { SkeletonBox } from "./Skeleton";
 
 interface MseItem {
   title: string;
@@ -68,6 +69,25 @@ function merge(mse: MseItem[], external: ExternalItem[]): Item[] {
  * scrape plus any configured news sites can take several seconds, and the
  * price/chart above shouldn't wait on it.
  */
+/**
+ * Headlines shown on a phone before the rest is asked for.
+ *
+ * Five is about a thumb's length of screen. Beyond that the company's news
+ * pushes the analysis and the order book off the bottom of the page, and a
+ * reader who came to look at a price has to scroll past a fortnight of
+ * coverage to get back to it.
+ */
+const PHONE_LIMIT = 5;
+
+/**
+ * Everything past the fifth headline, hidden on a phone only.
+ *
+ * Written out in full rather than built from PHONE_LIMIT because Tailwind
+ * reads these class names out of the source: a template string produces a
+ * class that never gets generated.
+ */
+const PHONE_CUT = "[&>a:nth-child(n+6)]:hidden md:[&>a:nth-child(n+6)]:block";
+
 export default function CompanyNews({ symbol }: { symbol: string }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [loadedFor, setLoadedFor] = useState(symbol);
@@ -141,9 +161,15 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
         </h2>
 
       {state.kind === "loading" && (
-        <div className="space-y-2">
+        <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-14 rounded-2xl bg-app-card animate-pulse" />
+            <div key={i} className="px-4 py-3 space-y-2">
+              <SkeletonBox className="h-3.5 w-11/12 rounded" />
+              <div className="flex justify-between gap-3">
+                <SkeletonBox className="h-2.5 w-24 rounded" />
+                <SkeletonBox className="h-2.5 w-16 rounded" />
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -159,9 +185,24 @@ export default function CompanyNews({ symbol }: { symbol: string }) {
       )}
 
       {state.kind === "ready" && state.items.length > 0 && (
-        <NewsList items={state.items} />
+        <NewsList items={state.items} className={expanded ? undefined : PHONE_CUT} />
       )}
       </div>
+
+      {/* On a phone the cut is by count rather than by height: the column runs
+          the full width here, so there is no panel opposite to match and
+          nothing to clip against — just a list that scrolls past the fold. */}
+      {state.kind === "ready" && state.items.length > PHONE_LIMIT && (
+        <button
+          type="button"
+          onClick={() => setExpanded((open) => !open)}
+          className="md:hidden mt-2 w-full rounded-2xl border border-app-border py-2.5 text-xs font-semibold text-brand active:bg-app-elevated"
+        >
+          {expanded
+            ? "Хураах"
+            : `Бүх мэдээг харах (${state.items.length})`}
+        </button>
+      )}
 
       {/* Only on the board, and only when something is actually hidden. */}
       {clipped && !expanded && (

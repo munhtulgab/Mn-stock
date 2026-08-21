@@ -259,7 +259,7 @@ export default function ProfileForm({
         </button>
       </div>
 
-      <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden mt-6">
+      <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden mt-6">
         <div className="flex items-center justify-between px-4 py-3.5">
           <span className="flex items-center gap-2.5 text-sm text-app-muted">
             <PhoneIcon /> Утасны дугаар

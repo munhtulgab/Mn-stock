@@ -91,7 +91,7 @@ export default async function PortfolioPage() {
             </Link>
           </div>
         ) : (
-          <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+          <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
             {portfolio.holdings.map((h) => (
               <Link
                 key={h.symbol}

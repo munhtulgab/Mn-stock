@@ -124,7 +124,7 @@ export default function MarketInfoPanel({
         <h2 className="text-sm font-semibold text-app-text">Зах зээлийн үзүүлэлт</h2>
         {range}
         <Dividends years={declared} />
-        <div className="h-16 rounded bg-app-bg animate-pulse" />
+        <div className="skeleton h-16 rounded-lg" />
       </div>
     );
   }

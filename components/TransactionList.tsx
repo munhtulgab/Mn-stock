@@ -13,7 +13,7 @@ export default function TransactionList({
   transactions: Transaction[];
 }) {
   return (
-    <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+    <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
       {transactions.map((t, i) => (
         <div key={i} className="flex items-center gap-3 px-4 py-3">
           <StockAvatar symbol={t.symbol} />

@@ -25,7 +25,7 @@ export default function NotificationList({ items }: { items: FeedNotification[] 
   if (visible.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+    <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
       {visible.map((n) => (
         <SwipeRow
           key={n.id}

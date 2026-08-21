@@ -23,9 +23,18 @@ export interface NewsListItem {
  * two lists — and the sources disagree among themselves too, so normalising
  * beats trusting whatever each one happened to send.
  */
-export default function NewsList({ items }: { items: NewsListItem[] }) {
+export default function NewsList({
+  items,
+  /** Extra classes for the list box — used to hide rows past a cut. */
+  className = "",
+}: {
+  items: NewsListItem[];
+  className?: string;
+}) {
   return (
-    <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-border overflow-hidden">
+    <div
+      className={`rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden ${className}`}
+    >
       {items.map((item, i) => (
         <a
           key={`${item.url}|${i}`}

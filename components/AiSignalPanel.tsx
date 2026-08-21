@@ -248,14 +248,14 @@ function Loader() {
       </p>
 
       <div className="space-y-2 pt-1">
-        <div className="h-6 w-40 animate-pulse rounded-full bg-app-elevated" />
+        <div className="skeleton h-6 w-40 rounded-full" />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-12 animate-pulse rounded-xl bg-app-elevated" />
+            <div key={i} className="skeleton h-12 rounded-xl" />
           ))}
         </div>
-        <div className="h-3 w-full animate-pulse rounded bg-app-elevated" />
-        <div className="h-3 w-4/5 animate-pulse rounded bg-app-elevated" />
+        <div className="skeleton h-3 w-full rounded" />
+        <div className="skeleton h-3 w-4/5 rounded" />
       </div>
     </div>
   );
