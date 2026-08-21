@@ -309,6 +309,11 @@ interface MarketSnapshot {
   rows: DashboardRow[];
   computedAt: Date;
   schemaVersion?: number;
+  /**
+   * When a rebuild started, so several readers arriving at once produce one
+   * rather than one each. Cleared when it finishes; see the claim below.
+   */
+  rebuildStartedAt?: Date | null;
 }
 
 /**
@@ -316,39 +321,56 @@ interface MarketSnapshot {
  * day, so recomputing indicators for every listed company on each page view is
  * wasted work; the snapshot turns it into a single small read.
  */
-export async function getDashboardRows(db: Db): Promise<DashboardRow[]> {
+export interface DashboardSnapshot {
+  rows: DashboardRow[];
+  /**
+   * True when these rows are past their TTL and worth rebuilding. The caller
+   * decides when — a page schedules it for after the response, a cron job
+   * does it inline.
+   */
+  stale: boolean;
+}
+
+/**
+ * The market list, from the snapshot, without ever making a reader wait for
+ * one to be built.
+ *
+ * Rebuilding this is not a cache miss costing a database round trip. It reads
+ * every active security, twelve years of prices for each, and then runs the
+ * full combined analysis over all four hundred of them — three timeframes of
+ * indicators, the ratios, the sector medians. During trading hours the price
+ * tick refreshes it every two minutes and nobody ever sees that. After the
+ * close it goes stale thirty minutes later, and whoever opened the app next
+ * used to pay for the whole rebuild before a single row appeared: at 19:55,
+ * long after the market shut, that is every evening visitor in turn.
+ *
+ * So staleness is reported rather than acted on. Half-hour-old prices on a
+ * market that closed six hours ago are the same prices; a page that paints is
+ * worth more than one that is exactly current, and the rebuild still happens
+ * — just behind the response instead of in front of it.
+ */
+export async function getDashboardRows(db: Db): Promise<DashboardSnapshot> {
   const snapshots = db.collection<MarketSnapshot>("marketSnapshots");
   const cached = await snapshots.findOne({ key: SNAPSHOT_KEY });
-  const cacheIsFresh =
-    !!cached && Date.now() - cached.computedAt.getTime() < SNAPSHOT_TTL_MS;
-  const cacheIsCurrentVersion = cached?.schemaVersion === DASHBOARD_SCHEMA_VERSION;
 
-  if (cached && cacheIsFresh && cacheIsCurrentVersion) {
-    return cached.rows;
+  // An older row shape is not servable: the components tolerate missing
+  // fields, but a bumped version means the logic behind a column changed and
+  // showing the old answer is showing a wrong one.
+  if (cached && cached.schemaVersion === DASHBOARD_SCHEMA_VERSION) {
+    return {
+      rows: cached.rows,
+      stale: Date.now() - cached.computedAt.getTime() >= SNAPSHOT_TTL_MS,
+    };
   }
 
   try {
-    const live = await fetchLiveQuotes({ budgetMs: 9_000 }).catch(() => new Map());
-    const rows = await computeDashboardRows(db, { live });
-    await snapshots.updateOne(
-      { key: SNAPSHOT_KEY },
-      {
-        $set: {
-          key: SNAPSHOT_KEY,
-          rows,
-          computedAt: new Date(),
-          schemaVersion: DASHBOARD_SCHEMA_VERSION,
-        },
-      },
-      { upsert: true },
-    );
-    return rows;
+    return { rows: await refreshDashboardSnapshot(db, { returnRows: true }), stale: false };
   } catch (err) {
-    // A stale snapshot beats an error page if the recompute fails, even one
-    // from an older row shape — components tolerate missing new fields.
+    // Nothing servable and the rebuild failed. A stale snapshot of the wrong
+    // shape still beats an error page.
     if (cached) {
       console.error("dashboard recompute failed, serving stale snapshot", err);
-      return cached.rows;
+      return { rows: cached.rows, stale: true };
     }
     throw err;
   }
@@ -542,7 +564,25 @@ export function pricedRecently(rows: DashboardRow[], days: number): DashboardRow
 }
 
 /** Rebuild the snapshot immediately (called after a sync ingests new prices). */
-export async function refreshDashboardSnapshot(db: Db): Promise<number> {
+/**
+ * How long one rebuild may hold the claim before another may start.
+ *
+ * Long enough that a burst of readers arriving the minute a snapshot goes
+ * stale produces one rebuild rather than a dozen of the most expensive query
+ * this app has, and short enough that a run killed mid-flight by a function
+ * timeout is not left blocking the next one for long.
+ */
+const REBUILD_CLAIM_MS = 3 * 60 * 1000;
+
+export async function refreshDashboardSnapshot(
+  db: Db,
+  options: { returnRows: true },
+): Promise<DashboardRow[]>;
+export async function refreshDashboardSnapshot(db: Db): Promise<number>;
+export async function refreshDashboardSnapshot(
+  db: Db,
+  options: { returnRows?: boolean } = {},
+): Promise<number | DashboardRow[]> {
   const live = await fetchLiveQuotes({ budgetMs: 9_000 }).catch(() => new Map());
   const rows = await computeDashboardRows(db, { live });
   await db.collection<MarketSnapshot>("marketSnapshots").updateOne(
@@ -553,11 +593,52 @@ export async function refreshDashboardSnapshot(db: Db): Promise<number> {
         rows,
         computedAt: new Date(),
         schemaVersion: DASHBOARD_SCHEMA_VERSION,
+        rebuildStartedAt: null,
       },
     },
     { upsert: true },
   );
-  return rows.length;
+  return options.returnRows ? rows : rows.length;
+}
+
+/**
+ * Rebuilds the snapshot unless somebody else already is.
+ *
+ * For the page path, where several readers can arrive within the same second
+ * of a snapshot going stale and each schedule a rebuild behind their own
+ * response. The claim is taken with one conditional update, so exactly one of
+ * them wins it and the rest do nothing.
+ */
+export async function refreshDashboardSnapshotIfIdle(db: Db): Promise<boolean> {
+  const claimedBefore = new Date(Date.now() - REBUILD_CLAIM_MS);
+  const claim = await db
+    .collection<MarketSnapshot>("marketSnapshots")
+    .updateOne(
+      {
+        key: SNAPSHOT_KEY,
+        $or: [
+          { rebuildStartedAt: null },
+          { rebuildStartedAt: { $exists: false } },
+          { rebuildStartedAt: { $lt: claimedBefore } },
+        ],
+      },
+      { $set: { rebuildStartedAt: new Date() } },
+    );
+
+  if (claim.modifiedCount === 0) return false;
+
+  try {
+    await refreshDashboardSnapshot(db);
+    return true;
+  } catch (err) {
+    // Release the claim rather than leaving the next reader locked out for
+    // three minutes over a failure that may not repeat.
+    console.error("background dashboard rebuild failed", err);
+    await db
+      .collection<MarketSnapshot>("marketSnapshots")
+      .updateOne({ key: SNAPSHOT_KEY }, { $set: { rebuildStartedAt: null } });
+    return false;
+  }
 }
 
 export async function getStockDetail(

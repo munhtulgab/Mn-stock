@@ -46,7 +46,10 @@ export async function GET(req: NextRequest) {
   // Typed, so the narrowing below survives: a bare `[]` makes this
   // `DashboardRow[] | never[]`, and a type predicate does not apply cleanly
   // through a union of array types.
-  const rows = await getDashboardRows(db).catch((): DashboardRow[] => []);
+  const { rows } = await getDashboardRows(db).catch(() => ({
+    rows: [] as DashboardRow[],
+    stale: false,
+  }));
   // The same rule the notifier itself applies, so this diagnostic reports
   // what would actually be sent rather than a longer list.
   const priced = rows.filter(

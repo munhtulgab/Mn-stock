@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
@@ -34,6 +35,8 @@ import CombinedSignalCard from "@/components/CombinedSignalCard";
 import PriceChartPro from "@/components/PriceChartPro";
 import { buildAnalysis } from "@/lib/analysis/report";
 import { ulaanbaatarDay } from "@/lib/day";
+import { refreshDividendsIfStale } from "@/lib/dividends";
+import { ensureTdbDividends } from "@/lib/tdb/store";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +118,18 @@ export default async function StockDetailPage({
       return null;
     }),
   ]);
+  // Both behind the response. Rereading the exchange's news archive is eleven
+  // pages and about eight seconds, and the Datalab sweep is another nine
+  // calls; the dividend card is served from what is stored and picks up the
+  // rebuild on the next visit. Putting either in front of the render is what
+  // made this page sit on a skeleton.
+  after(async () => {
+    await refreshDividendsIfStale(db);
+    await ensureTdbDividends(db, today).catch((err) => {
+      console.error("TDB dividend refresh failed", err);
+    });
+  });
+
   const closedAt = sessionEnd(liveQuotes);
   const holding = portfolio.holdings.find((h) => h.symbol === security.symbol);
   const inWatchlist = watchlist.some((w) => w.symbol === security.symbol);

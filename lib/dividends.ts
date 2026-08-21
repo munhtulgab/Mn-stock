@@ -327,33 +327,68 @@ async function computeDividends(
 
 /** Reads the stored declarations, rebuilding them when they have gone stale. */
 async function getAllDividends(db: Db): Promise<Record<string, Dividend[]>> {
-  const snapshots = db.collection<DividendSnapshot>("marketSnapshots");
-  const cached = await snapshots.findOne({ key: SNAPSHOT_KEY });
-  if (
-    cached?.schemaVersion === SCHEMA_VERSION &&
-    Date.now() - cached.computedAt.getTime() < CACHE_MS
-  ) {
-    return cached.byCompany;
-  }
+  const cached = await db
+    .collection<DividendSnapshot>("marketSnapshots")
+    .findOne({ key: SNAPSHOT_KEY });
 
+  // Anything stored is served, however old. Building this walks the exchange's
+  // whole news archive — eleven pages of five hundred, eight seconds measured
+  // — and a company page must not sit behind that. `refreshDividendsIfStale`
+  // does it after the response instead.
+  if (cached?.schemaVersion === SCHEMA_VERSION) return cached.byCompany;
+
+  // Nothing servable: either the archive has never been read or the stored
+  // shape predates a change to what these rows mean. Both are worth waiting
+  // for once, because the alternative is an empty card.
   try {
-    const byCompany = await computeDividends(db);
-    await snapshots.updateOne(
-      { key: SNAPSHOT_KEY },
-      {
-        $set: {
-          key: SNAPSHOT_KEY,
-          byCompany,
-          computedAt: new Date(),
-          schemaVersion: SCHEMA_VERSION,
-        },
-      },
-      { upsert: true },
-    );
-    return byCompany;
+    return await rebuildDividends(db);
   } catch (err) {
     console.error("dividend notices unavailable", err);
     return cached?.byCompany ?? {};
+  }
+}
+
+async function rebuildDividends(db: Db): Promise<Record<string, Dividend[]>> {
+  const byCompany = await computeDividends(db);
+  await db.collection<DividendSnapshot>("marketSnapshots").updateOne(
+    { key: SNAPSHOT_KEY },
+    {
+      $set: {
+        key: SNAPSHOT_KEY,
+        byCompany,
+        computedAt: new Date(),
+        schemaVersion: SCHEMA_VERSION,
+      },
+    },
+    { upsert: true },
+  );
+  return byCompany;
+}
+
+/**
+ * Rereads the archive when what is stored has gone stale, and otherwise does
+ * one indexed read and nothing else.
+ *
+ * For calling after a response has been sent. A declaration is an annual
+ * event; a day-old answer is the same answer, and nobody should watch a
+ * spinner for the difference.
+ */
+export async function refreshDividendsIfStale(db: Db): Promise<boolean> {
+  const cached = await db
+    .collection<DividendSnapshot>("marketSnapshots")
+    .findOne({ key: SNAPSHOT_KEY }, { projection: { computedAt: 1, schemaVersion: 1 } });
+
+  const current =
+    cached?.schemaVersion === SCHEMA_VERSION &&
+    Date.now() - cached.computedAt.getTime() < CACHE_MS;
+  if (current) return false;
+
+  try {
+    await rebuildDividends(db);
+    return true;
+  } catch (err) {
+    console.error("background dividend refresh failed", err);
+    return false;
   }
 }
 

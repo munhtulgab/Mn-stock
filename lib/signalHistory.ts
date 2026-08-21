@@ -74,7 +74,7 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
   /** Delivery failures, so a silent run says why it was silent. */
   pushErrors?: string[];
 }> {
-  const rows = await getDashboardRows(db);
+  const { rows } = await getDashboardRows(db);
   // A row with no verdict is not a company whose verdict has changed. These
   // used to carry the older rule engine's answer instead of nothing, so a
   // run where the combined analysis failed announced its opinion of the whole

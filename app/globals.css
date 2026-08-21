@@ -238,6 +238,29 @@ body {
   }
 }
 
+/**
+ * The sweep's own colour, per theme.
+ *
+ * It was white at 7% in both, which is a highlight on a near-black block and
+ * nothing at all on a light grey one — in day mode the placeholders simply
+ * sat there, and a loading screen that does not move reads as a broken one.
+ * Light mode lifts towards white and needs the opacity; dark mode is already
+ * most of the way there and would blow out at the same figure.
+ */
+:root {
+  --skeleton-sweep: rgb(255 255 255 / 0.55);
+}
+
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    --skeleton-sweep: rgb(255 255 255 / 0.06);
+  }
+}
+
+:root[data-theme="dark"] {
+  --skeleton-sweep: rgb(255 255 255 / 0.06);
+}
+
 .skeleton {
   position: relative;
   overflow: hidden;
@@ -252,22 +275,30 @@ body {
   background-image: linear-gradient(
     90deg,
     transparent,
-    rgb(255 255 255 / 0.07),
+    var(--skeleton-sweep),
     transparent
   );
-  animation: skeleton-sweep 1.5s ease-in-out infinite;
+  /*
+   * Slower and eased at both ends. The old 1.5s linear-ish sweep read as a
+   * scanner passing over the page; at 1.9s with the pause `ease-in-out`
+   * leaves at each end it reads as breathing, which is what you want from
+   * something that may be on screen for a while.
+   */
+  animation: skeleton-sweep 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: var(--skeleton-delay, 0s);
 }
 
-/* Staggered, so a column of rows reads as one wave rather than as six blocks
-   flashing in lockstep. */
-.skeleton:nth-child(2)::after {
-  animation-delay: 0.1s;
-}
-.skeleton:nth-child(3)::after {
-  animation-delay: 0.2s;
-}
-.skeleton:nth-child(4)::after {
-  animation-delay: 0.3s;
+/*
+ * The wave runs down the page rather than across each row.
+ *
+ * The stagger used to be three `nth-child` rules matched against the boxes
+ * inside a row, so a row's avatar, name and price shimmered a tenth of a
+ * second apart while every row in a list of six started together — and the
+ * fifth and sixth rows had no rule at all. The delay is set on the row now,
+ * and inherited by every placeholder in it.
+ */
+.skeleton-stagger > * {
+  --skeleton-delay: calc(var(--row, 0) * 0.09s);
 }
 
 @media (prefers-reduced-motion: reduce) {

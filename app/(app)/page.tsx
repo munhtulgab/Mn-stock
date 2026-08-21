@@ -5,6 +5,7 @@ import {
   applyLiveQuotes,
   getDashboardRows,
   pricedRecently,
+  refreshDashboardSnapshotIfIdle,
   tradedSession,
   type DashboardRow,
 } from "@/lib/data";
@@ -44,13 +45,13 @@ export default async function HomePage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
   const settings = await getSettings(db);
-  const [storedRows, portfolio, watchlist, indices] = await Promise.all([
+  const [snapshot, portfolio, watchlist, indices] = await Promise.all([
     getDashboardRows(db),
     getPortfolioSummary(db, user!._id!),
     getWatchlist(db, user!._id!),
     getMarketIndices(db),
   ]);
-  const { rows, session, board } = await applyLiveQuotes(storedRows, {
+  const { rows, session, board } = await applyLiveQuotes(snapshot.rows, {
     extraCaCerts: settings.extraCaCerts,
   });
 
@@ -61,6 +62,11 @@ export default async function HomePage() {
   // check to once a quarter of an hour, the news to its own half-hour cache
   // — so a busy morning does not run them over and over.
   after(async () => {
+    // First, because everything below reads the rows it produces — and
+    // because a reader who arrived on a stale snapshot is the reason it is
+    // being rebuilt at all. It used to be rebuilt in front of them: four
+    // hundred companies' worth of indicators before the page painted.
+    if (snapshot.stale) await refreshDashboardSnapshotIfIdle(db);
     await checkSignalChangesIfDue(db);
     const { stale } = await getMarketNews(db);
     if (stale) await refreshMarketNews(db);
