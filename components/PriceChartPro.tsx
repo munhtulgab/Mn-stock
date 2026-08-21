@@ -71,6 +71,7 @@ const CHART_TYPES: { key: ChartType; label: string }[] = [
  */
 const RANGES: { label: string; days: number | null; timeframe: Timeframe }[] = [
   { label: "Бүх цаг үе", days: null, timeframe: "1M" },
+  { label: "10 жил", days: 3653, timeframe: "1M" },
   { label: "5 жил", days: 1826, timeframe: "1W" },
   { label: "3 жил", days: 1095, timeframe: "1W" },
   { label: "1 жил", days: 365, timeframe: "1D" },
@@ -80,8 +81,8 @@ const RANGES: { label: string; days: number | null; timeframe: Timeframe }[] = [
   { label: "7 хоног", days: 7, timeframe: "1D" },
 ];
 
-/** Opens on three years: long enough to show a cycle, short enough to read. */
-const DEFAULT_RANGE = RANGES.findIndex((r) => r.label === "3 жил");
+/** Opens on five years: long enough to show a cycle, short enough to read. */
+const DEFAULT_RANGE = RANGES.findIndex((r) => r.label === "5 жил");
 
 const INTERVAL_LABELS: Record<Timeframe, string> = {
   "1D": "өдрийн",
@@ -128,15 +129,15 @@ const PANES: { key: PaneKey; label: string }[] = [
  * stacked on by default, because all eight panes at once is a page and a
  * half of chart before the reader has asked for anything.
  */
-const DEFAULT_OVERLAYS = ["ma20", "ma50", "bb"];
-
 /**
- * None.
+ * Nothing, on either row.
  *
- * Three panes opened by default, which is a page and a half of oscillator
- * under a chart somebody opened to look at a price. An indicator is worth
- * seeing when it has been asked for; until then the chart is the chart.
+ * The chart opened carrying two moving averages, the bands and three panes —
+ * six lines over a price somebody had come to look at, and a page and a half
+ * of oscillator under it. Every one of them is a question worth asking and
+ * none of them had been asked. They are a tap away instead.
  */
+const DEFAULT_OVERLAYS: string[] = [];
 const DEFAULT_PANES: PaneKey[] = [];
 
 function shortNumber(value: number): string {
@@ -371,7 +372,7 @@ export default function PriceChartPro({
   /** Needed only to fetch the rest of the history for the whole-life range. */
   symbol: string;
 }) {
-  // Opens on the line and on three years, as asked.
+  // Opens on the line and on five years, as asked.
   const [type, setType] = useState<ChartType>("line");
   const [rangeIndex, setRangeIndex] = useState(DEFAULT_RANGE);
   const [overlays, setOverlays] = useState<string[]>(DEFAULT_OVERLAYS);
