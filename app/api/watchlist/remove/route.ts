@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
-import { removeFromWatchlist, getWatchlist } from "@/lib/portfolio";
+import { removeFromWatchlist } from "@/lib/portfolio";
 
+/** Removing one, and nothing else — see the note on the add route. */
 export async function POST(req: NextRequest) {
   const db = await getDb();
   const user = await getCurrentUser(db);
@@ -12,6 +13,5 @@ export async function POST(req: NextRequest) {
   const symbol = typeof body.symbol === "string" ? body.symbol : "";
 
   await removeFromWatchlist(db, user._id!, symbol);
-  const items = await getWatchlist(db, user._id!);
-  return NextResponse.json({ items });
+  return NextResponse.json({ ok: true });
 }

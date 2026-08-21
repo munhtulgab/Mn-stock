@@ -178,7 +178,10 @@ export default async function StockDetailPage({
             </span>
           </p>
         </div>
-        <div className="flex items-start gap-2">
+        {/* Centred against the price block rather than aligned to its first
+            line: the price is two lines tall and the bookmark was sitting
+            level with the top of the number, which read as hanging off it. */}
+        <div className="flex items-center gap-2">
           <LivePrice
             symbol={security.symbol}
             initial={
