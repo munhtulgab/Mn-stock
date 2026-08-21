@@ -27,6 +27,7 @@ import RiskPanel from "@/components/RiskPanel";
 import ReturnDistribution from "@/components/ReturnDistribution";
 import YearPanel from "@/components/YearPanel";
 import DividendNotices from "@/components/DividendNotices";
+import type { Financials } from "@/lib/types";
 import DividendHistory from "@/components/DividendHistory";
 import PeerTable from "@/components/PeerTable";
 import CombinedSignalCard from "@/components/CombinedSignalCard";
@@ -296,7 +297,7 @@ export default async function StockDetailPage({
 
               <Group title="Орлого, үр дүн">
                 <Metric
-                  label="Борлуулалтын орлого"
+                  label={revenueLabel(financials.reportKind)}
                   value={money(financials.revenue, 0)}
                   info="revenue"
                 />
@@ -476,6 +477,33 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+/**
+ * One figure from the filing.
+ *
+ * `value` of "—" means the company does not file this line at all, and the
+ * row is dropped rather than drawn: a bank files no cost of sales and no
+ * gross profit, so a third of its income statement would otherwise be dashes
+ * that read as an app which had failed to fetch them.
+ */
+/**
+ * What a company calls its top line.
+ *
+ * The exchange publishes four report layouts and this app stores all four
+ * under `revenue`, so a bank's interest income was appearing under
+ * "Борлуулалтын орлого" — a heading no bank has.
+ */
+function revenueLabel(kind: Financials["reportKind"]): string {
+  switch (kind) {
+    case "bank":
+    case "nbfi":
+      return "Хүүгийн орлого";
+    case "insurance":
+      return "Даатгалын хураамжийн орлого";
+    default:
+      return "Борлуулалтын орлого";
+  }
+}
+
 function Metric({
   label,
   value,
@@ -485,6 +513,7 @@ function Metric({
   value: string;
   info?: MetricTerm;
 }) {
+  if (value === "—" || value.startsWith("—")) return null;
   return (
     <>
       <dt className="text-app-muted">

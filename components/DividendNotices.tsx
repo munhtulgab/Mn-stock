@@ -13,9 +13,28 @@ import type { DividendRow } from "@/lib/analysis/report";
  * Same DividendRow[] the dividend-history table below reads, rather than a
  * separate fetch of its own — two different sources previously meant the two
  * cards could show different figures for the same year.
+ *
+ * Four years of it. The full run is the history card further down; this is
+ * the summary that belongs beside the quarter's profit, and a company that
+ * has paid every year since it listed would otherwise push the ratios above
+ * it off the top of the screen.
+ *
+ * Every one of the four gets a line whether or not it has a figure. A company
+ * that paid in 2025 and not in 2024 said something by not paying, and a list
+ * that simply omits the year leaves the reader unable to tell that from a year
+ * this app failed to read.
  */
+const YEARS_SHOWN = 4;
+
 export default function DividendNotices({ years }: { years: DividendRow[] }) {
   if (years.length === 0) return null;
+
+  const declared = new Map(years.map((row) => [row.year, row]));
+  // Counted back from the newest year on record rather than from the clock:
+  // a page rendered in January would otherwise open on a year nobody has
+  // declared anything for yet.
+  const newest = Math.max(...years.map((row) => row.year));
+  const shown = Array.from({ length: YEARS_SHOWN }, (_, i) => newest - i);
 
   return (
     <div>
@@ -24,22 +43,29 @@ export default function DividendNotices({ years }: { years: DividendRow[] }) {
         <MetricInfo term="dividend" />
       </h3>
       <ul className="space-y-1">
-        {years.map((year) => (
-          <li key={year.year} className="flex justify-between gap-2 text-xs">
-            <span className="text-app-muted">{year.year} он</span>
-            <span className="shrink-0 tabular-nums">
-              <span className="text-app-text">
-                <Num value={year.amount} digits={2} suffix="₮" />
-                {year.yieldPct !== null && (
-                  <span className="text-app-muted">
-                    {" · өгөөж "}
-                    {year.yieldPct.toFixed(2)}%
+        {shown.map((year) => {
+          const row = declared.get(year);
+          return (
+            <li key={year} className="flex justify-between gap-2 text-xs">
+              <span className="text-app-muted">{year} он</span>
+              <span className="shrink-0 tabular-nums">
+                {row ? (
+                  <span className="text-app-text">
+                    <Num value={row.amount} digits={2} suffix="₮" />
+                    {row.yieldPct !== null && (
+                      <span className="text-app-muted">
+                        {" · өгөөж "}
+                        {row.yieldPct.toFixed(2)}%
+                      </span>
+                    )}
                   </span>
+                ) : (
+                  <span className="text-app-muted">—</span>
                 )}
               </span>
-            </span>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
