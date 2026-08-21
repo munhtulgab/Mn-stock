@@ -488,8 +488,10 @@ function Metric({
   return (
     <>
       <dt className="text-app-muted">
-        {label}
-        {info && <MetricInfo term={info} />}
+        <span className="inline-flex items-center gap-1">
+          {label}
+          {info && <MetricInfo term={info} />}
+        </span>
       </dt>
       <dd className="text-right tabular-nums text-app-text">{value}</dd>
     </>

@@ -193,7 +193,7 @@ export default function MetricInfo({ term }: { term: MetricTerm }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={`${title} гэж юу вэ?`}
-        className="ml-1 inline-flex translate-y-px align-middle text-app-muted active:opacity-60"
+        className="inline-flex shrink-0 text-app-muted active:opacity-60"
       >
         <InfoIcon size={12} />
       </button>

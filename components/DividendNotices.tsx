@@ -19,7 +19,7 @@ export default function DividendNotices({ years }: { years: DividendRow[] }) {
 
   return (
     <div>
-      <h3 className="text-[10px] font-bold uppercase tracking-wide text-app-muted mb-1">
+      <h3 className="text-[10px] font-bold uppercase tracking-wide text-app-muted mb-1 inline-flex items-center gap-1">
         Ногдол ашиг
         <MetricInfo term="dividend" />
       </h3>
