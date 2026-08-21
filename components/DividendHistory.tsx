@@ -39,9 +39,6 @@ export default function DividendHistory({
                     Нэгж хувьцаанд
                   </th>
                   <th className="font-medium pb-1.5 px-2 text-right">Өгөөж</th>
-                  <th className="font-medium pb-1.5 px-2 text-right whitespace-nowrap">
-                    Ашгаас
-                  </th>
                   <th className="font-medium pb-1.5 pl-2 text-right whitespace-nowrap">
                     Зарласан
                   </th>
@@ -50,8 +47,16 @@ export default function DividendHistory({
               <tbody>
                 {dividends.map((dividend) => (
                   <tr key={dividend.year} className="border-t border-app-border/50">
-                    <td className="py-1.5 pr-2 text-app-muted">
+                    <td className="py-1.5 pr-2 text-app-muted whitespace-nowrap">
                       {dividend.year} он
+                      {/* A half-yearly payer's row is two declarations added
+                          together, and a reader comparing it against a single
+                          announcement should be able to see why it is larger. */}
+                      {dividend.payments > 1 && (
+                        <span className="ml-1 text-[10px]">
+                          ({dividend.payments} удаа)
+                        </span>
+                      )}
                     </td>
                     <td className="py-1.5 px-2 text-right text-app-text">
                       <Num value={dividend.amount} digits={2} suffix="₮" />
@@ -61,42 +66,28 @@ export default function DividendHistory({
                         ? "—"
                         : `${dividend.yieldPct.toFixed(2)}%`}
                     </td>
-                    {/* What share of the year's profit was handed out. A
-                        payout over 100% is a company paying out of reserves,
-                        which is worth seeing. */}
-                    <td className="py-1.5 px-2 text-right tabular-nums text-app-muted">
-                      {dividend.payoutRatio === null
-                        ? "—"
-                        : `${dividend.payoutRatio.toFixed(0)}%`}
-                    </td>
                     <td className="py-1.5 pl-2 text-right">
-                      {dividend.url && dividend.date ? (
-                        <a
-                          href={dividend.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="tabular-nums text-brand"
-                        >
-                          {dividend.date}
-                        </a>
-                      ) : (
-                        <span className="text-app-muted">TDB Datalab</span>
-                      )}
+                      {/* Every row links to the announcement it was read from.
+                          That is the point of using the exchange's notices:
+                          a figure the reader can check. */}
+                      <a
+                        href={dividend.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="tabular-nums text-brand"
+                      >
+                        {dividend.date}
+                      </a>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {/* The year used to be described as the one the profit was earned
-              in, which was true of the notices and not of the other source.
-              They are merged into one table, so one of the two descriptions
-              had to be wrong; this is the one both sources actually use. */}
           <p className="mt-3 text-[10px] text-app-muted">
-            Он гэдэг нь ногдол ашгийг зарласан жил — хагас жилээр хоёр удаа
-            зарласан бол нийлбэрээр нь харуулав. Өгөөжийг өнөөдрийн ханшаар
-            тооцов. Огноотой мөр нь МХБ-ийн мэдэгдэл — дарж эх сурвалжийг нь
-            үзнэ.
+            Он гэдэг нь ашиг олсон жил — МХБ-ийн мэдэгдэлд заасны дагуу. Хагас
+            жилээр хоёр удаа хуваарилсан бол нийлбэрээр нь харуулав. Өгөөжийг
+            өнөөдрийн ханшаар тооцов. Огноон дээр дарж эх мэдэгдлийг үзнэ.
           </p>
         </>
       )}

@@ -36,7 +36,6 @@ import PriceChartPro from "@/components/PriceChartPro";
 import { buildAnalysis } from "@/lib/analysis/report";
 import { ulaanbaatarDay } from "@/lib/day";
 import { refreshDividendsIfStale } from "@/lib/dividends";
-import { ensureTdbDividends } from "@/lib/tdb/store";
 
 export const dynamic = "force-dynamic";
 
@@ -118,17 +117,12 @@ export default async function StockDetailPage({
       return null;
     }),
   ]);
-  // Both behind the response. Rereading the exchange's news archive is eleven
-  // pages and about eight seconds, and the Datalab sweep is another nine
-  // calls; the dividend card is served from what is stored and picks up the
-  // rebuild on the next visit. Putting either in front of the render is what
-  // made this page sit on a skeleton.
-  after(async () => {
-    await refreshDividendsIfStale(db);
-    await ensureTdbDividends(db, today).catch((err) => {
-      console.error("TDB dividend refresh failed", err);
-    });
-  });
+  // Behind the response. Rereading the exchange's news archive is eleven
+  // pages plus an article apiece for the notices that bury their figure —
+  // fifteen seconds measured. The card is served from what is stored and
+  // picks the rebuild up on the next visit; putting it in front of the render
+  // is what made this page sit on a skeleton.
+  after(() => refreshDividendsIfStale(db));
 
   const closedAt = sessionEnd(liveQuotes);
   const holding = portfolio.holdings.find((h) => h.symbol === security.symbol);

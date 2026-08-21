@@ -1,5 +1,10 @@
 import type { Db } from "mongodb";
-import { fetchExchangeNewsSince } from "@/lib/mse/exchangeNews";
+import {
+  fetchExchangeArticle,
+  fetchExchangeNewsSince,
+  type ExchangeNewsItem,
+} from "@/lib/mse/exchangeNews";
+import { pooled } from "@/lib/tdb/store";
 import type { Security } from "@/lib/types";
 
 /**
@@ -23,9 +28,9 @@ import type { Security } from "@/lib/types";
  */
 
 export interface Dividend {
-  /** The calendar year the declaration was announced in. */
+  /** The year whose profit is being distributed, as the notice states it. */
   year: number;
-  /** Tugriks per share, summed over every declaration made that year. */
+  /** Tugriks per share, summed over every declaration made for that year. */
   amount: number;
   /** How many declarations that sum is made of — two for a half-yearly payer. */
   payments: number;
@@ -41,7 +46,7 @@ const SNAPSHOT_KEY = "dividends";
 /** A declaration is an annual event; a day between rebuilds is plenty. */
 const CACHE_MS = 24 * 60 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 /**
  * How far back the newsroom is read.
  *
@@ -138,26 +143,37 @@ function parseAmount(raw: string): number | null {
 }
 
 /**
- * The year a declaration is counted in: the year it was announced.
+ * The year whose profit is being distributed, as the exchange states it.
  *
- * This used to read the year out of the headline — "2025 ОНЫ ЦЭВЭР АШГААС",
- * the year whose profit is being distributed — and that is a defensible thing
- * to mean, but it is not what the other source means, and the two are merged
- * by year. Keying them differently silently mixed two calendars in one table.
+ * "«АПУ» ХК 2024 ОНЫ ХОЁРДУГААР ХАГАС ЖИЛИЙН ЦЭВЭР АШГААС" — the year in
+ * front of "оны". That is the year an investor means when they say what a
+ * company paid for a year, it is the year printed in the headline the row
+ * links to, and it is therefore the only year this table can be checked
+ * against.
  *
- * Datalab counts a payment in the year it was declared, and АПУ settles it:
- * the notices announced during 2024 are 44₮ in February, for the second half
- * of 2023, and 55₮ in August, for the first half of 2024. Datalab's figure
- * for АПУ 2024 is 99.0 — the two added together, under the year they were
- * announced in, not the years the profit was earned. 2020 and 2021 agree the
- * same way: 71 + 37.5 against Datalab's 108.377, and 57.5 + 46 against
- * 103.44.
+ * It briefly was the announcement year instead, because Datalab counts that
+ * way and the two sources were being merged on it. They cannot be: Datalab's
+ * АПУ 2024 is 99₮, which is 44₮ announced in February for the second half of
+ * 2023 plus 55₮ announced in August for the first half of 2024 — one year's
+ * cash, two years' profit. The exchange's own notices put 2024's two halves
+ * at 55₮ and 65₮, so 2024 earned 120₮ and the card was showing 99.
  *
- * So the announcement year it is, for both sources, and the card below says
- * so rather than claiming these are profit years.
+ * Older notices — "«АПУ» ХК НОГДОЛ АШИГ ТАРААХААР БОЛЛОО" — name no year at
+ * all, and the half they were published in says which one they mean. A
+ * declaration in the first half of a year is the previous year's result being
+ * distributed once the accounts are closed; one in the second half is an
+ * interim on the year in progress. Checked against the years АПУ does state:
+ * the pattern holds through every notice back to 2016.
  */
-function declarationYear(date: string): number {
-  return Number(date.slice(0, 4));
+const FIRST_HALF_MONTHS = 6;
+
+export function profitYear(title: string, date: string): number {
+  const stated = /(20\d{2})\s*ОНЫ/i.exec(title);
+  if (stated) return Number(stated[1]);
+
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7));
+  return month <= FIRST_HALF_MONTHS ? year - 1 : year;
 }
 
 /**
@@ -252,6 +268,57 @@ function unambiguousSpaceless(listings: Listing[]): Map<string, number> {
   );
 }
 
+/**
+ * Notices asked about at once when their figure is not in the standfirst.
+ *
+ * Six, matching what the rest of this app asks of the exchange. It is a few
+ * dozen rounds of one small call, once a day, behind a response nobody is
+ * waiting on.
+ */
+const ARTICLE_CONCURRENCY = 6;
+
+/**
+ * Each notice with the per-share figure it declares, dropping the ones that
+ * declare none.
+ *
+ * Most notices state the amount in the standfirst the listing already
+ * carries. About 150 of 331 do not — they give a payment date and leave the
+ * figure to the article — and those years used to vanish from the history
+ * with no sign that anything was missing. АПУ's whole 2025 was two such
+ * notices, so a company that paid 145₮ that year showed nothing at all.
+ *
+ * So the article is read for those, and only those. Sampled across a dozen,
+ * ten gave up their figure; the two that did not are notices which genuinely
+ * never state one, and a year with no figure anywhere is better left blank
+ * than guessed at.
+ */
+async function resolveAmounts(
+  notices: ExchangeNewsItem[],
+): Promise<{ notice: ExchangeNewsItem; amount: number }[]> {
+  const resolved: { notice: ExchangeNewsItem; amount: number }[] = [];
+  const needArticle: ExchangeNewsItem[] = [];
+
+  for (const notice of notices) {
+    const amount = perShare(`${notice.description} ${notice.title}`);
+    if (amount !== null) resolved.push({ notice, amount });
+    else needArticle.push(notice);
+  }
+
+  await pooled(needArticle, ARTICLE_CONCURRENCY, async (notice) => {
+    const id = Number(notice.url.split("/").pop());
+    if (!Number.isFinite(id)) return;
+    const article = await fetchExchangeArticle(id).catch(() => null);
+    if (!article) return;
+    const text = article.body
+      .map((block) => (block.kind === "table" ? block.rows.flat().join(" ") : block.text))
+      .join(" ");
+    const amount = perShare(text);
+    if (amount !== null) resolved.push({ notice, amount });
+  });
+
+  return resolved;
+}
+
 async function computeDividends(
   db: Db,
 ): Promise<Record<string, Dividend[]>> {
@@ -277,24 +344,28 @@ async function computeDividends(
   const spaceless = unambiguousSpaceless(prefixes);
   const byCompany: Record<string, Dividend[]> = {};
 
-  for (const notice of notices) {
-    if (seen.has(notice.url)) continue;
-    seen.add(notice.url);
-    const companyCode = companyOf(notice.title, exact, prefixes, spaceless);
-    if (companyCode === null) continue;
-    const amount = perShare(`${notice.description} ${notice.title}`);
-    if (amount === null) continue;
+  // Whose notice, and how much — resolved before anything is totalled,
+  // because the ones that need their article read are fetched together
+  // rather than one at a time down the loop.
+  const declarations = await resolveAmounts(
+    notices.filter((notice) => {
+      if (seen.has(notice.url)) return false;
+      seen.add(notice.url);
+      return companyOf(notice.title, exact, prefixes, spaceless) !== null;
+    }),
+  );
 
-    const year = declarationYear(notice.date);
+  for (const { notice, amount } of declarations) {
+    const companyCode = companyOf(notice.title, exact, prefixes, spaceless)!;
+    const year = profitYear(notice.title, notice.date);
     const list = (byCompany[companyCode] ??= []);
     const existing = list.find((d) => d.year === year);
 
     // Added, not replaced. АПУ, Сүү, ТТЛ and others declare twice a year —
-    // once on each half's result — and keeping only one notice per year
-    // reported half of what the company paid. It reported the wrong half,
-    // too: the rule was "newest wins", so a year showed its August
-    // instalment and dropped its February one. Datalab's own figures are
-    // these sums, which is what made the arithmetic checkable.
+    // an interim on the first half and a final on the second — and keeping
+    // only one notice per year reported half of what the company paid. It
+    // reported the wrong half, too: the rule was "newest wins", so a year
+    // showed one instalment and dropped the other.
     if (existing) {
       existing.amount += amount;
       existing.payments += 1;

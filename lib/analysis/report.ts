@@ -3,9 +3,9 @@ import type { Financials, PricePoint, Security } from "@/lib/types";
 import { fetchIndexSeries } from "@/lib/mse/indices";
 import { getDividendHistory, type Dividend } from "@/lib/dividends";
 import { classifySector, resolveSector, type SectorKey } from "./sectors";
-import { getTdbDividends, getTdbLatest, getTdbProfile } from "@/lib/tdb/store";
+import { getTdbLatest, getTdbProfile } from "@/lib/tdb/store";
 import type { TdbProfile, TdbReturnDistribution } from "@/lib/tdb/datalab";
-import type { TdbDividend, TdbYear } from "@/lib/tdb/datalab";
+import type { TdbYear } from "@/lib/tdb/datalab";
 import {
   buildRatioViews,
   computeRatios,
@@ -50,20 +50,17 @@ export interface PeerRow {
   self: boolean;
 }
 
-/**
- * One year's payout, from whichever source knew about it.
- *
- * `date` and `url` are present only where the exchange announced it, so a
- * reader can always tell a figure they can check from one they cannot.
- */
+/** One year's payout, and the announcement it was read from. */
 export interface DividendRow {
+  /** The year whose profit was distributed, as the exchange's notice names it. */
   year: number;
+  /** Per share, summed over the year's declarations. */
   amount: number;
+  /** How many declarations that is — two where a company pays half-yearly. */
+  payments: number;
   yieldPct: number | null;
-  payoutRatio: number | null;
-  date: string | null;
-  url: string | null;
-  source: "mse" | "tdb";
+  date: string;
+  url: string;
 }
 
 export interface StockAnalysis {
@@ -104,74 +101,38 @@ export interface StockAnalysis {
 }
 
 /**
- * One dividend history out of the two sources that have one.
+ * The dividend history, from the exchange's own notices and nothing else.
  *
- * The exchange's own notices carry a date and a link to the announcement, and
- * they reach companies Datalab does not: it has no dividend at all for any of
- * the banks, and its best year covers 29 of the 88 companies it lists.
- * Datalab in turn has years no notice survives for, and the payout ratio.
+ * Datalab used to be merged in here and no longer is, because the two count
+ * years differently and a table cannot hold both. Datalab counts a payment in
+ * the year it was paid: its АПУ 2024 is 99₮, being 44₮ paid in February for
+ * the second half of 2023 plus 55₮ paid in August for the first half of 2024.
+ * The exchange's notices name the year whose profit is being distributed, and
+ * by that reckoning 2024 was 55₮ and 65₮ — 120₮. Neither is wrong; they answer
+ * different questions. Showing one year's cash under a heading that reads as a
+ * year's earnings is what made the card wrong.
  *
- * Both are keyed on the year the payment was declared, which took some
- * settling — see `declarationYear`. Where both have a year, the figure is
- * Datalab's and the date and link are the exchange's; the reasoning is at the
- * point where that choice is made below.
+ * The notices win because they are the year an investor means, because the
+ * exchange states them in the headline rather than leaving them to be
+ * inferred, and because every row links to that headline — a figure the
+ * reader can check beats one they have to trust. They also reach further:
+ * 68 companies and 274 company-years against Datalab's 29 in its best year and
+ * nothing at all for any bank.
+ *
+ * What went with Datalab is the payout ratio, which was its own year's profit
+ * and so could not survive the change either.
  */
-export function mergeDividends(
-  notices: Dividend[],
-  datalab: TdbDividend[],
-  price: number | null,
-): DividendRow[] {
-  const rows = new Map<number, DividendRow>();
-
-  // The notices first, so they hold the years Datalab has no figure for —
-  // which is most of the market: Datalab carries a dividend for 29 companies
-  // in its best year and none at all for any of the banks.
-  for (const notice of notices) {
-    rows.set(notice.year, {
+export function dividendRows(notices: Dividend[]): DividendRow[] {
+  return [...notices]
+    .sort((a, b) => b.year - a.year)
+    .map((notice) => ({
       year: notice.year,
       amount: notice.amount,
+      payments: notice.payments,
       yieldPct: notice.yieldPct,
-      payoutRatio: null,
       date: notice.date,
       url: notice.url,
-      source: "mse",
-    });
-  }
-
-  // Datalab second, and it wins the figure where it has one.
-  //
-  // This was the other way round, on the reasoning that the exchange's own
-  // announcement outranks a third party's arithmetic. It does — but only if
-  // the announcement was read correctly, and reading it means pulling a
-  // number out of a sentence. Checked across every company both sources
-  // cover: 74 years agree, 18 differ, and the differences run one way. АПУ
-  // 2025 reads 65₮ from the notices against Datalab's 130 because the July
-  // declaration's standfirst states a payment date and no amount, so half the
-  // year is invisible to any parser. A missed instalment makes the notice
-  // total too low; nothing makes Datalab's too high.
-  //
-  // The rest of the gap is not error at all: Datalab divides by a weighted
-  // average share count, so Багануур's 330₮ is its 297.29 — the same payment
-  // over a year in which the count changed.
-  //
-  // So the number comes from Datalab where it exists, and the notice keeps
-  // what only it has: the date, and the link to the announcement.
-  for (const entry of datalab) {
-    const announced = rows.get(entry.year);
-    rows.set(entry.year, {
-      year: entry.year,
-      amount: entry.amountPerShare,
-      yieldPct:
-        entry.yieldPct ??
-        (price && price > 0 ? (entry.amountPerShare / price) * 100 : null),
-      payoutRatio: entry.payoutRatio,
-      date: announced?.date ?? null,
-      url: announced?.url ?? null,
-      source: announced ? "mse" : "tdb",
-    });
-  }
-
-  return [...rows.values()].sort((a, b) => b.year - a.year);
+    }));
 }
 
 /** Full daily OHLCV, which the chart and every indicator are built from. */
@@ -616,12 +577,11 @@ export async function buildAnalysis(
 ): Promise<StockAnalysis> {
   const from = `${Number(today.slice(0, 4)) - HISTORY_YEARS}${today.slice(4)}`;
 
-  const [storedCandles, context, noticeDividends, tdbDividends, tdb] =
+  const [storedCandles, context, noticeDividends, tdb] =
     await Promise.all([
       getCandles(db, security.companyCode, from),
       loadMarketContext(db),
       getDividendHistory(db, security.companyCode, price).catch(() => []),
-      getTdbDividends(db, security.companyCode).catch(() => []),
       getTdbProfile(db, security.companyCode).catch(() => ({
         profile: null,
         distribution: null,
@@ -638,7 +598,7 @@ export async function buildAnalysis(
     riskYears: RISK_YEARS,
     profile: tdb.profile,
     distribution: tdb.distribution,
-    dividends: mergeDividends(noticeDividends, tdbDividends, price),
+    dividends: dividendRows(noticeDividends),
     candles,
     enoughHistory: candles.length >= MIN_CANDLES,
   };

@@ -267,10 +267,12 @@ function analysisPayload(analysis: StockAnalysis, keep: Set<SectionName>) {
     ...(keep.has("dividend_history")
       ? {
           dividend_history: analysis.dividends.map((dividend) => ({
+            /** The year the profit was earned, per the exchange's notice. */
             year: dividend.year,
             amount_per_share: dividend.amount,
             yield_pct: dividend.yieldPct,
-            payout_ratio_pct: dividend.payoutRatio,
+            /** Two where the company paid an interim and a final. */
+            declarations: dividend.payments,
             announced: dividend.date,
           })),
         }

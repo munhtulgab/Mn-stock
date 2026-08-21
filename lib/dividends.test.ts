@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { perShare } from "./dividends";
+import { perShare, profitYear } from "./dividends";
 
 /**
  * Reading a figure out of a sentence.
@@ -46,4 +46,50 @@ test("the total paid out is not the per-share figure", () => {
 test("a sentence that only mentions a share is not a declaration", () => {
   assert.equal(perShare("хувьцаа эзэмшигчдэд 250,000,000 төгрөг"), null);
   assert.equal(perShare("ногдол ашиг тараахаар боллоо"), null);
+});
+
+/**
+ * Which year a declaration belongs to.
+ *
+ * The card was showing Хаан банк's 214₮ against 2026 when the notice says
+ * "2025 ОНЫ ... ЦЭВЭР АШГААС", and АПУ's 2024 as 99₮ when the exchange
+ * announced 55₮ and 65₮ for that year's two halves. Both came from counting
+ * by the year a payment was made rather than the year it was earned.
+ */
+
+test("the year the headline states is the year", () => {
+  assert.equal(
+    profitYear('"ХААН БАНК" ХК 2025 ОНЫ ТАТВАРЫН ДАРААХ ЦЭВЭР АШГААС НОГДОЛ АШИГ ХУВААРИЛНА', "2026-02-23"),
+    2025,
+  );
+  // Announced in the same year it was earned, on the first half's result.
+  assert.equal(
+    profitYear('"АПУ" ХК 2024 ОНЫ ЭХНИЙ ХАГАС ЖИЛИЙН ЦЭВЭР АШГААС НОГДОЛ АШИГ ХУВААРИЛНА', "2024-08-02"),
+    2024,
+  );
+  // And the second half's, announced the February after.
+  assert.equal(
+    profitYear('"АПУ" ХК 2024 ОНЫ ХОЁРДУГААР ХАГАС ЖИЛИЙН ЦЭВЭР АШГААС НОГДОЛ АШИГ ХУВААРИЛНА', "2025-02-11"),
+    2024,
+  );
+});
+
+test("a headline naming no year is dated by the half it appeared in", () => {
+  // The exchange's older wording. A February notice distributes the year just
+  // closed; an August one is an interim on the year running.
+  assert.equal(profitYear('"АПУ" ХК НОГДОЛ АШИГ ТАРААХААР БОЛЛОО', "2018-02-20"), 2017);
+  assert.equal(profitYear('"АПУ" ХК ХАГАС ЖИЛИЙН ЦЭВЭР АШГААС НОГДОЛ АШИГ ХУВААРИЛНА', "2020-08-18"), 2020);
+  // June is still the first half; July is not.
+  assert.equal(profitYear("НОГДОЛ АШИГ ТАРААХААР БОЛЛОО", "2021-06-30"), 2020);
+  assert.equal(profitYear("НОГДОЛ АШИГ ТАРААХААР БОЛЛОО", "2021-07-01"), 2021);
+});
+
+test("the year is not taken from the payment date in the standfirst", () => {
+  // Only the headline is read. A notice's body routinely names the date the
+  // money must reach shareholders — "2026 оны 12 дугаар сарын 31-ний өдрийн
+  // дотор" — and that is a deadline, not a financial year.
+  assert.equal(
+    profitYear('"АПУ" ХК 2026 ОНЫ ЭХНИЙ ХАГАС ЖИЛИЙН САНХҮҮГИЙН ҮР ДҮНГ ХАРГАЛЗАЖ НОГДОЛ АШИГ ХУВААРИЛНА', "2026-08-19"),
+    2026,
+  );
 });

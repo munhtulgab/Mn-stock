@@ -92,11 +92,25 @@ export default function ThemeToggle() {
       </span>
 
       {/* Nothing until the theme is known, so the knob does not start at one
-          end and jump to the other a frame later. */}
+          end and jump to the other a frame later.
+
+          The night position is 1.625rem across, and that figure is arithmetic
+          rather than taste. The pill is 4.25rem (68px) wide including its 1px
+          borders, and carries 0.25rem of padding a side, so the track the knob
+          runs along is 68 − 2 − 8 = 58px. The knob is 2rem (32px). It can
+          therefore travel 58 − 32 = 26px, which is 1.625rem.
+
+          It was 2.25rem — ten pixels too far — so in night mode the knob hung
+          off the right-hand end of its own capsule. Written out because the
+          number cannot be interpolated: Tailwind reads class names out of the
+          source text, so a computed `translate-x-[${...}]` compiles to no
+          class at all and the knob would not move. */}
       {theme && (
         <span
-          className={`pointer-events-none absolute top-1 h-8 w-8 rounded-full bg-app-elevated shadow-[0_2px_6px_rgba(0,0,0,0.35)] transition-transform duration-300 ease-out flex items-center justify-center ${
-            light ? "left-1 translate-x-0 text-app-warn" : "left-1 translate-x-[2.25rem] text-app-text"
+          className={`pointer-events-none absolute top-1 left-1 h-8 w-8 rounded-full bg-app-elevated shadow-[0_2px_6px_rgba(0,0,0,0.35)] transition-transform duration-300 ease-out flex items-center justify-center ${
+            light
+              ? "translate-x-0 text-app-warn"
+              : "translate-x-[1.625rem] text-app-text"
           }`}
         >
           {light ? <SunIcon /> : <MoonIcon />}
