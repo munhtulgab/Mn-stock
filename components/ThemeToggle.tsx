@@ -87,13 +87,17 @@ export default function ThemeToggle() {
       {/* The two ends. Whichever the knob is over is covered by it, so the one
           on show is always the mode a tap would move to.
 
-          Inset by the same 0.75rem the knob's own centre sits at, so the sun
-          under the knob is concentric with it and the moon left showing is the
-          same distance from its edge as the sun is from the other. At 0.625rem
-          the icons sat two pixels outboard of the knob centres: the covered
-          one looked off-centre inside the knob, and the free one looked
-          closer to the rim than its opposite number. */}
-      <span className="pointer-events-none absolute inset-0 flex items-center justify-between px-3 text-app-muted">
+          11px, which is not a round number and is not meant to be: it is the
+          gap the icons already had above and below. This row is `inset-0`, so
+          it fills the padding box — 40px less the two 1px borders, or 38 — and
+          centring a 16px icon in that leaves 11px top and bottom. Setting the
+          ends to anything else makes an icon nearer one edge of the pill than
+          another, which is what a reader noticed at 12px.
+
+          The knob covers whichever icon it is over, so there is no question
+          of aligning these with it; the one that matters is the one on show,
+          and what matters about it is its distance to the rim. */}
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-between px-[11px] text-app-muted">
         <SunIcon />
         <MoonIcon />
       </span>
