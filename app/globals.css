@@ -309,36 +309,25 @@ body {
 }
 
 /*
- * The two fixed-height panes on the wide layout.
+ * The panes that hold a set number of rows and scroll for the rest.
  *
- * Scrollbars are hidden everywhere else in this app, and rightly: it is a
- * phone app and the page scrolls under the thumb. These two are different —
- * they are boxes of a set height with more inside them than fits, and with no
- * scrollbar there is nothing at all to say so. The ninth watchlist card would
- * simply not exist as far as the reader is concerned.
+ * They scroll, and they say so by what they show rather than by a bar down
+ * the side: the holdings list closes on a whole row with more list behind it,
+ * and the watchlist's columns are 47% so the next one always shows an edge.
+ * A bar was drawn here for a while and it read as furniture — the only piece
+ * of chrome in an app that hides scrollbars everywhere else, sitting inside a
+ * card, on a surface people use with a thumb.
  *
- * Thin, and the same grey as a card border, so it reads as an edge rather
- * than as furniture. It appears only when the content actually overflows,
- * which is what makes it the right affordance: on a short list there is
- * nothing to hide and nothing is shown.
+ * `overflow-y: auto` is the whole of what this class now does; the three
+ * declarations that take the bar away are the same ones the rest of the app
+ * uses, spelled once per engine because no two agree on the property.
  */
 .pane-scroll {
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--app-border) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .pane-scroll::-webkit-scrollbar {
-  display: block;
-  width: 6px;
-  height: 6px;
-}
-
-.pane-scroll::-webkit-scrollbar-thumb {
-  background-color: var(--app-border);
-  border-radius: 999px;
-}
-
-.pane-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  display: none;
 }

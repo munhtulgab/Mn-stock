@@ -4,9 +4,9 @@ import { getDb } from "@/lib/mongodb";
 import {
   applyLiveQuotes,
   getDashboardRows,
-  pricedRecently,
   refreshDashboardSnapshotIfIdle,
   tradedSession,
+  tradedThisMonth,
   type DashboardRow,
 } from "@/lib/data";
 import type { ExchangeMover } from "@/lib/mse/movers";
@@ -25,13 +25,8 @@ import PageHeader from "@/components/PageHeader";
 
 export const dynamic = "force-dynamic";
 
-/**
- * How stale a security's last trade may be before its score stops meaning
- * anything. Many MSE listings trade a handful of times a month, so the bound
- * has to be generous enough to keep them — but not so generous that a
- * listing dormant since 2006 is offered as a pick.
- */
-const TOP_PICK_MAX_AGE_DAYS = 45;
+/** How many of them there are, and the reason the box is the height it is. */
+const TOP_PICKS = 5;
 
 /**
  * How many gainers and how many losers to show. Also what makes a date worth
@@ -118,9 +113,10 @@ export default async function HomePage() {
         .slice(0, MOVERS);
   const moversSession = hasBoard ? session : stored.session;
   // Untraded listings score 0 across the board; ranking them as "top picks"
-  // would just surface whatever sorts first alphabetically. A long-dormant
-  // listing is excluded for the same reason its indicators are meaningless.
-  const topPicks = pricedRecently(rows, TOP_PICK_MAX_AGE_DAYS)
+  // would just surface whatever sorts first alphabetically. A listing that has
+  // not traded this month is excluded for the same reason its indicators are
+  // meaningless — and because a pick nobody can act on is not one.
+  const topPicks = tradedThisMonth(rows, session)
     .filter(
       // A company with no verdict cannot be a pick: there is nothing to rank
       // it by and nothing to badge it with.
@@ -128,7 +124,7 @@ export default async function HomePage() {
         r.lastPrice !== null && r.score !== null && r.score !== 0 && r.signal !== null,
     )
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+    .slice(0, TOP_PICKS);
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-6">
@@ -194,23 +190,24 @@ export default async function HomePage() {
         {portfolio.holdings.length === 0 ? (
           <Empty>Одоогоор хувьцаа худалдаж аваагүй байна.</Empty>
         ) : (
-          /* Every holding, not the first four. On a phone the card grows and
-             the page scrolls under it as before; on the wide layout it fills
-             its column and scrolls inside, so the two columns finish level.
+          /* Every holding, not the first four — five rows of box and the rest
+             behind them, on a phone as much as on a laptop.
 
-             Five rows and no part of a sixth. Measured: a row is 65px and
-             the fifth ends 326px below the box's top edge, so 327 with the
-             bottom border is where the box closes — exactly five, cleanly.
+             Five and no part of a sixth. Measured: a row is 65px and the
+             fifth ends 326px below the box's top edge, so 327 with the bottom
+             border is where the box closes — exactly five, cleanly. It was
+             344 before, which left the sixth cut across its middle.
 
-             It was 344 before, which left the sixth row cut across its middle
-             as a hint that the list continued. Asked for five, it shows five;
-             `.pane-scroll` puts a thin scrollbar there in the browsers that
-             draw one.
+             The cap used to be `lg:` only, so a phone with eleven holdings
+             gave eleven rows and a card half a screen tall. The rows are the
+             same 65px at every width — same padding, same type — so one
+             figure serves both and the phone scrolls inside the card the way
+             the wide layout already did.
 
              No `overflow-hidden`: `.pane-scroll` sets overflow-y and the two
              would fight over one property — a scroll container clips to its
              own border radius anyway. */
-          <div className="pane-scroll overflow-x-hidden rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider lg:flex-1 lg:min-h-0 lg:max-h-[20.4375rem]">
+          <div className="pane-scroll overflow-x-hidden rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider max-h-[20.4375rem] lg:flex-1 lg:min-h-0">
             {portfolio.holdings.map((h) => (
               <Link
                 key={h.symbol}
@@ -304,6 +301,21 @@ export default async function HomePage() {
         action={{ href: "/discover", label: "Бүгд" }}
         className="lg:col-span-2"
       >
+        {/* Built like a row on the Зах зээл page, because it is one: the same
+            company, ranked by the same score, and a reader who taps through
+            should not have to re-read a different arrangement of the same
+            figures. The verdict moves up beside the ticker where that page
+            keeps it, and the price, the day's move and the trend line come
+            with it — a pick with no price attached says nothing about whether
+            it can be acted on.
+
+            The trend line waits for a wide screen. A phone row already
+            carries an avatar, a name, a score and a price block, and 56px of
+            chart would come out of the name.
+
+            The date appears only when the last trade is not the running
+            session, exactly as it does on that page: no date means it traded
+            today, and every row here traded this month by construction. */}
         <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
           {topPicks.map((r) => (
             <Link
@@ -313,11 +325,41 @@ export default async function HomePage() {
             >
               <StockAvatar symbol={r.symbol} />
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-app-text text-sm">{r.symbol}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-app-text text-sm">{r.symbol}</span>
+                  <SignalBadge signal={r.signal} size="sm" />
+                </div>
                 <div className="text-xs text-app-muted truncate">{r.name}</div>
               </div>
-              <span className="text-xs tabular-nums text-app-muted shrink-0">{r.score}</span>
-              <SignalBadge signal={r.signal} />
+              <span className="shrink-0 w-8 text-right text-sm tabular-nums text-app-text">
+                {r.score}
+              </span>
+              <div className="hidden lg:block shrink-0 w-32">
+                <Sparkline
+                  data={r.sparkline}
+                  positive={(r.changePct ?? 0) >= 0}
+                  width={56}
+                  height={24}
+                  fill
+                />
+              </div>
+              <div className="text-right shrink-0 lg:w-28">
+                <div className="text-sm text-app-text">
+                  {r.lastPrice === null ? (
+                    <span className="text-app-muted">—</span>
+                  ) : (
+                    <Num value={r.lastPrice} digits={2} />
+                  )}
+                </div>
+                <div className="text-xs">
+                  <Pct value={r.changePct} suffix="" />
+                </div>
+                {r.lastDate && r.lastDate !== session && (
+                  <div className="text-[10px] text-app-muted leading-none mt-0.5">
+                    {r.lastDate}
+                  </div>
+                )}
+              </div>
             </Link>
           ))}
         </div>

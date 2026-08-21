@@ -3,7 +3,7 @@ import { computeRecommendation } from "@/lib/recommendation";
 import { syncPricesForCompany } from "@/lib/sync";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 import { fetchExchangeMovers, type ExchangeMovers } from "@/lib/mse/movers";
-import { daysBetween, sessionChangePct } from "@/lib/priceChange";
+import { sessionChangePct } from "@/lib/priceChange";
 import { ulaanbaatarDay } from "@/lib/day";
 import { needsPriceRefresh } from "@/lib/priceFreshness";
 import { liveCandle } from "@/lib/liveCandle";
@@ -551,16 +551,29 @@ export function tradedSession(
 }
 
 /**
- * Rows priced within `days` of the latest session. Indicators computed from a
- * series that stops years ago describe a market that no longer exists, so a
- * ranking by score has to bound how stale its inputs may be.
+ * Rows whose last trade falls in the same calendar month as `session`.
+ *
+ * A ranking by score has to bound how stale its inputs may be: indicators
+ * computed from a series that stops months ago describe a market that no
+ * longer exists, and on this exchange plenty of listings go that long without
+ * a trade while keeping a price and a score.
+ *
+ * The month is taken from the session rather than from the clock, and the
+ * difference only ever shows in the first days of a month: on the 1st, before
+ * anything has traded, the wall clock says a month in which no session exists
+ * and the rule would empty the list outright. Reckoned from the session it
+ * means "the current month of trading", which on every day the market has
+ * opened is the same month the calendar is on.
  */
-export function pricedRecently(rows: DashboardRow[], days: number): DashboardRow[] {
-  const session = latestSessionDate(rows);
+export function tradedThisMonth(
+  rows: DashboardRow[],
+  session: string | null,
+): DashboardRow[] {
   if (!session) return [];
-  return rows.filter(
-    (r) => r.lastDate !== null && daysBetween(r.lastDate, session) <= days,
-  );
+  // Both sides are `YYYY-MM-DD`, where a lexical comparison is a chronological
+  // one — the fixed-width digits are what makes that true.
+  const from = `${session.slice(0, 7)}-01`;
+  return rows.filter((r) => r.lastDate !== null && r.lastDate >= from);
 }
 
 /** Rebuild the snapshot immediately (called after a sync ingests new prices). */
