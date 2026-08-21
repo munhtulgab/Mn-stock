@@ -198,16 +198,18 @@ export default async function HomePage() {
              the page scrolls under it as before; on the wide layout it fills
              its column and scrolls inside, so the two columns finish level.
 
-             Capped at the same 27.5rem as the watchlist. Without the cap a
-             portfolio of fourteen made the row 911px tall and left the
-             watchlist beside it with five hundred pixels of nothing under its
-             eighth card — the taller pane has to be bounded too, or matching
-             the heights just moves the mismatch.
+             Five rows, and a little more. A row measures 65px, so five is
+             325px; the cap is 344px, which leaves the sixth row cut across
+             its middle. Scrollbars are hidden throughout this app and some
+             browsers draw them as an overlay taking no layout space, so a
+             clean cut at exactly five would leave nothing on screen to say a
+             sixth existed. The half-row is the cue that does not depend on
+             the platform.
 
              No `overflow-hidden`: `.pane-scroll` sets overflow-y and the two
              would fight over one property — a scroll container clips to its
              own border radius anyway. */
-          <div className="pane-scroll overflow-x-hidden rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider lg:flex-1 lg:min-h-0 lg:max-h-[27.5rem]">
+          <div className="pane-scroll overflow-x-hidden rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider lg:flex-1 lg:min-h-0 lg:max-h-[21.5rem]">
             {portfolio.holdings.map((h) => (
               <Link
                 key={h.symbol}
@@ -235,19 +237,18 @@ export default async function HomePage() {
 
       {watchlist.length > 0 && (
         <Section title="Хяналтын жагсаалт" fill>
-          {/* Eight cards is 420px — four rows of a measured 96px plus the
-              three 12px gaps. The cap is 440px, twenty more, so that a ninth
-              card shows its top edge instead of being invisible: scrollbars
-              are hidden throughout this app and some browsers draw them as
-              an overlay that takes no space at all, so a clean cut at exactly
-              eight would give the reader nothing to say there was a ninth. A
-              partly visible row is the cue that does not depend on the
-              platform.
+          {/* Six at a time on the wide layout, and sideways for the rest.
+              Cards fill downward in threes and then start a new column, so
+              two columns of three are on screen and the next two arrive by
+              scrolling right — the same gesture the phone layout already
+              uses, rather than a second scroll direction to learn.
 
-              A cap rather than a height, so a watchlist of three does not sit
-              in a box two-thirds empty — the taller of the two columns sets
-              the row and the other fills it. */}
-          <div className="pane-scroll flex gap-3 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-cols-2 lg:max-h-[27.5rem] lg:overflow-x-hidden lg:content-start lg:flex-1 lg:min-h-0">
+              The columns are 47% rather than half, so the pair does not fill
+              the width exactly and the next column shows an edge. Without
+              that there is nothing to say a seventh card exists: scrollbars
+              are hidden throughout this app and some browsers draw them as an
+              overlay that takes no layout space at all. */}
+          <div className="pane-scroll flex gap-3 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-flow-col lg:grid-rows-3 lg:auto-cols-[47%] lg:content-start lg:flex-1 lg:min-h-0">
             {watchlist.map((w) => (
               <Link
                 key={w.symbol}
