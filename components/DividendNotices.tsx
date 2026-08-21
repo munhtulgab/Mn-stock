@@ -1,69 +1,46 @@
+import Num from "@/components/Num";
 import MetricInfo from "@/components/MetricInfo";
 import type { DividendRow } from "@/lib/analysis/report";
 
 /**
- * What has been declared per share over the last few years.
+ * What the company has declared per share, year by year.
  *
- * The same figures the dividend history card below draws, cut to four years:
- * this is the summary a reader wants beside the quarter's profit — did any of
- * it reach them — and the full run is a card of its own further down.
+ * Lived inside the market panel until that card was removed. It belongs with
+ * the financial statements rather than with the market data it sat beside: a
+ * declared dividend is something the company decided, not something the board
+ * did to its price.
  *
- * Every one of the four years gets a line whether or not it has a figure. A
- * company that paid in 2025 and not in 2024 said something by not paying, and
- * a list that simply omits the year leaves the reader unable to tell that from
- * a year this app failed to read.
+ * Same DividendRow[] the dividend-history table below reads, rather than a
+ * separate fetch of its own — two different sources previously meant the two
+ * cards could show different figures for the same year.
  */
-const YEARS_SHOWN = 4;
-
-export default function DividendNotices({
-  dividends,
-}: {
-  dividends: DividendRow[];
-}) {
-  const declared = new Map(dividends.map((row) => [row.year, row]));
-  // Counted back from the newest year either source knows about rather than
-  // from the clock: a server rendering this in January would otherwise open
-  // with a year nobody has declared anything for yet.
-  const newest = dividends.length > 0 ? Math.max(...dividends.map((d) => d.year)) : null;
-  if (newest === null) return null;
-
-  const years = Array.from({ length: YEARS_SHOWN }, (_, i) => newest - i);
+export default function DividendNotices({ years }: { years: DividendRow[] }) {
+  if (years.length === 0) return null;
 
   return (
     <div>
-      <h3 className="text-xs font-bold text-app-text mb-1.5">Ногдол ашиг</h3>
-      <dl className="space-y-1">
-        {years.map((year) => {
-          const row = declared.get(year);
-          return (
-            <div key={year} className="flex items-baseline justify-between gap-3 text-xs">
-              <dt className="text-app-muted">{year} он</dt>
-              <dd className="flex items-baseline gap-0.5 text-right tabular-nums text-app-text">
-                <span>
-                  {row ? (
-                    <>
-                      {row.amount.toLocaleString("mn-MN", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}{" "}
-                      ₮
-                      {row.yieldPct !== null && (
-                        <span className="text-app-muted">
-                          {" · өгөөж "}
-                          {row.yieldPct.toFixed(2)}%
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-app-muted">—</span>
-                  )}
-                </span>
-                <MetricInfo term="dividend" />
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
+      <h3 className="text-[10px] font-bold uppercase tracking-wide text-app-muted mb-1 inline-flex items-center gap-1">
+        Ногдол ашиг
+        <MetricInfo term="dividend" />
+      </h3>
+      <ul className="space-y-1">
+        {years.map((year) => (
+          <li key={year.year} className="flex justify-between gap-2 text-xs">
+            <span className="text-app-muted">{year.year} он</span>
+            <span className="shrink-0 tabular-nums">
+              <span className="text-app-text">
+                <Num value={year.amount} digits={2} suffix="₮" />
+                {year.yieldPct !== null && (
+                  <span className="text-app-muted">
+                    {" · өгөөж "}
+                    {year.yieldPct.toFixed(2)}%
+                  </span>
+                )}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
