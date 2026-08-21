@@ -422,15 +422,33 @@ export default async function StockDetailPage({
             <DividendHistory dividends={analysis.dividends} />
           </div>
 
-          {/* Beside the fundamentals it belongs with: the year's range, its
-              return and what usually changes hands. */}
-          {analysis.profile && (
-            <div className="md:order-7 md:col-span-2">
-              <YearPanel profile={analysis.profile} price={currentPrice} />
-            </div>
-          )}
+          {/* The year and the risk, side by side and half the board each.
+              They are read against one another — a year's range and return
+              beside the spread and the drawdown that produced them — and each
+              was taking two of three columns on its own row, which left a
+              column of nothing next to both and pushed them a screen apart.
 
-          <div className="md:order-8 md:col-span-2">
+              A pair inside one full-width cell rather than four columns in the
+              outer grid: three does not divide in half, and the panels are
+              wanted at equal width, not two-thirds and one-third. On a phone
+              the wrapper is not a grid at all and they stack as before.
+
+              Both panels are direct children of it so the row stretches them
+              to a common height; a div around either one would take the
+              stretch itself and leave the card inside it short.
+
+              One column when there is no year profile, rather than the risk
+              panel sitting in half a row with nothing beside it. Both class
+              names are written out because Tailwind reads them from the
+              source and a built-up one would compile to nothing. */}
+          <div
+            className={`md:order-7 md:col-span-3 space-y-4 md:space-y-0 md:grid md:gap-4 ${
+              analysis.profile ? "md:grid-cols-2" : "md:grid-cols-1"
+            }`}
+          >
+            {analysis.profile && (
+              <YearPanel profile={analysis.profile} price={currentPrice} />
+            )}
             <RiskPanel risk={analysis.risk} years={analysis.riskYears} />
           </div>
 
