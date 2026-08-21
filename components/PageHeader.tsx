@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getUnreadCount } from "@/lib/notifications";
+import ThemeToggle from "@/components/ThemeToggle";
 
 /**
  * The top of a section: its name, and the two things that should be one tap
@@ -31,6 +32,7 @@ export default async function PageHeader({
         <h1 className="text-xl font-bold text-app-text truncate">{title}</h1>
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        <ThemeToggle />
         <Link
           href="/discover"
           aria-label="Хайх"

@@ -41,6 +41,18 @@ export const viewport: Viewport = {
   interactiveWidget: "resizes-content",
 };
 
+/**
+ * Applies the reader's theme before the first paint.
+ *
+ * Inline and blocking on purpose. Anything that runs after hydration is a
+ * frame too late: the page would paint dark, then flip to light in front of
+ * somebody who has already told it which one they want. The attribute is the
+ * same one ThemeToggle writes, and dark is the answer when nothing is stored
+ * — this app is dark by default and a first visit should not depend on how
+ * the phone happens to be set.
+ */
+const APPLY_THEME = `try{var t=localStorage.getItem("mse-theme");if(t==="light")document.documentElement.dataset.theme="light"}catch(e){}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -51,6 +63,9 @@ export default function RootLayout({
       lang="mn"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: APPLY_THEME }} />
+      </head>
       <body className="min-h-full bg-app-bg text-app-text">
         <PwaRegister />
         <ToastProvider>{children}</ToastProvider>

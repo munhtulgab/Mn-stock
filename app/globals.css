@@ -1,9 +1,71 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0d0f14;
-  --foreground: #ffffff;
   color-scheme: dark;
+
+  /* Dark trading palette. Every surface colour lives here rather than in the
+     @theme block below, so the light theme can restate the same names and the
+     utilities pick up whichever set is in force. */
+  --app-bg: #0d0f14;
+  --app-card: #171a21;
+  --app-elevated: #1e222b;
+  /* The line around a card. Lifted well clear of the surfaces it separates:
+     at #252932 a card had no visible edge at all on a phone in daylight, and
+     the layout read as text floating on one flat sheet. */
+  --app-border: #3a404e;
+  /* The line between rows inside a card, which is a quieter job. Held at the
+     old border tone: a list of forty holdings drawn with the outline colour
+     reads as a grid of boxes rather than as one card with rows in it. */
+  --app-divider: #252932;
+  --app-text: #ffffff;
+  --app-muted: #8b90a0;
+
+  --brand: #00d16c;
+  --brand-dark: #00a857;
+  --brand-light: #10291f;
+  --app-positive: #00d16c;
+  --app-positive-bg: #0e2a1d;
+  --app-negative: #ff5a5f;
+  --app-negative-bg: #2c1518;
+  /* The middle of three: a ratio level with its sector rather than above or
+     below it. Amber reads as "neither" against both the green and the red,
+     which a dimmer grey would not on a card carrying all three at once. */
+  --app-warn: #ffb020;
+  --app-warn-bg: #2b2110;
+
+  --background: var(--app-bg);
+  --foreground: var(--app-text);
+}
+
+/*
+ * Daylight.
+ *
+ * Not the dark palette inverted: a green that carries a figure against black
+ * is too pale to read against white, so the accents step down a shade while
+ * the surfaces step up. The floating tab bar keeps its dark tones in both —
+ * it is a bar that hovers over the page rather than part of it, and a white
+ * one on a white page has nothing to hover above.
+ */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --app-bg: #f4f5f8;
+  --app-card: #ffffff;
+  --app-elevated: #eef0f4;
+  --app-border: #dde1e9;
+  --app-divider: #edeff4;
+  --app-text: #10131a;
+  --app-muted: #667085;
+
+  --brand: #00a857;
+  --brand-dark: #00874a;
+  --brand-light: #e4f7ed;
+  --app-positive: #00a857;
+  --app-positive-bg: #e4f7ed;
+  --app-negative: #d92d33;
+  --app-negative-bg: #fdeaea;
+  --app-warn: #b26a00;
+  --app-warn-bg: #fdf2df;
 }
 
 @theme inline {
@@ -12,32 +74,22 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Dark trading palette */
-  --color-brand: #00d16c;
-  --color-brand-dark: #00a857;
-  --color-brand-light: #10291f;
-  --color-app-bg: #0d0f14;
-  --color-app-card: #171a21;
-  --color-app-elevated: #1e222b;
-  /* The line around a card. Lifted well clear of the surfaces it separates:
-     at #252932 a card had no visible edge at all on a phone in daylight, and
-     the layout read as text floating on one flat sheet. */
-  --color-app-border: #3a404e;
-  /* The line between rows inside a card, which is a quieter job. Held at the
-     old border tone: a list of forty holdings drawn with the outline colour
-     reads as a grid of boxes rather than as one card with rows in it. */
-  --color-app-divider: #252932;
-  --color-app-text: #ffffff;
-  --color-app-muted: #8b90a0;
-  --color-app-positive: #00d16c;
-  --color-app-positive-bg: #0e2a1d;
-  --color-app-negative: #ff5a5f;
-  --color-app-negative-bg: #2c1518;
-  /* The middle of three: a ratio level with its sector rather than above or
-     below it. Amber reads as "neither" against both the green and the red,
-     which a dimmer grey would not on a card carrying all three at once. */
-  --color-app-warn: #ffb020;
-  --color-app-warn-bg: #2b2110;
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-light: var(--brand-light);
+  --color-app-bg: var(--app-bg);
+  --color-app-card: var(--app-card);
+  --color-app-elevated: var(--app-elevated);
+  --color-app-border: var(--app-border);
+  --color-app-divider: var(--app-divider);
+  --color-app-text: var(--app-text);
+  --color-app-muted: var(--app-muted);
+  --color-app-positive: var(--app-positive);
+  --color-app-positive-bg: var(--app-positive-bg);
+  --color-app-negative: var(--app-negative);
+  --color-app-negative-bg: var(--app-negative-bg);
+  --color-app-warn: var(--app-warn);
+  --color-app-warn-bg: var(--app-warn-bg);
 
   /* Floating tab bar (swapped: surface takes the old active tone, active
      takes the old surface tone) plus lighter twins for a convex gradient. */
