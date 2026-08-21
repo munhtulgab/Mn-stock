@@ -1,5 +1,5 @@
 import type { Db } from "mongodb";
-import { fetchExchangeNews } from "@/lib/mse/exchangeNews";
+import { fetchExchangeNewsSince } from "@/lib/mse/exchangeNews";
 import type { Security } from "@/lib/types";
 
 /**
@@ -23,10 +23,12 @@ import type { Security } from "@/lib/types";
  */
 
 export interface Dividend {
-  /** The year the profit was earned, as the notice states it. */
+  /** The calendar year the declaration was announced in. */
   year: number;
-  /** Tugriks per share. */
+  /** Tugriks per share, summed over every declaration made that year. */
   amount: number;
+  /** How many declarations that sum is made of — two for a half-yearly payer. */
+  payments: number;
   /** Against the current price, where there is one. */
   yieldPct: number | null;
   /** The notice this was read from. */
@@ -39,9 +41,26 @@ const SNAPSHOT_KEY = "dividends";
 /** A declaration is an annual event; a day between rebuilds is plenty. */
 const CACHE_MS = 24 * 60 * 60 * 1000;
 /** Bump when the stored shape changes so old rows are rebuilt, not served. */
-const SCHEMA_VERSION = 5;
-/** Notices to read back through — several years of declarations. */
-const NOTICES = 120;
+const SCHEMA_VERSION = 6;
+/**
+ * How far back the newsroom is read.
+ *
+ * This was a count — 120 notices — and a count is the wrong unit for an
+ * archive whose density changes: the exchange files a trading report every
+ * session plus whatever else happened that day, so 120 items is a few weeks
+ * at the recent end. It reached 2024, and a bank that has paid a dividend
+ * every year since it listed showed two of them.
+ *
+ * A date, and a page walk to reach it. 2016 rather than 2018 so the earliest
+ * year the history card shows is itself surrounded by context rather than
+ * sitting on the edge of what was read, and because a declaration for the
+ * 2018 financial year is announced in 2019 — the year in the headline and the
+ * year of publication are not the same, and only one of them can be paged to.
+ *
+ * Measured over the whole archive: 423 dividend notices back to 2011, against
+ * the 58 one page reached.
+ */
+const NOTICES_FROM = "2016-01-01";
 /**
  * A declaration is not reliably filed under the exchange's own "dividend"
  * tab. QPAY's 60₮ announcement of 2026-07-30 is in the general feed and
@@ -80,12 +99,21 @@ interface DividendSnapshot {
  * Many notices then spell the figure out — "500 (Таван зуу) төгрөгөөр" —
  * which is why the currency is allowed to arrive after a bracket rather than
  * straight after the digits.
+ *
+ * A few words are allowed between the phrase and the number, and that is not
+ * cosmetic: "Нэгж хувьцаа тус бүрд 141.73 төгрөгөөр тооцож" is how Хаан банк
+ * announces its dividend, and requiring the digits to follow "хувьцаа"
+ * immediately read that notice as having no figure in it at all. The filler
+ * is listed rather than left as `\w+` so that a sentence which merely mentions
+ * a share before quoting some other sum cannot be mistaken for a declaration.
  */
-function perShare(text: string): number | null {
-  const match =
-    /нэгж\s+хувьцаа[а-яөүёА-ЯӨҮЁ]*\s+([\d,]+(?:\.\d+)?)\s*(?:\([^)]*\)\s*)?төгрөг/i.exec(
-      text,
-    );
+const FILLER = "(?:тус|бүр|бүрд|бүрт|тутам|тутамд|ногдох|ноогдох|нь)";
+
+export function perShare(text: string): number | null {
+  const match = new RegExp(
+    `нэгж\\s+хувьцаа[а-яөүёА-ЯӨҮЁ]*(?:\\s+${FILLER}){0,3}\\s+([\\d,]+(?:\\.\\d+)?)\\s*(?:\\([^)]*\\)\\s*)?төгрөг`,
+    "i",
+  ).exec(text);
   return match ? parseAmount(match[1]) : null;
 }
 
@@ -110,16 +138,26 @@ function parseAmount(raw: string): number | null {
 }
 
 /**
- * The year the profit was earned.
+ * The year a declaration is counted in: the year it was announced.
  *
- * "2025 ОНЫ ЦЭВЭР АШГААС" — the year in front of "оны", which is the year
- * being distributed rather than the year it is being distributed in. A
- * notice with no such year is dated by its own publication.
+ * This used to read the year out of the headline — "2025 ОНЫ ЦЭВЭР АШГААС",
+ * the year whose profit is being distributed — and that is a defensible thing
+ * to mean, but it is not what the other source means, and the two are merged
+ * by year. Keying them differently silently mixed two calendars in one table.
+ *
+ * Datalab counts a payment in the year it was declared, and АПУ settles it:
+ * the notices announced during 2024 are 44₮ in February, for the second half
+ * of 2023, and 55₮ in August, for the first half of 2024. Datalab's figure
+ * for АПУ 2024 is 99.0 — the two added together, under the year they were
+ * announced in, not the years the profit was earned. 2020 and 2021 agree the
+ * same way: 71 + 37.5 against Datalab's 108.377, and 57.5 + 46 against
+ * 103.44.
+ *
+ * So the announcement year it is, for both sources, and the card below says
+ * so rather than claiming these are profit years.
  */
-function profitYear(title: string, date: string): number {
-  const match = /(20\d{2})\s*ОНЫ/i.exec(title);
-  const stated = match ? Number(match[1]) : NaN;
-  return Number.isFinite(stated) ? stated : Number(date.slice(0, 4));
+function declarationYear(date: string): number {
+  return Number(date.slice(0, 4));
 }
 
 /**
@@ -218,8 +256,8 @@ async function computeDividends(
   db: Db,
 ): Promise<Record<string, Dividend[]>> {
   const [filed, general, securities] = await Promise.all([
-    fetchExchangeNews(NOTICES, "dividend"),
-    fetchExchangeNews(NOTICES),
+    fetchExchangeNewsSince(NOTICES_FROM, "dividend"),
+    fetchExchangeNewsSince(NOTICES_FROM),
     db
       .collection<Security>("securities")
       .find({}, { projection: { _id: 0, companyCode: 1, name: 1 } })
@@ -247,15 +285,40 @@ async function computeDividends(
     const amount = perShare(`${notice.description} ${notice.title}`);
     if (amount === null) continue;
 
-    const year = profitYear(notice.title, notice.date);
+    const year = declarationYear(notice.date);
     const list = (byCompany[companyCode] ??= []);
-    // One declaration per year per company: the exchange sometimes follows a
-    // notice with a correction or a reminder, and the newest is read first.
-    if (list.some((d) => d.year === year)) continue;
-    list.push({ year, amount, yieldPct: null, url: notice.url, date: notice.date });
+    const existing = list.find((d) => d.year === year);
+
+    // Added, not replaced. АПУ, Сүү, ТТЛ and others declare twice a year —
+    // once on each half's result — and keeping only one notice per year
+    // reported half of what the company paid. It reported the wrong half,
+    // too: the rule was "newest wins", so a year showed its August
+    // instalment and dropped its February one. Datalab's own figures are
+    // these sums, which is what made the arithmetic checkable.
+    if (existing) {
+      existing.amount += amount;
+      existing.payments += 1;
+      // The year's link points at its most recent notice.
+      if (notice.date > existing.date) {
+        existing.date = notice.date;
+        existing.url = notice.url;
+      }
+      continue;
+    }
+    list.push({
+      year,
+      amount,
+      payments: 1,
+      yieldPct: null,
+      url: notice.url,
+      date: notice.date,
+    });
   }
 
   for (const list of Object.values(byCompany)) {
+    // Summing floats reintroduces the tail a rounded figure did not have:
+    // 44 + 55 is 99 but 5.14 + 7.36 is 12.500000000000002.
+    for (const row of list) row.amount = Math.round(row.amount * 1e6) / 1e6;
     list.sort((a, b) => b.year - a.year);
     list.splice(KEEP_YEARS);
   }

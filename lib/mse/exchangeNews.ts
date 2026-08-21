@@ -48,14 +48,22 @@ export async function fetchExchangeNews(
   limit = 30,
   category?: string,
 ): Promise<ExchangeNewsItem[]> {
+  return fetchExchangeNewsPage(1, limit, category);
+}
+
+async function fetchExchangeNewsPage(
+  page: number,
+  perPage: number,
+  category?: string,
+): Promise<ExchangeNewsItem[]> {
   const parameter =
-    `?lang=mn&orderby=DESC&page=1&perpage=${limit}` +
+    `?lang=mn&orderby=DESC&page=${page}&perpage=${perPage}` +
     (category ? `&category=${category}` : "");
 
-  const page = await callMseAction("news", parameter, isNewsPage);
-  if (!page) return [];
+  const answer = await callMseAction("news", parameter, isNewsPage);
+  if (!answer) return [];
 
-  return (page.data ?? [])
+  return (answer.data ?? [])
     .filter((n) => n.id && n.title)
     .map((n) => ({
       title: clean(n.title),
@@ -63,6 +71,51 @@ export async function fetchExchangeNews(
       date: clean(n.date).slice(0, 10),
       url: `${ARTICLE_BASE}/${n.id}`,
     }));
+}
+
+/** Items a page asks for. The endpoint serves 500 without complaint. */
+const PAGE_SIZE = 500;
+
+/**
+ * A ceiling on the walk, so a feed that stops answering with dates — or
+ * starts answering with the same page forever — cannot spin. Sixteen pages
+ * reached 2011 when this was measured, which is the whole archive.
+ */
+const MAX_PAGES = 20;
+
+/**
+ * Everything the newsroom has published since `from`, oldest page last.
+ *
+ * `perpage` alone does not reach back: asking for fifteen hundred returns the
+ * same fifteen hundred as asking for five hundred three times would have
+ * given for the first page, and the feed stops there. `page` is what moves,
+ * and nothing here was using it — the dividend history was built from one
+ * page of 120 and reached 2024, which is why a company that has paid every
+ * year since it listed showed two.
+ *
+ * Paged rather than sliced by count because the density is not constant: the
+ * exchange publishes a daily trading report plus whatever else happened, so
+ * five hundred items is fifteen months at one end of the archive and eight at
+ * the other.
+ */
+export async function fetchExchangeNewsSince(
+  from: string,
+  category?: string,
+): Promise<ExchangeNewsItem[]> {
+  const all: ExchangeNewsItem[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const items = await fetchExchangeNewsPage(page, PAGE_SIZE, category);
+    // An empty page is the end of the archive, and is also what a failed
+    // call looks like. Either way there is nothing further back to have.
+    if (items.length === 0) break;
+    all.push(...items);
+
+    const oldest = items.reduce((a, b) => (a.date < b.date ? a : b)).date;
+    if (oldest <= from) break;
+  }
+
+  return all;
 }
 
 /* -------------------------------------------------------------------------

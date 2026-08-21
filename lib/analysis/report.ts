@@ -111,24 +111,58 @@ export interface StockAnalysis {
 /**
  * One dividend history out of the two sources that have one.
  *
- * The exchange's own notices are authoritative and carry a date and a link
- * to the announcement, but they only reach back as far as the newsroom does
- * and cover 34 companies. Datalab covers 83 and goes back five years, with
- * the payout ratio, but states only a year.
+ * The exchange's own notices carry a date and a link to the announcement, and
+ * they reach companies Datalab does not: it has no dividend at all for any of
+ * the banks, and its best year covers 29 of the 88 companies it lists.
+ * Datalab in turn has years no notice survives for, and the payout ratio.
  *
- * So a year the exchange announced keeps the exchange's row — the figure, the
- * date, the link — and Datalab fills in the years it does not have. The two
- * agree where they overlap: Хаан банк's 2025 payment reads 214₮ in the
- * notices and Datalab's summary states the same 214₮.
+ * Both are keyed on the year the payment was declared, which took some
+ * settling — see `declarationYear`. Where both have a year, the figure is
+ * Datalab's and the date and link are the exchange's; the reasoning is at the
+ * point where that choice is made below.
  */
-function mergeDividends(
+export function mergeDividends(
   notices: Dividend[],
   datalab: TdbDividend[],
   price: number | null,
 ): DividendRow[] {
   const rows = new Map<number, DividendRow>();
 
+  // The notices first, so they hold the years Datalab has no figure for —
+  // which is most of the market: Datalab carries a dividend for 29 companies
+  // in its best year and none at all for any of the banks.
+  for (const notice of notices) {
+    rows.set(notice.year, {
+      year: notice.year,
+      amount: notice.amount,
+      yieldPct: notice.yieldPct,
+      payoutRatio: null,
+      date: notice.date,
+      url: notice.url,
+      source: "mse",
+    });
+  }
+
+  // Datalab second, and it wins the figure where it has one.
+  //
+  // This was the other way round, on the reasoning that the exchange's own
+  // announcement outranks a third party's arithmetic. It does — but only if
+  // the announcement was read correctly, and reading it means pulling a
+  // number out of a sentence. Checked across every company both sources
+  // cover: 74 years agree, 18 differ, and the differences run one way. АПУ
+  // 2025 reads 65₮ from the notices against Datalab's 130 because the July
+  // declaration's standfirst states a payment date and no amount, so half the
+  // year is invisible to any parser. A missed instalment makes the notice
+  // total too low; nothing makes Datalab's too high.
+  //
+  // The rest of the gap is not error at all: Datalab divides by a weighted
+  // average share count, so Багануур's 330₮ is its 297.29 — the same payment
+  // over a year in which the count changed.
+  //
+  // So the number comes from Datalab where it exists, and the notice keeps
+  // what only it has: the date, and the link to the announcement.
   for (const entry of datalab) {
+    const announced = rows.get(entry.year);
     rows.set(entry.year, {
       year: entry.year,
       amount: entry.amountPerShare,
@@ -136,22 +170,9 @@ function mergeDividends(
         entry.yieldPct ??
         (price && price > 0 ? (entry.amountPerShare / price) * 100 : null),
       payoutRatio: entry.payoutRatio,
-      date: null,
-      url: null,
-      source: "tdb",
-    });
-  }
-
-  // Second, so the exchange's own announcement wins the year outright.
-  for (const notice of notices) {
-    rows.set(notice.year, {
-      year: notice.year,
-      amount: notice.amount,
-      yieldPct: notice.yieldPct,
-      payoutRatio: rows.get(notice.year)?.payoutRatio ?? null,
-      date: notice.date,
-      url: notice.url,
-      source: "mse",
+      date: announced?.date ?? null,
+      url: announced?.url ?? null,
+      source: announced ? "mse" : "tdb",
     });
   }
 

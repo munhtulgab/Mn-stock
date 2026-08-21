@@ -1,4 +1,11 @@
-export type SecurityClassification = "I" | "II" | "III" | "unknown";
+/**
+ * Which shelf of the exchange a security sits on.
+ *
+ * "fund" is not one of MSE's three share classes — it is the Сан tab, the
+ * collective investment funds and ETFs, which trade alongside the shares and
+ * have a price and a chart but no class and no quarterly filing.
+ */
+export type SecurityClassification = "I" | "II" | "III" | "fund" | "unknown";
 
 export interface Security {
   companyCode: number;

@@ -88,9 +88,15 @@ export default function DividendHistory({
               </tbody>
             </table>
           </div>
+          {/* The year used to be described as the one the profit was earned
+              in, which was true of the notices and not of the other source.
+              They are merged into one table, so one of the two descriptions
+              had to be wrong; this is the one both sources actually use. */}
           <p className="mt-3 text-[10px] text-app-muted">
-            Он гэдэг нь ашиг олсон жил. Өгөөжийг өнөөдрийн ханшаар тооцов.
-            Огноотой мөр нь МХБ-ийн мэдэгдэл — дарж эх сурвалжийг нь үзнэ.
+            Он гэдэг нь ногдол ашгийг зарласан жил — хагас жилээр хоёр удаа
+            зарласан бол нийлбэрээр нь харуулав. Өгөөжийг өнөөдрийн ханшаар
+            тооцов. Огноотой мөр нь МХБ-ийн мэдэгдэл — дарж эх сурвалжийг нь
+            үзнэ.
           </p>
         </>
       )}

@@ -161,7 +161,12 @@ export default async function StockDetailPage({
               </span>
               Идэвхтэй
             </span>
-            <span>· Ангилал {security.classification}</span>
+            <span>
+              ·{" "}
+              {security.classification === "fund"
+                ? "Хамтын сан"
+                : `Ангилал ${security.classification}`}
+            </span>
           </p>
         </div>
         <div className="flex items-start gap-2">
