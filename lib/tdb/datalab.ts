@@ -24,13 +24,21 @@ const BASE = "https://api.tdbsecurities.mn/tdbs/datalab";
 const TIMEOUT_MS = 15_000;
 
 /**
- * The years Datalab holds complete company-years for.
+ * The first year Datalab answers for.
  *
- * The market-wide list answers for 2018 onward, but the per-company series
- * — the one carrying the current ratio — runs 2020 to 2024. The most recent
- * year is deliberately not the current one: see `usable` below.
+ * 2018, and fully: the market-wide list returns all 88 companies for 2018 and
+ * 2019 with the same fields as every later year — 63 of them carrying a
+ * current ratio in each, the same count as 2020 — and only one 2018 row and
+ * three 2019 rows fail the plausibility check below, against 45 of the
+ * part-filed current year. This was 2020 on the belief that the earlier two
+ * were thinner than they are.
+ *
+ * The distance matters most for dividends. The per-company dividend endpoint
+ * answers with four years and no more, so 2018 and 2019 exist in this source
+ * alone. The most recent year is deliberately included and then filtered
+ * per row: see `usable` below.
  */
-export const TDB_FIRST_YEAR = 2020;
+export const TDB_FIRST_YEAR = 2018;
 
 export interface TdbYear {
   year: number;

@@ -27,6 +27,12 @@ const PROFILES = "tdbProfiles";
 const META_KEY = "tdbSync";
 /** Annual figures; a week between refreshes is already generous. */
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * Bumped when a sweep starts covering something it did not cover before, so
+ * the next run happens now rather than whenever the week is up. Version 2
+ * reaches back to 2018 and keeps the year list's dividend column.
+ */
+const SYNC_VERSION = 2;
 
 /**
  * Companies asked about at once.
@@ -39,9 +45,24 @@ const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
  */
 const COMPANY_CONCURRENCY = 6;
 
+/**
+ * What one company has paid, from both of Datalab's accounts of it.
+ *
+ * `history` is the per-company dividend endpoint, which answers with four
+ * years and nothing before them. `annual` is the dividend column of the
+ * market-wide year list, which reaches back to 2018 — the same series the
+ * Datalab site's own dividends view is drawn from. Where the two overlap they
+ * agree to the last decimal place, checked across АПУ, ТТЛ, Сүү, QPAY, ММХ,
+ * Сүлжээ and Тахьколтех, so the older half is the only thing the second field
+ * adds.
+ *
+ * Kept as two fields rather than merged on write so that a company dropped
+ * from one sweep does not silently lose the years the other sweep found.
+ */
 interface TdbDividendDoc {
   companyCode: number;
   history: TdbDividend[];
+  annual?: TdbDividend[];
   fetchedAt: Date;
 }
 
@@ -77,6 +98,7 @@ export async function pooled<T>(
 interface SyncMeta {
   key: string;
   syncedAt: Date;
+  version?: number;
 }
 
 /**
@@ -93,11 +115,37 @@ export async function syncTdb(db: Db, today: string): Promise<{
   let rows = 0;
   let years = 0;
   const companies = new Set<number>();
+  const annual = new Map<number, TdbDividend[]>();
 
   for (let year = TDB_FIRST_YEAR; year <= thisYear; year++) {
     const fetched = await fetchTdbYear(year).catch(() => [] as TdbYear[]);
     if (fetched.length === 0) continue;
     years++;
+
+    // Taken before the plausibility filter below, and deliberately.
+    //
+    // A dividend per share is a figure the company declared, not one Datalab
+    // worked out from a part-filed statement, and it survives a row whose
+    // ratios do not: 22 of the 29 companies with a dividend for the running
+    // year sit in rows `usable` rejects for an impossible margin, and every
+    // one of those dividends matches the per-company endpoint exactly. Losing
+    // them with the row would mean the newest payout — the one a reader is
+    // actually asking about — disappearing until the year closed.
+    for (const row of fetched) {
+      if (row.dividendPerShare === null || row.dividendPerShare <= 0) continue;
+      annual.set(row.companyCode, [
+        ...(annual.get(row.companyCode) ?? []),
+        {
+          year: row.year,
+          amountPerShare: row.dividendPerShare,
+          // Stated only by the per-company endpoint; the year list carries
+          // the per-share figure and the two ratios around it.
+          totalPaid: null,
+          yieldPct: row.dividendYield,
+          payoutRatio: row.dividendPayoutRatio,
+        },
+      ]);
+    }
 
     // Kept per row rather than per year. Datalab's newest year is part
     // filled, so it holds good rows for the companies that have filed and
@@ -121,6 +169,26 @@ export async function syncTdb(db: Db, today: string): Promise<{
 
   let dividends = 0;
   let profiles = 0;
+
+  // The long half of the history, written before the per-company sweep so a
+  // company that sweep cannot reach still has its years stored.
+  if (annual.size > 0) {
+    await db.collection<TdbDividendDoc>(DIVIDENDS).bulkWrite(
+      [...annual].map(([companyCode, history]) => ({
+        updateOne: {
+          filter: { companyCode },
+          update: {
+            $set: {
+              companyCode,
+              annual: history.sort((a, b) => b.year - a.year),
+            },
+            $setOnInsert: { history: [], fetchedAt: new Date() },
+          },
+          upsert: true,
+        },
+      })),
+    );
+  }
 
   await pooled([...companies], COMPANY_CONCURRENCY, async (companyCode) => {
     // Three independent reads of the same company. One failing says nothing
@@ -158,19 +226,21 @@ export async function syncTdb(db: Db, today: string): Promise<{
     .collection<SyncMeta>("marketSnapshots")
     .updateOne(
       { key: META_KEY },
-      { $set: { key: META_KEY, syncedAt: new Date() } },
+      { $set: { key: META_KEY, syncedAt: new Date(), version: SYNC_VERSION } },
       { upsert: true },
     );
 
   return { years, rows, dividends, profiles };
 }
 
-/** True when Datalab has not been read for a week. */
+/** True when Datalab has not been read for a week, or was read for less. */
 export async function tdbIsStale(db: Db): Promise<boolean> {
   const meta = await db
     .collection<SyncMeta>("marketSnapshots")
     .findOne({ key: META_KEY });
-  return !meta || Date.now() - meta.syncedAt.getTime() > REFRESH_MS;
+  if (!meta) return true;
+  if ((meta.version ?? 1) !== SYNC_VERSION) return true;
+  return Date.now() - meta.syncedAt.getTime() > REFRESH_MS;
 }
 
 /**
@@ -201,6 +271,14 @@ export async function getTdbLatest(
   return out;
 }
 
+/**
+ * Every year Datalab knows this company paid in, newest first.
+ *
+ * Both of its accounts, the wider one behind the narrower: the year list
+ * reaches back to 2018 and the per-company endpoint only four years, so the
+ * older years come from the first and the recent ones — which carry the total
+ * paid out as well — from the second. They agree where they overlap.
+ */
 export async function getTdbDividends(
   db: Db,
   companyCode: number,
@@ -208,7 +286,12 @@ export async function getTdbDividends(
   const doc = await db
     .collection<TdbDividendDoc>(DIVIDENDS)
     .findOne({ companyCode });
-  return doc?.history ?? [];
+  if (!doc) return [];
+
+  const byYear = new Map<number, TdbDividend>();
+  for (const row of doc.annual ?? []) byYear.set(row.year, row);
+  for (const row of doc.history ?? []) byYear.set(row.year, row);
+  return [...byYear.values()].sort((a, b) => b.year - a.year);
 }
 
 /** One company's year figures and return distribution, as last stored. */

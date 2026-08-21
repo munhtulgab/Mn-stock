@@ -359,7 +359,10 @@ export default async function StockDetailPage({
                   finances rather than about its market, and it was the one
                   thing on that card with nowhere else to go. Same source as
                   the dividend history table below, so the two never disagree. */}
-              <DividendNotices years={analysis?.dividends ?? []} />
+              <DividendNotices
+                years={analysis?.dividends ?? []}
+                through={Number(today.slice(0, 4))}
+              />
             </div>
           ) : (
             <p className="text-xs text-app-muted">Мэдээлэл олдсонгүй.</p>

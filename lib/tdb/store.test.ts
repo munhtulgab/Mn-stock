@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { pooled } from "./store";
+import type { Db } from "mongodb";
+import { getTdbDividends, pooled } from "./store";
+import type { TdbDividend } from "./datalab";
 
 /**
  * The TDB sweep asks about eighty-odd companies, three calls each. Doing that
@@ -59,4 +61,95 @@ test("a failure surfaces instead of being swallowed", async () => {
     }),
     /boom/,
   );
+});
+
+/**
+ * Datalab tells the same dividend story twice, over different lengths.
+ *
+ * Its per-company endpoint answers with four years and stops; its market-wide
+ * year list carries the same dividend column back to 2018, which is what the
+ * site's own dividends view is drawn from. The card on the company page is
+ * meant to show the whole run, so the reader was seeing four years of a
+ * history that is eight years long.
+ */
+
+function row(year: number, amount: number, extra: Partial<TdbDividend> = {}): TdbDividend {
+  return {
+    year,
+    amountPerShare: amount,
+    totalPaid: null,
+    yieldPct: null,
+    payoutRatio: null,
+    ...extra,
+  };
+}
+
+/** A Mongo stand-in that answers with one stored document. */
+function dbWith(doc: unknown): Db {
+  return {
+    collection: () => ({ findOne: async () => doc }),
+  } as unknown as Db;
+}
+
+test("both accounts of the history are read, longest first", async () => {
+  const dividends = await getTdbDividends(
+    dbWith({
+      companyCode: 90,
+      annual: [2021, 2020, 2019, 2018].map((y) => row(y, y - 2000)),
+      history: [row(2022, 150.83), row(2021, 103.44)],
+    }),
+    90,
+  );
+
+  assert.deepEqual(
+    dividends.map((d) => d.year),
+    [2022, 2021, 2020, 2019, 2018],
+  );
+});
+
+test("the per-company endpoint wins a year both cover", async () => {
+  const dividends = await getTdbDividends(
+    dbWith({
+      companyCode: 90,
+      annual: [row(2025, 130, { yieldPct: 13.3 })],
+      history: [row(2025, 130, { yieldPct: 13.3, totalPaid: 1.38e11 })],
+    }),
+    90,
+  );
+
+  assert.equal(dividends.length, 1);
+  // The narrower source states the total paid out; the wider one never does,
+  // so taking the wider row would lose a column rather than a year.
+  assert.equal(dividends[0].totalPaid, 1.38e11);
+});
+
+test("a company the year list reached but the per-company sweep did not", async () => {
+  // Хаан банк's per-company history comes back as four years of nulls, which
+  // the fetcher drops entirely. Before the year list was kept, that left the
+  // card with nothing at all for a bank that pays every year.
+  const dividends = await getTdbDividends(
+    dbWith({ companyCode: 563, annual: [row(2024, 189), row(2023, 154)], history: [] }),
+    563,
+  );
+
+  assert.deepEqual(
+    dividends.map((d) => d.year),
+    [2024, 2023],
+  );
+});
+
+test("a document stored before the year list was kept still reads", async () => {
+  const dividends = await getTdbDividends(
+    dbWith({ companyCode: 90, history: [row(2024, 99)] }),
+    90,
+  );
+
+  assert.deepEqual(
+    dividends.map((d) => d.year),
+    [2024],
+  );
+});
+
+test("a company Datalab does not cover has no history rather than an error", async () => {
+  assert.deepEqual(await getTdbDividends(dbWith(null), 999), []);
 });

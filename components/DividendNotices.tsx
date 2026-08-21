@@ -14,27 +14,32 @@ import type { DividendRow } from "@/lib/analysis/report";
  * separate fetch of its own — two different sources previously meant the two
  * cards could show different figures for the same year.
  *
- * Four years of it. The full run is the history card further down; this is
- * the summary that belongs beside the quarter's profit, and a company that
- * has paid every year since it listed would otherwise push the ratios above
- * it off the top of the screen.
+ * Four years of it, counted back from the year we are in. The full run is the
+ * history card further down; this is the summary that belongs beside the
+ * quarter's profit, and a company that has paid every year since it listed
+ * would otherwise push the ratios above it off the top of the screen.
  *
- * Every one of the four gets a line whether or not it has a figure. A company
- * that paid in 2025 and not in 2024 said something by not paying, and a list
- * that simply omits the year leaves the reader unable to tell that from a year
- * this app failed to read.
+ * Every one of the four gets a line whether or not it has a figure — including
+ * the current year, which for most companies is a dash until the annual
+ * meeting sits. That dash is the point. A company that paid in 2025 and not in
+ * 2024 said something by not paying, and a list that quietly ends at whatever
+ * year the company last paid leaves the reader unable to tell "has not
+ * declared yet" from "this app has no figure for it".
  */
 const YEARS_SHOWN = 4;
 
-export default function DividendNotices({ years }: { years: DividendRow[] }) {
+export default function DividendNotices({
+  years,
+  /** Today's year in Ulaanbaatar, read once on the server rather than here. */
+  through,
+}: {
+  years: DividendRow[];
+  through: number;
+}) {
   if (years.length === 0) return null;
 
   const declared = new Map(years.map((row) => [row.year, row]));
-  // Counted back from the newest year on record rather than from the clock:
-  // a page rendered in January would otherwise open on a year nobody has
-  // declared anything for yet.
-  const newest = Math.max(...years.map((row) => row.year));
-  const shown = Array.from({ length: YEARS_SHOWN }, (_, i) => newest - i);
+  const shown = Array.from({ length: YEARS_SHOWN }, (_, i) => through - i);
 
   return (
     <div>
