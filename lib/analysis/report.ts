@@ -3,7 +3,12 @@ import type { Financials, PricePoint, Security } from "@/lib/types";
 import { fetchIndexSeries } from "@/lib/mse/indices";
 import { getDividendHistory, type Dividend } from "@/lib/dividends";
 import { classifySector, resolveSector, type SectorKey } from "./sectors";
-import { getTdbDividends, getTdbLatest, getTdbProfile } from "@/lib/tdb/store";
+import {
+  ensureTdbDividends,
+  getTdbDividends,
+  getTdbLatest,
+  getTdbProfile,
+} from "@/lib/tdb/store";
 import type { TdbProfile, TdbReturnDistribution } from "@/lib/tdb/datalab";
 import type { TdbDividend, TdbYear } from "@/lib/tdb/datalab";
 import {
@@ -594,6 +599,14 @@ export async function buildAnalysis(
   live?: LiveQuote | null,
 ): Promise<StockAnalysis> {
   const from = `${Number(today.slice(0, 4)) - HISTORY_YEARS}${today.slice(4)}`;
+
+  // Before the read below rather than beside it, and only ever on a cold or
+  // week-old store: the dividend history otherwise arrives with whatever the
+  // last nightly sync happened to fetch, which meant a change to how far back
+  // it reaches took a day to show up on the page that shows it.
+  await ensureTdbDividends(db, today).catch((err) => {
+    console.error("TDB dividend refresh failed", err);
+  });
 
   const [storedCandles, context, noticeDividends, tdbDividends, tdb] =
     await Promise.all([

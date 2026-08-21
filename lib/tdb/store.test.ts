@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Db } from "mongodb";
-import { getTdbDividends, pooled } from "./store";
+import {
+  dueForRefresh,
+  getTdbDividends,
+  pooled,
+  SYNC_VERSION,
+  type SyncMeta,
+} from "./store";
 import type { TdbDividend } from "./datalab";
 
 /**
@@ -152,4 +158,75 @@ test("a document stored before the year list was kept still reads", async () => 
 
 test("a company Datalab does not cover has no history rather than an error", async () => {
   assert.deepEqual(await getTdbDividends(dbWith(null), 999), []);
+});
+
+/**
+ * When the dividend refresh is allowed to run.
+ *
+ * It is called from a page render, so both halves of this matter: too eager
+ * and every visitor pays for nine HTTP calls, too shy and a change to what the
+ * app stores waits a day for the nightly sync — which is exactly what happened
+ * the day it started keeping 2018 and 2019, and what a reader reported as a
+ * history that stopped at 2022.
+ */
+
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+/** What a document stamped by an attempt that never finished carries. */
+const NEVER_SYNCED = new Date(0);
+
+const NOW = Date.UTC(2026, 7, 21, 7, 0, 0);
+
+function stamp(partial: Partial<SyncMeta>): SyncMeta {
+  return { key: "tdbDividendSync", syncedAt: new Date(NOW), ...partial };
+}
+
+test("a sweep that has never run is due", () => {
+  assert.equal(dueForRefresh(null, NOW), true);
+});
+
+test("a sweep finished by this version an hour ago is not", () => {
+  assert.equal(
+    dueForRefresh(stamp({ syncedAt: new Date(NOW - HOUR), version: SYNC_VERSION }), NOW),
+    false,
+  );
+});
+
+test("a week old is due again", () => {
+  assert.equal(
+    dueForRefresh(
+      stamp({ syncedAt: new Date(NOW - 8 * DAY), attemptedAt: new Date(NOW - 8 * DAY), version: SYNC_VERSION }),
+      NOW,
+    ),
+    true,
+  );
+});
+
+test("a sweep finished by an older version is due however recent", () => {
+  // The case this whole mechanism exists for: the code now fetches years the
+  // last run did not, so yesterday's success is not this version's success.
+  assert.equal(
+    dueForRefresh(
+      stamp({ syncedAt: new Date(NOW - HOUR), attemptedAt: new Date(NOW - HOUR), version: SYNC_VERSION - 1 }),
+      NOW,
+    ),
+    true,
+  );
+});
+
+test("an attempt in the last half hour holds the next one off", () => {
+  // A source that is down must not be asked again by every render. The
+  // attempt is stamped whether or not it succeeds, which is what makes this
+  // a ceiling on the damage rather than a hope.
+  assert.equal(
+    dueForRefresh(stamp({ syncedAt: NEVER_SYNCED, attemptedAt: new Date(NOW - 60_000) }), NOW),
+    false,
+  );
+});
+
+test("once the half hour is up a failed attempt is retried", () => {
+  assert.equal(
+    dueForRefresh(stamp({ syncedAt: NEVER_SYNCED, attemptedAt: new Date(NOW - 2 * HOUR) }), NOW),
+    true,
+  );
 });

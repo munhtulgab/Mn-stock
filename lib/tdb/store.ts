@@ -25,14 +25,28 @@ const COLLECTION = "tdbAnnual";
 const DIVIDENDS = "tdbDividends";
 const PROFILES = "tdbProfiles";
 const META_KEY = "tdbSync";
+/** The dividend half of the sweep, which can also run on its own. */
+const DIVIDEND_META_KEY = "tdbDividendSync";
 /** Annual figures; a week between refreshes is already generous. */
 const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
+/** How long a failed attempt holds off the next one. */
+const RETRY_MS = 30 * 60 * 1000;
+/** A stamp for a sweep that has never finished. */
+const NEVER = new Date(0);
+/**
+ * Years asked about at once by the dividend-only refresh.
+ *
+ * Nine of them, and the whole set answers in about two seconds this way
+ * against five sequentially. Six is what the per-company sweep below already
+ * asks of the same API, so this is not a new demand on it.
+ */
+const YEAR_CONCURRENCY = 6;
 /**
  * Bumped when a sweep starts covering something it did not cover before, so
  * the next run happens now rather than whenever the week is up. Version 2
  * reaches back to 2018 and keeps the year list's dividend column.
  */
-const SYNC_VERSION = 2;
+export const SYNC_VERSION = 2;
 
 /**
  * Companies asked about at once.
@@ -95,10 +109,153 @@ export async function pooled<T>(
   await Promise.all(workers);
 }
 
-interface SyncMeta {
+export interface SyncMeta {
   key: string;
+  /** When a run last finished. */
   syncedAt: Date;
+  /** The version of this code that finished it. */
   version?: number;
+  /** When a run last started, which is not the same as finishing one. */
+  attemptedAt?: Date;
+}
+
+/**
+ * Whether a stamped sweep should run now.
+ *
+ * Three things have to be true together, and the reason this is written out
+ * rather than inlined is that getting any of them wrong is invisible until it
+ * is expensive. A sweep is due when it has never finished, when the code that
+ * finished it has since learnt to fetch more, or when a week has passed — and
+ * it is held back regardless if something started one in the last half hour,
+ * so a source that is refusing to answer is retried by the occasional reader
+ * rather than by every render in between.
+ *
+ * The finish and the start are separate fields for the same reason: an attempt
+ * that failed must never be able to pass for a sweep that succeeded, which is
+ * what a single timestamp would have made it.
+ */
+export function dueForRefresh(stamp: SyncMeta | null, now: number): boolean {
+  if (stamp?.attemptedAt && now - stamp.attemptedAt.getTime() < RETRY_MS) {
+    return false;
+  }
+  if (!stamp) return true;
+  if (stamp.version !== SYNC_VERSION) return true;
+  return now - stamp.syncedAt.getTime() >= REFRESH_MS;
+}
+
+/** Marks a sweep as done, so the next caller knows not to repeat it. */
+async function stampSync(db: Db, key: string): Promise<void> {
+  await db
+    .collection<SyncMeta>("marketSnapshots")
+    .updateOne(
+      { key },
+      { $set: { key, syncedAt: new Date(), version: SYNC_VERSION } },
+      { upsert: true },
+    );
+}
+
+/**
+ * The dividend column of the year list, out of rows already fetched.
+ *
+ * Taken before the plausibility filter the ratios go through, and
+ * deliberately. A dividend per share is a figure the company declared, not one
+ * Datalab worked out from a part-filed statement, and it survives a row whose
+ * ratios do not: 22 of the 29 companies with a dividend for the running year
+ * sit in rows `usable` rejects for an impossible margin, and every one of
+ * those dividends matches the per-company endpoint exactly. Losing them with
+ * the row would mean the newest payout — the one a reader is actually asking
+ * about — disappearing until the year closed.
+ */
+function harvestDividends(rows: TdbYear[], into: Map<number, TdbDividend[]>): void {
+  for (const row of rows) {
+    if (row.dividendPerShare === null || row.dividendPerShare <= 0) continue;
+    into.set(row.companyCode, [
+      ...(into.get(row.companyCode) ?? []),
+      {
+        year: row.year,
+        amountPerShare: row.dividendPerShare,
+        // Stated only by the per-company endpoint; the year list carries the
+        // per-share figure and the two ratios around it.
+        totalPaid: null,
+        yieldPct: row.dividendYield,
+        payoutRatio: row.dividendPayoutRatio,
+      },
+    ]);
+  }
+}
+
+/** Stores one harvest, leaving the per-company half of each document alone. */
+async function writeAnnualDividends(
+  db: Db,
+  annual: Map<number, TdbDividend[]>,
+): Promise<number> {
+  if (annual.size === 0) return 0;
+  await db.collection<TdbDividendDoc>(DIVIDENDS).bulkWrite(
+    [...annual].map(([companyCode, history]) => ({
+      updateOne: {
+        filter: { companyCode },
+        update: {
+          $set: { companyCode, annual: history.sort((a, b) => b.year - a.year) },
+          $setOnInsert: { history: [], fetchedAt: new Date() },
+        },
+        upsert: true,
+      },
+    })),
+  );
+  return annual.size;
+}
+
+/**
+ * Every year of the market's dividend history, on its own.
+ *
+ * The full sweep above fetches this as a by-product of the ratios, but it runs
+ * behind the daily sync and at most once a week — so the day this app started
+ * keeping 2018 and 2019, every reader saw four years of an eight-year history
+ * until the next sync happened to come round. A page should not wait a day for
+ * a change to what it stores.
+ *
+ * This is the cheap half of that sweep taken by itself: nine calls, no
+ * per-company reads, the whole market in one go. It is safe to call on a page
+ * render because it almost always does nothing — one indexed read of the meta
+ * document — and because the work it guards is bounded whatever happens to it.
+ */
+export async function ensureTdbDividends(db: Db, today: string): Promise<number> {
+  const meta = db.collection<SyncMeta>("marketSnapshots");
+  const stamp = await meta.findOne({ key: DIVIDEND_META_KEY });
+  if (!dueForRefresh(stamp, Date.now())) return 0;
+
+  await meta.updateOne(
+    { key: DIVIDEND_META_KEY },
+    {
+      $set: { key: DIVIDEND_META_KEY, attemptedAt: new Date() },
+      $setOnInsert: { syncedAt: NEVER },
+    },
+    { upsert: true },
+  );
+
+  const thisYear = Number(today.slice(0, 4));
+  const years = Array.from(
+    { length: thisYear - TDB_FIRST_YEAR + 1 },
+    (_, i) => TDB_FIRST_YEAR + i,
+  );
+
+  const annual = new Map<number, TdbDividend[]>();
+  let answered = 0;
+  await pooled(years, YEAR_CONCURRENCY, async (year) => {
+    const rows = await fetchTdbYear(year).catch(() => [] as TdbYear[]);
+    if (rows.length === 0) return;
+    answered++;
+    harvestDividends(rows, annual);
+  });
+
+  // Nothing at all came back: leave what is stored alone rather than replacing
+  // a real history with an empty one, and let the attempt stamp above hold off
+  // the retry.
+  if (answered === 0) return 0;
+
+  const written = await writeAnnualDividends(db, annual);
+  await stampSync(db, DIVIDEND_META_KEY);
+  return written;
 }
 
 /**
@@ -122,30 +279,9 @@ export async function syncTdb(db: Db, today: string): Promise<{
     if (fetched.length === 0) continue;
     years++;
 
-    // Taken before the plausibility filter below, and deliberately.
-    //
-    // A dividend per share is a figure the company declared, not one Datalab
-    // worked out from a part-filed statement, and it survives a row whose
-    // ratios do not: 22 of the 29 companies with a dividend for the running
-    // year sit in rows `usable` rejects for an impossible margin, and every
-    // one of those dividends matches the per-company endpoint exactly. Losing
-    // them with the row would mean the newest payout — the one a reader is
-    // actually asking about — disappearing until the year closed.
-    for (const row of fetched) {
-      if (row.dividendPerShare === null || row.dividendPerShare <= 0) continue;
-      annual.set(row.companyCode, [
-        ...(annual.get(row.companyCode) ?? []),
-        {
-          year: row.year,
-          amountPerShare: row.dividendPerShare,
-          // Stated only by the per-company endpoint; the year list carries
-          // the per-share figure and the two ratios around it.
-          totalPaid: null,
-          yieldPct: row.dividendYield,
-          payoutRatio: row.dividendPayoutRatio,
-        },
-      ]);
-    }
+    // Before the plausibility filter below, for the reasons given where this
+    // is defined.
+    harvestDividends(fetched, annual);
 
     // Kept per row rather than per year. Datalab's newest year is part
     // filled, so it holds good rows for the companies that have filed and
@@ -172,22 +308,10 @@ export async function syncTdb(db: Db, today: string): Promise<{
 
   // The long half of the history, written before the per-company sweep so a
   // company that sweep cannot reach still has its years stored.
-  if (annual.size > 0) {
-    await db.collection<TdbDividendDoc>(DIVIDENDS).bulkWrite(
-      [...annual].map(([companyCode, history]) => ({
-        updateOne: {
-          filter: { companyCode },
-          update: {
-            $set: {
-              companyCode,
-              annual: history.sort((a, b) => b.year - a.year),
-            },
-            $setOnInsert: { history: [], fetchedAt: new Date() },
-          },
-          upsert: true,
-        },
-      })),
-    );
+  if ((await writeAnnualDividends(db, annual)) > 0) {
+    // Which is the whole of what the dividend-only refresh does, so it has
+    // nothing left to do for a week.
+    await stampSync(db, DIVIDEND_META_KEY);
   }
 
   await pooled([...companies], COMPANY_CONCURRENCY, async (companyCode) => {
@@ -222,13 +346,7 @@ export async function syncTdb(db: Db, today: string): Promise<{
     }
   });
 
-  await db
-    .collection<SyncMeta>("marketSnapshots")
-    .updateOne(
-      { key: META_KEY },
-      { $set: { key: META_KEY, syncedAt: new Date(), version: SYNC_VERSION } },
-      { upsert: true },
-    );
+  await stampSync(db, META_KEY);
 
   return { years, rows, dividends, profiles };
 }
