@@ -324,7 +324,7 @@ export default async function StockDetailPage({
 
               <Group title="Санхүүгийн харьцаа">
                 <Metric
-                  label="ROA"
+                  label="Нийт хөрөнгийн өгөөж /ROA/"
                   value={`${fmt(financials.roa)}\u00A0%`}
                   info="roa"
                 />
