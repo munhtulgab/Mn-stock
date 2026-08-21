@@ -340,14 +340,32 @@ function analysisPayload(analysis: StockAnalysis, keep: Set<SectionName>) {
       })),
     },
     ...optional,
-    combined_verdict_from_this_app: {
-      note: "Энэ бол манай системийн эцсийн дүгнэлт. Үүнтэй санал нийлж эсвэл нийлэхгүй байгаагаа тайлбартаа тодорхой хэл.",
-      signal: analysis.combined.signal,
-      score_minus100_to_100: analysis.combined.score,
-      confidence: analysis.combined.confidence,
-      parts: analysis.combined.parts,
-      reasons: analysis.combined.reasons,
-    },
+    // The app's own verdict used to be here — its signal, its score, its
+    // confidence — under a note calling it "манай системийн эцсийн дүгнэлт"
+    // and asking the model to say whether it agreed.
+    //
+    // It agreed. All five providers came back BUY at exactly 83%, which is
+    // not five analysts concurring but one number copied five times: the
+    // panel exists to give the reader independent reads, and a model shown
+    // the answer and asked to react to it is not an independent read. Worse,
+    // the agreement figure printed beside them — "5/5, тохиролцоо 100%" — was
+    // then measuring how obediently they copied.
+    //
+    // What is left is the evidence the verdict was computed from, which the
+    // sections above already carry in full. The comparison is still made and
+    // still shown; it is made by this app afterwards, against answers reached
+    // without knowing what it wanted to hear.
+    ...(analysis.combined.parts.technical === null &&
+    analysis.combined.parts.fundamental === null
+      ? {}
+      : {
+          scored_components_minus100_to_100: {
+            note: "Энэ апп-ын онооны задаргаа. Дүгнэлт БИШ — дээрх үзүүлэлтүүдээс тооцсон завсрын оноо. Өөрийн дүгнэлтээ эдгээрээс бус, анхдагч үзүүлэлтүүдээс гарга.",
+            technical: analysis.combined.parts.technical,
+            fundamental: analysis.combined.parts.fundamental,
+            risk_penalty: analysis.combined.parts.risk,
+          },
+        }),
   };
 }
 

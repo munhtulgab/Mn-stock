@@ -179,7 +179,7 @@ test("the floor is the three criteria a verdict rests on", () => {
   assert.match(user, /"fundamentals"/);
   assert.match(user, /"technical_analysis"/);
   assert.match(user, /"fundamental_analysis"/);
-  assert.match(user, /"combined_verdict_from_this_app"/);
+  assert.match(user, /"scored_components_minus100_to_100"/);
   // And the instructions still say how to answer, not only how to read.
   assert.match(system, /ГАРЦЫН ФОРМАТ/);
 });
@@ -218,7 +218,7 @@ test("the numbered guidance is numbered without gaps", () => {
   const { system } = buildPrompt({ ...input, budgetTokens: 12_000 });
   const numbers = [...system.matchAll(/^(\d+)\. /gm)].map((m) => Number(m[1]));
   const guidance = numbers.filter((n, i) => n === 1 || numbers[i - 1] === n - 1);
-  assert.deepEqual(guidance.slice(0, 6), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(guidance.slice(0, 5), [1, 2, 3, 4, 5]);
 });
 
 test("an analysis that could not be built still produces a prompt", () => {
@@ -244,4 +244,60 @@ test("every trimmed prompt is still valid JSON, at every budget", () => {
     assert.ok(parsed.fundamental_analysis, `fundamental gone at ${budget}`);
     assert.ok(parsed.fundamentals, `financials gone at ${budget}`);
   }
+});
+
+test("no model is shown the verdict it is being asked for", () => {
+  // The reported symptom: Gemini, Groq, OpenRouter, Cerebras and Cloudflare
+  // all answered BUY at exactly 83%. Five model families do not land on the
+  // same integer by thinking; they land on it by being told it. The prompt
+  // carried `combined_verdict_from_this_app` — this app's signal, score and
+  // confidence — under a note calling it the final verdict and asking each
+  // model to say whether it agreed. The agreement figure printed beside them
+  // was then measuring obedience.
+  //
+  // Checked at every budget, because the block only has to survive one rung
+  // of the ladder to poison the panel.
+  for (let budget = 20_000; budget >= 1_000; budget -= 500) {
+    const { user, system } = buildPrompt({ ...input, budgetTokens: budget });
+    const payload = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(user)![1]);
+
+    assert.equal(payload.combined_verdict_from_this_app, undefined,
+      `the app's verdict is back in the prompt at budget ${budget}`);
+
+    // Nor smuggled in under another name: the app's own signal and its
+    // confidence must not appear anywhere in the message.
+    const flat = JSON.stringify(payload);
+    assert.doesNotMatch(flat, /"confidence"/, `a confidence at budget ${budget}`);
+    assert.doesNotMatch(flat, /"signal"/, `a signal at budget ${budget}`);
+
+    // And the instructions must not ask the model to react to a verdict.
+    assert.doesNotMatch(system, /эцсийн дүгнэлт\. Үүнтэй санал/);
+  }
+});
+
+test("the component scores are sent as workings, not as an answer", () => {
+  // They are still worth sending — a model that disagrees with the technical
+  // score should say so — but they are labelled as intermediate and carry no
+  // signal and no confidence to copy.
+  const { user } = buildPrompt(input);
+  const payload = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(user)![1]);
+  const scored = payload.scored_components_minus100_to_100;
+  assert.ok(scored, "component scores missing");
+  assert.equal(scored.technical, 40);
+  assert.equal(scored.fundamental, 28);
+  assert.equal(scored.risk_penalty, -5);
+  assert.match(scored.note, /Дүгнэлт БИШ/);
+  assert.equal(scored.signal, undefined);
+  assert.equal(scored.confidence, undefined);
+});
+
+test("the confidence rule tells the model what the number has to mean", () => {
+  // A model asked for a confidence and given no scale returns a habit — 80,
+  // 85, 90. It is asked here for a measure of how well the evidence holds,
+  // with the three things it is made of named.
+  const { system } = buildPrompt({ ...input, budgetTokens: 1 });
+  assert.match(system, /signal_confidence[\s\S]*тогтоох журам/);
+  assert.match(system, /НОТОЛГООНЫ ХЭМЖЭЭ/);
+  assert.match(system, /НОТОЛГООНЫ НИЙЦЭЛ/);
+  assert.match(system, /ДОХИОНЫ ХҮЧ/);
 });

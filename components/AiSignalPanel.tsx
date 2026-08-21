@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import SignalBadge from "./SignalBadge";
 import { RefreshIcon, SparkIcon } from "./icons";
 import type { AiSignal } from "@/lib/types";
+import { inLockstep } from "@/lib/ai/consensus";
 import { ulaanbaatarDateTime } from "@/lib/day";
 
 type State =
@@ -131,6 +132,13 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
               {ulaanbaatarDateTime(state.data.createdAt)}
             </span>
           </div>
+
+          {inLockstep(state.data.providers) && (
+            <p className="rounded-lg border border-app-warn/30 bg-app-warn/10 px-2.5 py-1.5 text-[11px] text-app-muted">
+              Бүх загвар яг ижил итгэлцэл өгсөн байна. Бие даасан дүгнэлт ийм
+              давхцах магадлал бага тул энэ тохиролцоог нотолгоо гэж үзэхгүй.
+            </p>
+          )}
 
           {/* One row, centred. Two of them in a grid left the third alone
               under an empty half; abreast they read as what they are — the

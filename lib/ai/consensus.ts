@@ -188,3 +188,32 @@ export function buildConsensus(
 
   return { consensus, agreement };
 }
+
+/** Just enough of a stored provider row to judge it. */
+export interface LockstepInput {
+  ok: boolean;
+  signal?: Signal;
+  confidence?: number;
+}
+
+/**
+ * Whether the analysts have answered as one voice rather than several.
+ *
+ * Three or more models returning not just the same call but the same
+ * confidence to the integer is not agreement — independent readings do not
+ * land on the same number. It happened, and the cause was the prompt: every
+ * model was handed this app's own verdict and confidence and asked whether it
+ * agreed, so all five returned BUY at exactly 83%, and the agreement figure
+ * beside them read 100%.
+ *
+ * The prompt no longer shows them the answer. This stays because the reader
+ * had to catch that by eye, and a panel whose whole claim is independence
+ * should be able to say when its own output stops looking independent.
+ */
+export function inLockstep(providers: LockstepInput[]): boolean {
+  const answered = providers.filter((p) => p.ok && p.confidence !== undefined);
+  if (answered.length < 3) return false;
+  return answered.every(
+    (p) => p.confidence === answered[0].confidence && p.signal === answered[0].signal,
+  );
+}
