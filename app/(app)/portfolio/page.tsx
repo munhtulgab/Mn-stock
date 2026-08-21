@@ -2,8 +2,9 @@ import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getTransactions } from "@/lib/portfolio";
-import StockAvatar from "@/components/StockAvatar";
 import TransactionList from "@/components/TransactionList";
+import HoldingsList from "@/components/HoldingsList";
+import PortfolioAllocation from "@/components/PortfolioAllocation";
 import Num, { Pct } from "@/components/Num";
 import PageHeader from "@/components/PageHeader";
 
@@ -46,11 +47,15 @@ export default async function PortfolioPage() {
             <div className="text-xs font-normal text-app-muted">өнөөдөр</div>
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-4 border-t border-app-border">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 pt-4 border-t border-app-border">
+          {/* What the positions cost, which the card never said. Without it
+              the gain below is a number with nothing to be a gain on: a
+              reader could see 326,821₮ made and 4,237,052₮ held and still not
+              know what had been put in. */}
           <div>
-            <div className="text-xs text-app-muted">Бэлэн мөнгө</div>
+            <div className="text-xs text-app-muted">Нийт хөрөнгө оруулалт</div>
             <div className="text-sm text-app-text">
-              <Num value={portfolio.cashBalance} digits={2} suffix="₮" />
+              <Num value={portfolio.totalCostBasis} digits={2} suffix="₮" />
             </div>
           </div>
           <div>
@@ -75,47 +80,33 @@ export default async function PortfolioPage() {
               <Pct value={portfolio.totalGainLossPct} />
             </div>
           </div>
+          <div>
+            <div className="text-xs text-app-muted">Бэлэн мөнгө</div>
+            <div className="text-sm text-app-text">
+              <Num value={portfolio.cashBalance} digits={2} suffix="₮" />
+            </div>
+          </div>
         </div>
+
+        <PortfolioAllocation holdings={portfolio.holdings} />
       </div>
 
       {/* Holdings and the trades that produced them, side by side once there
           is room for both. */}
       <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
       <section>
-        <h2 className="font-semibold text-app-text text-sm mb-3">Хувьцаанууд</h2>
         {portfolio.holdings.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-muted">
-            Одоогоор хувьцаа худалдаж аваагүй байна.{" "}
-            <Link href="/" className="text-brand font-semibold">
-              Зах зээл рүү очих
-            </Link>
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
-            {portfolio.holdings.map((h) => (
-              <Link
-                key={h.symbol}
-                href={`/stock/${h.symbol}`}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-app-bg/60"
-              >
-                <StockAvatar symbol={h.symbol} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-app-text text-sm">{h.symbol}</div>
-                  <div className="text-xs text-app-muted">
-                    {h.quantity} ширхэг · дундаж {h.avgCost.toFixed(2)}₮
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-sm text-app-text">
-                    <Num value={h.marketValue} digits={2} suffix="₮" />
-                  </div>
-                  <div className="text-xs">
-                    <Pct value={h.gainLossPct} />
-                  </div>
-                </div>
+          <>
+            <h2 className="font-semibold text-app-text text-sm mb-3">Хувьцаанууд</h2>
+            <div className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-muted">
+              Одоогоор хувьцаа худалдаж аваагүй байна.{" "}
+              <Link href="/" className="text-brand font-semibold">
+                Зах зээл рүү очих
               </Link>
-            ))}
-          </div>
+            </div>
+          </>
+        ) : (
+          <HoldingsList holdings={portfolio.holdings} />
         )}
       </section>
 

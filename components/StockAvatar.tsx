@@ -1,21 +1,5 @@
 import { hasLogo } from "@/lib/logos";
-
-const PALETTE = [
-  "#4C6FFF",
-  "#FF6B81",
-  "#17C674",
-  "#FFA726",
-  "#8E63FF",
-  "#22C1D6",
-  "#F4483D",
-  "#2FB8A4",
-];
-
-function colorFor(symbol: string): string {
-  let hash = 0;
-  for (let i = 0; i < symbol.length; i++) hash = (hash * 31 + symbol.charCodeAt(i)) | 0;
-  return PALETTE[Math.abs(hash) % PALETTE.length];
-}
+import { colorFor } from "@/lib/symbolColor";
 
 export default function StockAvatar({
   symbol,

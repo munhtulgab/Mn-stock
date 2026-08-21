@@ -11,21 +11,10 @@ import type {
 import { STARTING_CASH_BALANCE } from "@/lib/types";
 import { fetchLiveQuotes } from "@/lib/marketinfo/quotes";
 import { priorClose } from "@/lib/priceChange";
+export * from "@/lib/holdings";
+import type { HoldingView } from "@/lib/holdings";
 
 export class PortfolioError extends Error {}
-
-export interface HoldingView {
-  companyCode: number;
-  symbol: string;
-  name: string;
-  quantity: number;
-  avgCost: number;
-  currentPrice: number | null;
-  marketValue: number;
-  costBasis: number;
-  gainLoss: number;
-  gainLossPct: number | null;
-}
 
 export interface PortfolioSummary {
   cashBalance: number;
