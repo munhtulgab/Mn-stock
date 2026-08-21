@@ -329,18 +329,18 @@ export default async function StockDetailPage({
                   info="roa"
                 />
                 <Metric
-                  label="ROE"
+                  label="Хувь нийлүүлсэн хөрөнгийн өгөөж /ROE/"
                   value={`${fmt(financials.roe)}\u00A0%`}
                   info="roe"
                 />
                 <Metric
-                  label="ROTA"
+                  label="Нийт хөрөнгийн эргэц /ROTA/"
                   value={fmt(financials.rota, 4)}
                   info="rota"
                 />
-                <Metric label="EPS" value={money(financials.eps)} info="eps" />
+                <Metric label="Нэгж хувьцааны өгөөж /EPS/" value={money(financials.eps)} info="eps" />
                 <Metric
-                  label="P/E"
+                  label="Үнэ ашгийн харьцаа (P/E Ratio)"
                   value={`${fmt(financials.pe, 2)}\u00A0х`}
                   info="pe"
                 />
