@@ -198,18 +198,19 @@ export default async function HomePage() {
              the page scrolls under it as before; on the wide layout it fills
              its column and scrolls inside, so the two columns finish level.
 
-             Five rows, and a little more. A row measures 65px, so five is
-             325px; the cap is 344px, which leaves the sixth row cut across
-             its middle. Scrollbars are hidden throughout this app and some
-             browsers draw them as an overlay taking no layout space, so a
-             clean cut at exactly five would leave nothing on screen to say a
-             sixth existed. The half-row is the cue that does not depend on
-             the platform.
+             Five rows and no part of a sixth. Measured: a row is 65px and
+             the fifth ends 326px below the box's top edge, so 327 with the
+             bottom border is where the box closes — exactly five, cleanly.
+
+             It was 344 before, which left the sixth row cut across its middle
+             as a hint that the list continued. Asked for five, it shows five;
+             `.pane-scroll` puts a thin scrollbar there in the browsers that
+             draw one.
 
              No `overflow-hidden`: `.pane-scroll` sets overflow-y and the two
              would fight over one property — a scroll container clips to its
              own border radius anyway. */
-          <div className="pane-scroll overflow-x-hidden rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider lg:flex-1 lg:min-h-0 lg:max-h-[21.5rem]">
+          <div className="pane-scroll overflow-x-hidden rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider lg:flex-1 lg:min-h-0 lg:max-h-[20.4375rem]">
             {portfolio.holdings.map((h) => (
               <Link
                 key={h.symbol}
@@ -247,8 +248,16 @@ export default async function HomePage() {
               the width exactly and the next column shows an edge. Without
               that there is nothing to say a seventh card exists: scrollbars
               are hidden throughout this app and some browsers draw them as an
-              overlay that takes no layout space at all. */}
-          <div className="pane-scroll flex gap-3 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-flow-col lg:grid-rows-3 lg:auto-cols-[47%] lg:content-start lg:flex-1 lg:min-h-0">
+              overlay that takes no layout space at all.
+
+              The three rows are `1fr` each and nothing pins them to the top,
+              so they divide whatever height the row settles at. That is what
+              makes the two panels exactly the same height rather than
+              approximately: five holding rows come to 327px and three cards
+              of their own accord to 312, and the cards take the difference
+              instead of leaving fifteen pixels of nothing under the last
+              one. */}
+          <div className="pane-scroll flex gap-3 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-flow-col lg:grid-rows-3 lg:auto-cols-[47%] lg:flex-1 lg:min-h-0">
             {watchlist.map((w) => (
               <Link
                 key={w.symbol}
