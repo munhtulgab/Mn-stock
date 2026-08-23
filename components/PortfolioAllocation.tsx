@@ -16,11 +16,20 @@ import Num from "./Num";
  * it was bought, whatever was paid for it.
  */
 
-/** The ring's geometry. A viewBox unit is a percent of the circumference. */
+/**
+ * The ring's geometry. A viewBox unit is a percent of the circumference,
+ * which is what lets a slice be written as its own percentage.
+ *
+ * The box is the ring and nothing else: its side is the outer diameter, so
+ * the drawing touches all four edges and the element's size on the page is
+ * the circle's size. It was 42 units around a 37.8-unit ring, which put a
+ * tenth of the width into margin the browser had already given us — the ring
+ * came out a tenth smaller than the space set aside for it, at every size.
+ */
 const RADIUS = 100 / (2 * Math.PI);
-const SIZE = 42;
-const CENTRE = SIZE / 2;
 const STROKE = 6;
+const SIZE = 2 * RADIUS + STROKE;
+const CENTRE = SIZE / 2;
 
 /**
  * Below this a slice is thinner than the gap beside it and reads as a drawing
@@ -71,11 +80,26 @@ export default function PortfolioAllocation({
 
   return (
     <div className="pt-4 mt-4 border-t border-app-border">
-      <h3 className="text-xs text-app-muted mb-3">Багцын хувиарлалт</h3>
-      <div className="flex items-center gap-5">
+      <h3 className="text-xs text-app-muted mb-4 text-center">Багцын хувиарлалт</h3>
+      {/* Down the middle rather than side by side.
+
+          The ring was 112px in a column beside the legend, which is a
+          thumbnail: at that size a slice of a few per cent is a couple of
+          pixels of arc and the shape it makes cannot be read. It is the point
+          of this section, so it gets the width — as much of it as there is,
+          up to 18rem on a phone, which is what the card leaves once the page
+          and the card have taken their padding, and 22rem from a tablet up
+          where there is more of it. Capped rather than uncapped: the card is
+          twelve hundred pixels wide on a desktop and a circle that size stops
+          being easier to read and starts being a poster.
+
+          The legend follows underneath at the same centre, capped so its
+          rows stay a readable table instead of a symbol and a figure at
+          opposite ends of a desktop. */}
+      <div className="flex flex-col items-center gap-5">
         <svg
           viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="w-28 h-28 shrink-0 -rotate-90"
+          className="w-full max-w-[18rem] sm:max-w-[22rem] aspect-square -rotate-90"
           aria-hidden
         >
           {slices
@@ -96,7 +120,7 @@ export default function PortfolioAllocation({
             ))}
         </svg>
 
-        <ul className="flex-1 min-w-0 space-y-1.5">
+        <ul className="w-full max-w-sm min-w-0 space-y-1.5">
           {slices.map((slice) => (
             <li key={slice.symbol} className="flex items-center gap-2 text-xs">
               <span
