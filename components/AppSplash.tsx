@@ -9,9 +9,11 @@
  * one like. The browser has the document and nothing in it, which on a phone
  * is a blank white screen with a status bar on top. This is what goes there.
  *
- * A mark rather than a spinner. The wait is the app starting up, not a button
- * thinking, and a spinner in the middle of an empty screen is the thing that
- * makes a slow start feel broken.
+ * A mark rather than a spinner, and no caption under it. The wait is the app
+ * starting up, and an animation that is plainly running says that on its own;
+ * a line of text saying so as well is a second thing to read on a screen that
+ * exists because there is nothing to read yet. The label is still there for a
+ * screen reader, which has no animation to go by.
  */
 export default function AppSplash() {
   return (
@@ -19,9 +21,9 @@ export default function AppSplash() {
       /* dvh, like the shell it stands in for, so it is the height of the
          viewport as it is right now rather than the height it would be with
          the browser's chrome hidden. */
-      className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-app-bg px-6"
+      className="flex min-h-dvh items-center justify-center bg-app-bg px-6"
       role="status"
-      aria-live="polite"
+      aria-label="Ачаалж байна"
     >
       {/* On its own white tile, because the artwork has a white background
           baked into it and nothing to key out — the coin's rim and the dollar
@@ -31,9 +33,9 @@ export default function AppSplash() {
           page reads as a picture that failed to load its own background.
 
           Fixed at 8rem with the file twice that, so it is sharp on a phone.
-          Width and height are on the tag as well: they reserve the square
-          before the image arrives, and without them the label under it would
-          be centred on an empty screen and then jump. */}
+          Width and height are on the tag as well, so the square is the size
+          it will be before the image arrives rather than collapsing to
+          nothing and pushing the tile open when it lands. */}
       <div className="rounded-3xl bg-white p-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
         {/* eslint-disable-next-line @next/next/no-img-element --
             `next/image` would route this through `/_next/image`, which is a
@@ -48,14 +50,14 @@ export default function AppSplash() {
           width={256}
           height={256}
           className="h-32 w-32"
-          /* It is the only thing on the screen; there is nothing to defer it
-             behind, and `async` decoding lets the first frame paint without
-             holding up the layout around it. */
+          /* The fetch itself is started from the document head, before this
+             markup has even been streamed — see the preload in the root
+             layout. These two say the same thing to the browser once it gets
+             here, and cost nothing if the file is already on its way. */
           decoding="async"
           fetchPriority="high"
         />
       </div>
-      <p className="text-sm text-app-muted">Зах зээлийн мэдээлэл ачаалж байна…</p>
     </div>
   );
 }

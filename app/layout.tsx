@@ -64,6 +64,24 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
+        {/* Asked for before anything else on the page, because it is the
+            first thing on the screen.
+
+            The head is in the opening bytes of the response and the splash
+            markup is two kilobytes further down, so left to the `<img>` the
+            fetch would not start until the parser reached it — and on a cold
+            start the rest of that stream is held behind a database
+            connection. Declared here, the request goes out while the shell is
+            still arriving. `as` and `type` are what let the browser match it
+            to the tag when it gets there; without them it fetches the file
+            twice. */}
+        <link
+          rel="preload"
+          as="image"
+          type="image/webp"
+          href="/loading.webp"
+          fetchPriority="high"
+        />
         <script dangerouslySetInnerHTML={{ __html: APPLY_THEME }} />
       </head>
       <body className="min-h-full bg-app-bg text-app-text">
