@@ -25,27 +25,42 @@ export default function PortfolioValueCard({
 
   return (
     <div className="lg:col-span-2 relative overflow-hidden rounded-3xl bg-linear-to-br from-brand to-brand-dark p-5 text-black">
-      {/* The two animals the market argues in, a half of the card each, with
-          the candles they are arguing about between them. Watermarks: they say
-          nothing the figures do not, so they are hidden from a screen reader
-          and kept faint enough that the number stays the loudest thing here.
+      {/* The chart down the middle, and the two animals arguing about it, a
+          half of the card each. Watermarks: they say nothing the figures do
+          not, so they are hidden from a screen reader and kept faint enough
+          that the number stays the loudest thing here.
 
-          Half the width each and a ceiling of the card's own height. Which of
-          the two bounds binds depends on the shape of the card, and the SVG
-          settles it: the bull is a long charging profile, the bear a tall
-          rearing one, so on a phone the bull is held by the width and the bear
-          by the height. Either way each one fills its half as far as it can
-          without distorting, and the card is split down the middle.
+          The chart comes first because it goes behind. These three are
+          absolutely positioned siblings with nothing to order them but the
+          order they are written in, and the candles used to be written in the
+          middle — which put them over the bull and under the bear, so the
+          same drawing was in front on one side of the card and behind on the
+          other. Written first it is behind both, which is where a thing two
+          animals are standing over belongs.
+
+          Wider than it was, and no longer waiting for a large screen. It was
+          a 112px icon that appeared from `sm` up; it is the picture the card
+          is built around now, so it takes half the width and as much of the
+          height as the card will give it — and rather more than half on a
+          phone, where half of 358px puts twenty-six sessions in 179 and the
+          run comes out as specks. Given the extra width it reads as a chart
+          again, and it is drawn a shade fainter than the two animals so that
+          it stays the thing behind them rather than a third thing competing
+          at the same strength.
+
+          Each animal gets half the width and a ceiling of the card's own
+          height. Which of the two bounds binds depends on the shape of the
+          card, and the SVG settles it: the bull is a long charging profile,
+          the bear a tall rearing one, so on a phone the bull is held by the
+          width and the bear by the height. Either way each one fills its half
+          as far as it can without distorting.
 
           Whichever bound binds, each is pushed hard against its own end of the
           card — the marks themselves carry the anchoring, so the half that is
-          left over opens towards the middle rather than the edge.
-
-          The middle mark would sit behind the total on a phone, where the card
-          is narrow and the text fills it, so it waits for a screen with room. */}
-      <BullMark className="pointer-events-none absolute left-0 top-1/2 w-1/2 max-h-full -translate-y-1/2 opacity-[0.13]" />
-      <CandlesMark className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block sm:w-28 lg:w-36 opacity-[0.12]" />
-      <BearMark className="pointer-events-none absolute right-0 top-1/2 w-1/2 max-h-full -translate-y-1/2 opacity-[0.13]" />
+          left over opens towards the middle rather than the edge. */}
+      <CandlesMark className="pointer-events-none absolute left-1/2 top-1/2 w-[62%] sm:w-1/2 max-h-[82%] -translate-x-1/2 -translate-y-1/2 opacity-[0.14]" />
+      <BullMark className="pointer-events-none absolute left-0 top-1/2 w-1/2 max-h-full -translate-y-1/2 opacity-[0.17]" />
+      <BearMark className="pointer-events-none absolute right-0 top-1/2 w-1/2 max-h-full -translate-y-1/2 opacity-[0.17]" />
 
       <div className="relative flex items-center justify-between mb-1">
         <div className="text-xs font-medium opacity-70">Багцын үнэ цэнэ</div>
