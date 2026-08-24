@@ -38,6 +38,36 @@ const CENTRE = SIZE / 2;
  */
 const MIN_DRAWN_PCT = 0.35;
 
+/**
+ * Nine rows, and the ring exactly as tall as they are.
+ *
+ * The two used to be sized by separate rules — the ring by a width the card
+ * could spare, the legend by however many holdings there happened to be — so
+ * the pair finished at different places and which of them was taller was a
+ * fact about the portfolio. One figure now serves both, and it is arithmetic
+ * rather than taste: nine 18px rows 10px apart come to 9 × 18 + 8 × 10.
+ *
+ * The row's height is set rather than left to the text. A 12px line in this
+ * face measures 17 with the figures in it, which is a number nothing in the
+ * file chose and which would move if the type ever did — and nine rows of it
+ * came to 233 against a box built for 224, so the ninth holding scrolled when
+ * the tenth was supposed to. 18 is a whole number with room for the
+ * descenders in ширхэг, and the box is built from it.
+ *
+ * Nine is also what a tenth holding scrolls past. A legend that grew without
+ * limit beside a fixed circle is the shape of the problem, not a fix for it.
+ *
+ * Written as numbers and applied as inline sizes rather than as Tailwind
+ * classes. The height of the box, the height of the circle and the spacing
+ * between the rows are one measurement wearing three hats, and a class name
+ * cannot be built from a constant — Tailwind reads those out of the source
+ * text — so three literals would have had to be kept in step by hand.
+ */
+const LEGEND_ROWS = 9;
+const ROW_PX = 18;
+const ROW_GAP_PX = 10;
+const PANE_PX = LEGEND_ROWS * ROW_PX + (LEGEND_ROWS - 1) * ROW_GAP_PX;
+
 export default function PortfolioAllocation({
   holdings,
 }: {
@@ -54,6 +84,7 @@ export default function PortfolioAllocation({
   const bySize = holdings
     .map((h) => ({
       symbol: h.symbol,
+      quantity: h.quantity,
       pct: (h.marketValue / total) * 100,
       value: h.marketValue,
     }))
@@ -107,7 +138,8 @@ export default function PortfolioAllocation({
       <div className="flex w-max mx-auto items-center gap-8">
         <svg
           viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="w-56 shrink-0 aspect-square -rotate-90 lg:w-72"
+          className="shrink-0 -rotate-90"
+          style={{ width: PANE_PX, height: PANE_PX }}
           aria-hidden
         >
           {slices
@@ -132,16 +164,49 @@ export default function PortfolioAllocation({
             table that flexed would have no width to flex against, and the
             figures need a fixed one anyway: they are right-aligned in their
             columns, and a column that changed width with the longest amount
-            in the portfolio would move every row when one holding grows. */}
-        <ul className="w-80 shrink-0 space-y-1.5">
+            in the portfolio would move every row when one holding grows.
+
+            Its height is the ring's, and `.pane-scroll` takes the tenth
+            holding and everything after it — without a bar down the side, the
+            same as the panes on the home screen.
+
+            A flex column rather than `space-y`, so the gap is a number this
+            file owns rather than a class that has to agree with one. Each row
+            is `shrink-0`: in a column of a set height they would otherwise
+            divide it between them, and nine rows in a box built for nine
+            would silently become however many there are, squeezed.
+
+            Centred in that box while they fit, so a portfolio of three sits
+            level with the middle of the circle instead of stacked against its
+            top with two thirds of a column of nothing underneath. Not centred
+            once they do not: a scroll container whose content is centred puts
+            the first rows above the top edge, where nothing can reach
+            them. */}
+        <ul
+          className={`pane-scroll flex flex-col w-80 shrink-0 pr-1 ${
+            slices.length <= LEGEND_ROWS ? "justify-center" : ""
+          }`}
+          style={{ height: PANE_PX, rowGap: ROW_GAP_PX }}
+        >
           {slices.map((slice) => (
-            <li key={slice.symbol} className="flex items-center gap-2 text-xs">
+            <li
+              key={slice.symbol}
+              className="flex shrink-0 items-center gap-2 text-xs"
+              style={{ height: ROW_PX }}
+            >
               <span
                 className="h-2.5 w-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: slice.color }}
                 aria-hidden
               />
               <span className="font-semibold text-app-text">{slice.symbol}</span>
+              {/* What is actually held, which no other figure here gives: the
+                  amount is a price times this and the percentage is a share
+                  of the whole, so a reader could see 37% of a portfolio and
+                  still not know how many shares to sell. */}
+              <span className="text-app-muted tabular-nums">
+                {slice.quantity.toLocaleString("mn-MN")} ш
+              </span>
               <span className="flex-1 text-right tabular-nums text-app-muted">
                 <Num value={slice.value} digits={0} suffix="₮" />
               </span>
