@@ -377,8 +377,11 @@ export default async function HomePage() {
                     <Num value={r.lastPrice} digits={2} />
                   )}
                 </div>
+                {/* With its unit, like the same row on the Зах зээл page:
+                    a bare +0.27 under a price is a number with nothing
+                    saying what it measures. */}
                 <div className="text-xs">
-                  <Pct value={r.changePct} suffix="" />
+                  <Pct value={r.changePct} />
                 </div>
               </div>
             </Link>

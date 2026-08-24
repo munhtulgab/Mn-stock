@@ -155,8 +155,14 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
                 fill
               />
             </div>
-            {/* Units are dropped here: every row is ₮ and every change is a
-                percent, so the suffixes only cost width the figures can use. */}
+            {/* The tugrik is dropped and the percent is not.
+                They looked like the same saving and are not: the price sits
+                under a column called Ханш and is the only large figure on the
+                row, so ₮ is said by where it is. The change is a bare
+                three-digit number under it — +0.27 is a figure with no unit
+                at all, and could as easily be tugriks moved as percent
+                gained. The sign and the colour say direction; only the % says
+                what is being measured. */}
             <div className="text-right shrink-0 lg:w-28">
               <div className="text-sm text-app-text">
                 {row.lastPrice === null ? (
@@ -166,7 +172,7 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
                 )}
               </div>
               <div className="text-xs">
-                <Pct value={row.changePct} suffix="" />
+                <Pct value={row.changePct} />
               </div>
               {/* A listing that hasn't traded for months still has a price;
                   without its date it reads as today's. */}
