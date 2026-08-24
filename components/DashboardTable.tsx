@@ -155,20 +155,22 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
                 fill
               />
             </div>
-            {/* The tugrik is dropped and the percent is not.
-                They looked like the same saving and are not: the price sits
-                under a column called Ханш and is the only large figure on the
-                row, so ₮ is said by where it is. The change is a bare
-                three-digit number under it — +0.27 is a figure with no unit
-                at all, and could as easily be tugriks moved as percent
-                gained. The sign and the colour say direction; only the % says
-                what is being measured. */}
+            {/* Both units, on both lines. They were dropped to buy width for
+                the figures, on the reasoning that every price on the board is
+                in tugriks and every change is a percent — true of the column,
+                but a row is read one row at a time, and a bare 1,585,500 over
+                a bare +0.27 is two numbers with nothing saying what either
+                one measures.
+
+                They cost about ten pixels of a 112px column on a wide screen
+                and are inside it; on a phone the block is only as wide as it
+                needs to be and the company name gives up the difference. */}
             <div className="text-right shrink-0 lg:w-28">
               <div className="text-sm text-app-text">
                 {row.lastPrice === null ? (
                   <span className="text-app-muted">—</span>
                 ) : (
-                  <Num value={row.lastPrice} digits={2} />
+                  <Num value={row.lastPrice} digits={2} suffix="₮" />
                 )}
               </div>
               <div className="text-xs">

@@ -369,17 +369,17 @@ export default async function HomePage() {
                   fill
                 />
               </div>
+              {/* Both units, as on the same row on the Зах зээл page: a bare
+                  1,585,500 over a bare +0.27 is two figures with nothing
+                  saying what either measures. */}
               <div className="text-right shrink-0 lg:w-28">
                 <div className="text-sm text-app-text">
                   {r.lastPrice === null ? (
                     <span className="text-app-muted">—</span>
                   ) : (
-                    <Num value={r.lastPrice} digits={2} />
+                    <Num value={r.lastPrice} digits={2} suffix="₮" />
                   )}
                 </div>
-                {/* With its unit, like the same row on the Зах зээл page:
-                    a bare +0.27 under a price is a number with nothing
-                    saying what it measures. */}
                 <div className="text-xs">
                   <Pct value={r.changePct} />
                 </div>
