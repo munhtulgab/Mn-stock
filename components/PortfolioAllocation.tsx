@@ -81,29 +81,33 @@ export default function PortfolioAllocation({
   return (
     <div className="pt-4 mt-4 border-t border-app-border">
       <h3 className="text-xs text-app-muted mb-4 text-center">Багцын хувиарлалт</h3>
-      {/* The ring on the left, its legend on the right, and the pair sitting
-          in the middle of the card.
+      {/* The ring on the left and its legend on the right, at every width.
 
-          Centred as a pair rather than each half filling what it is given:
-          `justify-center` is on the row and neither child grows, so the two
-          come out as one block down the middle of a card that is twelve
-          hundred pixels wide on a desktop, instead of a circle pinned to the
-          far left and a table pinned to the far right.
+          It used to stack below `sm`, on the reasoning that 224px of ring and
+          320px of table do not cross 318px of phone. They do not — so the
+          phone scrolls sideways instead. The arrangement is the point, and a
+          layout that rearranges itself is a second thing to learn; the
+          gesture to see the rest of it is the one the watchlist on the home
+          screen already uses.
 
-          It stacks below `sm`, which is not a preference: 288px of ring and a
-          table of symbols, amounts and percentages do not fit across 318px of
-          phone, and forcing the row would shrink both to nothing. Stacked,
-          the ring keeps the full width and the legend sits under it on the
-          same centre — so "left and right" is what a screen wide enough for a
-          left and a right gets.
+          `w-max` is what makes that work: the row is exactly as wide as the
+          two of them want to be, so neither is squeezed and the box around it
+          is what runs out of room. `mx-auto` centres that row where there is
+          space — on a desktop card of twelve hundred pixels the pair sits in
+          the middle — and collapses to nothing where there is not, which is
+          what puts the ring at the left edge of a phone rather than halfway
+          off it.
 
-          The ring stays large. It was 112px in this position once, which is a
-          thumbnail: at that size a slice of a few per cent is a couple of
-          pixels of arc and the shape it makes cannot be read. */}
-      <div className="flex flex-col items-center justify-center gap-6 sm:flex-row sm:items-center sm:gap-8">
+          The negative margin lets the scroll reach the card's own edges, with
+          the padding put back inside as the scroll's own, so the ring starts
+          where the text above it starts and the legend can be brought fully
+          into view. `.pane-scroll` is here for the scrollbar it takes away,
+          the same as the two panes on the home screen. */}
+      <div className="pane-scroll overflow-x-auto -mx-5 px-5">
+      <div className="flex w-max mx-auto items-center gap-8">
         <svg
           viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="w-full max-w-[18rem] shrink-0 aspect-square -rotate-90 sm:w-56 sm:max-w-none lg:w-72"
+          className="w-56 shrink-0 aspect-square -rotate-90 lg:w-72"
           aria-hidden
         >
           {slices
@@ -124,9 +128,12 @@ export default function PortfolioAllocation({
             ))}
         </svg>
 
-        {/* Capped, so a row is a readable line rather than a symbol and a
-            figure at opposite ends of a desktop. */}
-        <ul className="w-full max-w-sm min-w-0 space-y-1.5 sm:w-80">
+        {/* A set width rather than whatever is left. Inside a `w-max` row a
+            table that flexed would have no width to flex against, and the
+            figures need a fixed one anyway: they are right-aligned in their
+            columns, and a column that changed width with the longest amount
+            in the portfolio would move every row when one holding grows. */}
+        <ul className="w-80 shrink-0 space-y-1.5">
           {slices.map((slice) => (
             <li key={slice.symbol} className="flex items-center gap-2 text-xs">
               <span
@@ -144,6 +151,7 @@ export default function PortfolioAllocation({
             </li>
           ))}
         </ul>
+      </div>
       </div>
     </div>
   );
