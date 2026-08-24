@@ -331,22 +331,19 @@ export default async function HomePage() {
             with it — a pick with no price attached says nothing about whether
             it can be acted on.
 
-            The date appears only when the last trade is not the running
-            session, exactly as it does on that page: no date means it traded
-            today, and every row here traded this month by construction.
+            No trade date, unlike that page. It carries one because it lists
+            the whole board, dormant listings included, where a price with no
+            date on it reads as today's. Nothing dormant reaches this list —
+            every row here traded in the current month or it would not have
+            been ranked — so the date was a line of small print under five
+            prices that are all recent, and it cost the trend line its place
+            on a phone.
 
-            The trend line is on a phone too, and gives way to that date where
-            there is one. A phone row is 358px wide and already carries an
-            avatar, a name, a score and a price block; a dated row's price
-            block is a line taller and the 56px of chart is what the name
-            would otherwise pay for it. The two are alternatives rather than
-            neighbours, and the date is the one that cannot be worked out from
-            anything else on the row. On a wide screen both fit and both
-            stay. */}
+            So the trend line is on every row at every width now: 358px of
+            phone carries an avatar, a name, a score, 56px of chart and a
+            price, and every row is the same shape as the one above it. */}
         <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
-          {topPicks.map((r) => {
-            const dated = r.lastDate !== null && r.lastDate !== session;
-            return (
+          {topPicks.map((r) => (
             <Link
               key={r.symbol}
               href={`/stock/${r.symbol}`}
@@ -363,9 +360,7 @@ export default async function HomePage() {
               <span className="shrink-0 w-8 text-right text-sm tabular-nums text-app-text">
                 {r.score}
               </span>
-              <div
-                className={`shrink-0 w-14 lg:w-32 ${dated ? "hidden lg:block" : ""}`}
-              >
+              <div className="shrink-0 w-14 lg:w-32">
                 <Sparkline
                   data={r.sparkline}
                   positive={(r.changePct ?? 0) >= 0}
@@ -385,15 +380,9 @@ export default async function HomePage() {
                 <div className="text-xs">
                   <Pct value={r.changePct} suffix="" />
                 </div>
-                {dated && (
-                  <div className="text-[10px] text-app-muted leading-none mt-0.5">
-                    {r.lastDate}
-                  </div>
-                )}
               </div>
             </Link>
-            );
-          })}
+          ))}
         </div>
       </Section>
       )}
