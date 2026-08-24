@@ -38,3 +38,97 @@ test("the weekend never counts, whatever the hour", () => {
   assert.equal(boardIsAboutToday(ub("2026-08-08T03:00:00Z")), false);
   assert.equal(boardIsAboutToday(ub("2026-08-09T03:00:00Z")), false);
 });
+
+/* -------------------------------------------------------------------------
+   The session flag, and what it costs when the feed is down.
+
+   The cache used to be written only on success, so a status endpoint that
+   was refusing or hanging charged every render the whole timeout — and the
+   home page now asks on every visit, to decide whether the pulse beside an
+   index heading is drawn.
+   ------------------------------------------------------------------------- */
+
+const realFetch = globalThis.fetch;
+
+/** Counts calls and answers however the test says. */
+function stubFetch(answer: () => Promise<Response>) {
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return answer();
+  }) as typeof fetch;
+  return () => calls;
+}
+
+const statusBody = (status: string) =>
+  new Response(JSON.stringify({ status }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+
+test("the session flag is read from the exchange's own wording", async (t) => {
+  const { fetchMarketOpen, __resetStatusCache } = await import("./quotes");
+  t.after(() => {
+    globalThis.fetch = realFetch;
+    __resetStatusCache();
+  });
+
+  __resetStatusCache();
+  stubFetch(async () => statusBody("Зах зээл нээлттэй"));
+  assert.equal(await fetchMarketOpen(), true);
+
+  __resetStatusCache();
+  stubFetch(async () => statusBody("Зах зээл хаалттай"));
+  assert.equal(await fetchMarketOpen(), false);
+});
+
+test("an answer is asked for once and then remembered", async (t) => {
+  const { fetchMarketOpen, __resetStatusCache } = await import("./quotes");
+  t.after(() => {
+    globalThis.fetch = realFetch;
+    __resetStatusCache();
+  });
+
+  __resetStatusCache();
+  const calls = stubFetch(async () => statusBody("Зах зээл нээлттэй"));
+  assert.equal(await fetchMarketOpen(), true);
+  assert.equal(await fetchMarketOpen(), true);
+  assert.equal(await fetchMarketOpen(), true);
+  assert.equal(calls(), 1);
+});
+
+test("a failure is remembered too, so the wait is paid once", async (t) => {
+  const { fetchMarketOpen, __resetStatusCache } = await import("./quotes");
+  t.after(() => {
+    globalThis.fetch = realFetch;
+    __resetStatusCache();
+  });
+
+  __resetStatusCache();
+  const calls = stubFetch(async () => {
+    throw new Error("unreachable");
+  });
+  // Unknown, which the caller draws as "not in session" rather than guessing.
+  assert.equal(await fetchMarketOpen(), null);
+  assert.equal(await fetchMarketOpen(), null);
+  assert.equal(calls(), 1);
+});
+
+test("a feed that falls over keeps the last state it gave", async (t) => {
+  const { fetchMarketOpen, __resetStatusCache } = await import("./quotes");
+  t.after(() => {
+    globalThis.fetch = realFetch;
+    __resetStatusCache();
+  });
+
+  __resetStatusCache();
+  stubFetch(async () => statusBody("Зах зээл нээлттэй"));
+  assert.equal(await fetchMarketOpen(), true);
+
+  // The cache is cleared as if a minute had passed; the feed is now down.
+  __resetStatusCache({ keepValue: true });
+  stubFetch(async () => {
+    throw new Error("unreachable");
+  });
+  assert.equal(await fetchMarketOpen(), true);
+});

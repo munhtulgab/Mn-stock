@@ -252,26 +252,58 @@ export function sessionEnd(quotes: Map<number, LiveQuote>): string | null {
  * Guessing from the clock would be wrong on holidays and half-days.
  */
 export async function fetchMarketOpen(): Promise<boolean | null> {
-  if (statusCache && Date.now() - statusCache.at < CACHE_MS) {
+  if (statusCache && Date.now() - statusCache.at < STATUS_CACHE_MS) {
     return statusCache.open;
   }
   try {
     const res = await fetch(STATUS_ENDPOINT, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(STATUS_TIMEOUT_MS),
     });
-    if (!res.ok) return statusCache?.open ?? null;
+    if (!res.ok) throw new Error(`status ${res.status}`);
     const body = (await res.json()) as { status?: string };
     // Reported in Mongolian: "Зах зээл хаалттай" when shut.
     const open = typeof body.status === "string" && !/хаалттай/i.test(body.status);
     statusCache = { at: Date.now(), open };
     return open;
   } catch {
-    return statusCache?.open ?? null;
+    // A failure is an answer too, and worth remembering: the last known state
+    // is kept over nothing, but the *time* is updated either way so a feed
+    // that is down does not charge every reader the whole wait again. Without
+    // that the cache was only ever written on success, and a dead endpoint
+    // meant the timeout on every render.
+    statusCache = { at: Date.now(), open: statusCache?.open ?? null };
+    return statusCache.open;
   }
 }
 
-let statusCache: { at: number; open: boolean } | null = null;
+/**
+ * Its own budget, and not the quote feed's.
+ *
+ * Whether the exchange is in session changes twice a day and is worth a
+ * minute of memory, where a quote is worth five seconds. And nothing on a
+ * page depends on it enough to wait twelve seconds: it decides whether a
+ * pulse is drawn beside a heading and whether a book is called live. Two
+ * seconds or it is unknown, which is drawn as not in session.
+ */
+const STATUS_TIMEOUT_MS = 2_000;
+const STATUS_CACHE_MS = 60_000;
+
+let statusCache: { at: number; open: boolean | null } | null = null;
+
+/**
+ * Empties the status cache, for tests.
+ *
+ * `keepValue` stands in for a minute having passed: the last answer is still
+ * what the module knows, but it is old enough to ask again — which is the
+ * only way to reach the branch where a live feed falls over and the state it
+ * last gave is what a reader keeps seeing.
+ */
+export function __resetStatusCache(options: { keepValue?: boolean } = {}): void {
+  statusCache = options.keepValue
+    ? { at: 0, open: statusCache?.open ?? null }
+    : null;
+}
 let cache: { at: number; quotes: Map<number, LiveQuote> } | null = null;
 let inFlight: Promise<Map<number, LiveQuote>> | null = null;
 

@@ -13,6 +13,7 @@ import type { ExchangeMover } from "@/lib/mse/movers";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getMarketIndices } from "@/lib/indices";
+import { fetchMarketOpen } from "@/lib/marketinfo/quotes";
 import { checkSignalChangesIfDue } from "@/lib/signalHistory";
 import { getMarketNews, refreshMarketNews } from "@/lib/marketNews";
 import { getSettings } from "@/lib/settings";
@@ -40,11 +41,14 @@ export default async function HomePage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
   const settings = await getSettings(db);
-  const [snapshot, portfolio, watchlist, indices] = await Promise.all([
+  const [snapshot, portfolio, watchlist, indices, marketOpen] = await Promise.all([
     getDashboardRows(db),
     getPortfolioSummary(db, user!._id!),
     getWatchlist(db, user!._id!),
     getMarketIndices(db),
+    // Alongside the rest rather than after it: it is one short request behind
+    // its own cache, and the page should not wait a second time for it.
+    fetchMarketOpen().catch(() => null),
   ]);
   const { rows, session, board } = await applyLiveQuotes(snapshot.rows, {
     extraCaCerts: settings.extraCaCerts,
@@ -149,11 +153,29 @@ export default async function HomePage() {
               key={idx.key}
               className="rounded-2xl bg-app-card border border-app-border p-3 flex flex-col items-center gap-2"
             >
-              <div className="flex items-center gap-1 text-xs font-semibold text-app-text leading-none">
-                {idx.live && (
-                  <span className="relative flex h-1 w-1 shrink-0">
+              {/* The pulse means the level is moving, so it is shown only
+                  while the exchange says it is in session.
+
+                  `live` on its own does not mean that. It says the running
+                  level was fetched rather than read out of the stored series,
+                  and the exchange's front page answers with the last close
+                  all evening and all weekend — so the dot pulsed around the
+                  clock over a figure that had not changed since Friday. The
+                  exchange's own status settles it; guessing from the clock
+                  would be wrong on a holiday or a half-day.
+
+                  Shown only on a plain `true`. Unknown — the status endpoint
+                  unreachable — is not a session, and a claim the app cannot
+                  back is worse than a missing dot.
+
+                  8px rather than 4. At four it was a speck beside a label
+                  half its own weight, which is not enough to read as the one
+                  thing on the card that is moving. */}
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-app-text leading-none">
+                {idx.live && marketOpen === true && (
+                  <span className="relative flex h-2 w-2 shrink-0">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-app-positive opacity-75" />
-                    <span className="relative inline-flex h-1 w-1 rounded-full bg-app-positive" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-app-positive" />
                   </span>
                 )}
                 <span className="truncate">{idx.label}</span>
@@ -309,15 +331,22 @@ export default async function HomePage() {
             with it — a pick with no price attached says nothing about whether
             it can be acted on.
 
-            The trend line waits for a wide screen. A phone row already
-            carries an avatar, a name, a score and a price block, and 56px of
-            chart would come out of the name.
-
             The date appears only when the last trade is not the running
             session, exactly as it does on that page: no date means it traded
-            today, and every row here traded this month by construction. */}
+            today, and every row here traded this month by construction.
+
+            The trend line is on a phone too, and gives way to that date where
+            there is one. A phone row is 358px wide and already carries an
+            avatar, a name, a score and a price block; a dated row's price
+            block is a line taller and the 56px of chart is what the name
+            would otherwise pay for it. The two are alternatives rather than
+            neighbours, and the date is the one that cannot be worked out from
+            anything else on the row. On a wide screen both fit and both
+            stay. */}
         <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
-          {topPicks.map((r) => (
+          {topPicks.map((r) => {
+            const dated = r.lastDate !== null && r.lastDate !== session;
+            return (
             <Link
               key={r.symbol}
               href={`/stock/${r.symbol}`}
@@ -334,7 +363,9 @@ export default async function HomePage() {
               <span className="shrink-0 w-8 text-right text-sm tabular-nums text-app-text">
                 {r.score}
               </span>
-              <div className="hidden lg:block shrink-0 w-32">
+              <div
+                className={`shrink-0 w-14 lg:w-32 ${dated ? "hidden lg:block" : ""}`}
+              >
                 <Sparkline
                   data={r.sparkline}
                   positive={(r.changePct ?? 0) >= 0}
@@ -354,14 +385,15 @@ export default async function HomePage() {
                 <div className="text-xs">
                   <Pct value={r.changePct} suffix="" />
                 </div>
-                {r.lastDate && r.lastDate !== session && (
+                {dated && (
                   <div className="text-[10px] text-app-muted leading-none mt-0.5">
                     {r.lastDate}
                   </div>
                 )}
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       </Section>
       )}

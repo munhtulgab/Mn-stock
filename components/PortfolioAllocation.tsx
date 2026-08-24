@@ -81,25 +81,29 @@ export default function PortfolioAllocation({
   return (
     <div className="pt-4 mt-4 border-t border-app-border">
       <h3 className="text-xs text-app-muted mb-4 text-center">Багцын хувиарлалт</h3>
-      {/* Down the middle rather than side by side.
+      {/* The ring on the left, its legend on the right, and the pair sitting
+          in the middle of the card.
 
-          The ring was 112px in a column beside the legend, which is a
+          Centred as a pair rather than each half filling what it is given:
+          `justify-center` is on the row and neither child grows, so the two
+          come out as one block down the middle of a card that is twelve
+          hundred pixels wide on a desktop, instead of a circle pinned to the
+          far left and a table pinned to the far right.
+
+          It stacks below `sm`, which is not a preference: 288px of ring and a
+          table of symbols, amounts and percentages do not fit across 318px of
+          phone, and forcing the row would shrink both to nothing. Stacked,
+          the ring keeps the full width and the legend sits under it on the
+          same centre — so "left and right" is what a screen wide enough for a
+          left and a right gets.
+
+          The ring stays large. It was 112px in this position once, which is a
           thumbnail: at that size a slice of a few per cent is a couple of
-          pixels of arc and the shape it makes cannot be read. It is the point
-          of this section, so it gets the width — as much of it as there is,
-          up to 18rem on a phone, which is what the card leaves once the page
-          and the card have taken their padding, and 22rem from a tablet up
-          where there is more of it. Capped rather than uncapped: the card is
-          twelve hundred pixels wide on a desktop and a circle that size stops
-          being easier to read and starts being a poster.
-
-          The legend follows underneath at the same centre, capped so its
-          rows stay a readable table instead of a symbol and a figure at
-          opposite ends of a desktop. */}
-      <div className="flex flex-col items-center gap-5">
+          pixels of arc and the shape it makes cannot be read. */}
+      <div className="flex flex-col items-center justify-center gap-6 sm:flex-row sm:items-center sm:gap-8">
         <svg
           viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="w-full max-w-[18rem] sm:max-w-[22rem] aspect-square -rotate-90"
+          className="w-full max-w-[18rem] shrink-0 aspect-square -rotate-90 sm:w-56 sm:max-w-none lg:w-72"
           aria-hidden
         >
           {slices
@@ -120,7 +124,9 @@ export default function PortfolioAllocation({
             ))}
         </svg>
 
-        <ul className="w-full max-w-sm min-w-0 space-y-1.5">
+        {/* Capped, so a row is a readable line rather than a symbol and a
+            figure at opposite ends of a desktop. */}
+        <ul className="w-full max-w-sm min-w-0 space-y-1.5 sm:w-80">
           {slices.map((slice) => (
             <li key={slice.symbol} className="flex items-center gap-2 text-xs">
               <span
