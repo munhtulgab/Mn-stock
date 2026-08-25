@@ -1,6 +1,7 @@
 import Num from "@/components/Num";
 import MetricInfo from "@/components/MetricInfo";
 import type { DividendRow } from "@/lib/analysis/report";
+import type { DividendEstimate } from "@/lib/dividends";
 
 /**
  * What the company has declared per share, year by year.
@@ -32,9 +33,17 @@ export default function DividendNotices({
   years,
   /** Today's year in Ulaanbaatar, read once on the server rather than here. */
   through,
+  /**
+   * Half the filed earnings, for the current year only, and only where the
+   * company is in profit and has declared nothing yet. Worked out on the
+   * server — see `estimatedDividend` — because it is arithmetic on the
+   * statements rather than a fact about what was paid.
+   */
+  estimate = null,
 }: {
   years: DividendRow[];
   through: number;
+  estimate?: DividendEstimate | null;
 }) {
   if (years.length === 0) return null;
 
@@ -63,6 +72,22 @@ export default function DividendNotices({
                         {row.yieldPct.toFixed(2)}%
                       </span>
                     )}
+                  </span>
+                ) : estimate && year === through ? (
+                  /* In brackets and in the muted ink, because it is a sum and
+                     not a declaration. The two together are the whole of what
+                     marks it: a figure set like the ones above it would be
+                     read as one, and this company has not said anything yet.
+                     What the sum is is in the note behind the heading. */
+                  <span className="text-app-muted">
+                    (<Num value={estimate.amount} digits={2} suffix="₮" />
+                    {estimate.yieldPct !== null && (
+                      <>
+                        {" · өгөөж "}
+                        {estimate.yieldPct.toFixed(2)}%
+                      </>
+                    )}
+                    )
                   </span>
                 ) : (
                   <span className="text-app-muted">—</span>

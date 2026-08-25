@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { perShare, profitYear } from "./dividends";
+import { estimatedDividend, perShare, profitYear } from "./dividends";
 
 /**
  * Reading a figure out of a sentence.
@@ -92,4 +92,57 @@ test("the year is not taken from the payment date in the standfirst", () => {
     profitYear('"АПУ" ХК 2026 ОНЫ ЭХНИЙ ХАГАС ЖИЛИЙН САНХҮҮГИЙН ҮР ДҮНГ ХАРГАЛЗАЖ НОГДОЛ АШИГ ХУВААРИЛНА', "2026-08-19"),
     2026,
   );
+});
+
+/* -------------------------------------------------------------------------
+   Half the earnings, where a year carries no declaration.
+
+   A figure in brackets on a card people make decisions from, so what it
+   refuses to answer matters as much as what it works out.
+   ------------------------------------------------------------------------- */
+
+const filing = (
+  eps: number | null,
+  netProfit: number | null,
+  sharesOutstanding: number | null,
+) => ({ eps, netProfit, sharesOutstanding });
+
+test("half the filed EPS, and the yield against the price", () => {
+  const estimate = estimatedDividend(filing(120, 12_000_000, 100_000), 1_000);
+  assert.equal(estimate?.amount, 60);
+  assert.equal(estimate?.yieldPct, 6);
+});
+
+test("EPS is preferred, because it is the figure printed on the same card", () => {
+  // Profit over shares would give 200; the filing's own ratio says 120, and
+  // a reader halving what they can see should land where the app did.
+  const estimate = estimatedDividend(filing(120, 20_000_000, 100_000), null);
+  assert.equal(estimate?.amount, 60);
+});
+
+test("profit over shares where the filing carries no EPS", () => {
+  const estimate = estimatedDividend(filing(null, 20_000_000, 100_000), null);
+  assert.equal(estimate?.amount, 100);
+});
+
+test("a loss estimates nothing, whatever the ratios say", () => {
+  assert.equal(estimatedDividend(filing(null, -5_000_000, 100_000), 1_000), null);
+  // Including when a stale EPS on the same filing is still positive.
+  assert.equal(estimatedDividend(filing(120, -5_000_000, 100_000), 1_000), null);
+});
+
+test("a break-even year estimates nothing either", () => {
+  assert.equal(estimatedDividend(filing(0, 0, 100_000), 1_000), null);
+});
+
+test("no earnings figure at all, no estimate", () => {
+  assert.equal(estimatedDividend(filing(null, null, 100_000), 1_000), null);
+  assert.equal(estimatedDividend(filing(null, 20_000_000, null), 1_000), null);
+  assert.equal(estimatedDividend(filing(null, 20_000_000, 0), 1_000), null);
+});
+
+test("no price is an amount without a yield, not no amount", () => {
+  const estimate = estimatedDividend(filing(120, 12_000_000, 100_000), null);
+  assert.equal(estimate?.amount, 60);
+  assert.equal(estimate?.yieldPct, null);
 });

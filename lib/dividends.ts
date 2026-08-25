@@ -177,6 +177,74 @@ export function profitYear(title: string, date: string): number {
 }
 
 /**
+ * Half the earnings, for a year with nothing declared on it yet.
+ *
+ * A profitable company that has not held its annual meeting shows a dash
+ * against the current year, which is honest and says nothing about what a
+ * shareholder might reasonably expect. This puts a figure there: half the
+ * period's earnings per share, which is the payout ratio the larger MSE
+ * payers have settled around.
+ *
+ * It is a calculation and not a declaration, and the card marks it as one by
+ * setting it in brackets. Three things are worth being plain about:
+ *
+ *  - The half is an assumption. A company may pay all of its profit, none of
+ *    it, or something in between, and nothing here knows which.
+ *  - The earnings are the filing's, and MSE's quarterly filings are
+ *    cumulative from January. At the second quarter this is therefore half of
+ *    a half-year, not half of a year — it grows as the year is filed.
+ *  - A loss produces nothing. A company cannot distribute what it did not
+ *    make, and an estimate of a negative dividend is not a number anybody
+ *    should be shown.
+ *
+ * EPS as filed is preferred over profit ÷ shares because it is the figure
+ * printed a few lines above this on the same card, so a reader can halve it
+ * themselves and arrive where the app did. The division is the fallback for
+ * a filing that carries the profit but not the ratio.
+ */
+export const ESTIMATE_PAYOUT = 0.5;
+
+export interface DividendEstimate {
+  /** Tugriks per share. */
+  amount: number;
+  /** Against the current price, where there is one. */
+  yieldPct: number | null;
+}
+
+export function estimatedDividend(
+  financials: {
+    eps: number | null;
+    netProfit: number | null;
+    sharesOutstanding: number | null;
+  },
+  price: number | null,
+): DividendEstimate | null {
+  const { eps, netProfit, sharesOutstanding } = financials;
+
+  // A stated loss ends it, whatever the ratios say. Checked before EPS
+  // because a filing can carry a positive EPS and a negative profit when the
+  // two were taken from different periods.
+  if (netProfit !== null && netProfit <= 0) return null;
+
+  const perShare =
+    eps !== null && eps > 0
+      ? eps
+      : netProfit !== null &&
+          netProfit > 0 &&
+          sharesOutstanding !== null &&
+          sharesOutstanding > 0
+        ? netProfit / sharesOutstanding
+        : null;
+  if (perShare === null) return null;
+
+  const amount = perShare * ESTIMATE_PAYOUT;
+  return {
+    amount,
+    yieldPct: price !== null && price > 0 ? (amount / price) * 100 : null,
+  };
+}
+
+/**
  * Upper-cased, without quote marks or the legal form, for comparing names.
  *
  * The form is matched between spaces rather than with `\b`, which in

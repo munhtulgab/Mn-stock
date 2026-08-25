@@ -7,6 +7,7 @@ import { ensurePricesCurrent, getStockDetail } from "@/lib/data";
 import { sessionChangePct } from "@/lib/priceChange";
 import { getPortfolioSummary, getWatchlist } from "@/lib/portfolio";
 import { getSettings } from "@/lib/settings";
+import { estimatedDividend } from "@/lib/dividends";
 import {
   DETAIL_BUDGET_MS,
   fetchLiveQuotes,
@@ -379,6 +380,7 @@ export default async function StockDetailPage({
               <DividendNotices
                 years={analysis?.dividends ?? []}
                 through={Number(today.slice(0, 4))}
+                estimate={estimatedDividend(financials, currentPrice)}
               />
             </div>
           ) : (
