@@ -33,8 +33,18 @@ export function isChatModel(id: string): boolean {
  * preferred and still listed means the catalogue has moved on entirely, and
  * the first chat model beats refusing to answer.
  */
-export function pickModel(available: string[], prefer: string[]): string | null {
-  const chat = available.filter(isChatModel);
+export function pickModel(
+  available: string[],
+  prefer: string[],
+  /**
+   * Names already tried and refused. A listing is the catalogue rather than
+   * what this key may call — Mistral lists `mistral-large-latest` to an
+   * account that is told it cannot have it — so without this the pick lands
+   * on the refused name again and the substitution goes in a circle.
+   */
+  refused: ReadonlySet<string> = new Set(),
+): string | null {
+  const chat = available.filter((id) => isChatModel(id) && !refused.has(id));
   if (chat.length === 0) return null;
   for (const wanted of prefer) {
     const match = chat.find((id) => id.includes(wanted));
@@ -74,6 +84,33 @@ export function isModelNotFound(status: number, body: string): boolean {
 }
 
 /**
+ * Whether a refusal is "that model is not for this account".
+ *
+ * The model exists and is listed; the key's plan may not call it. Mistral
+ * answers `403 {"type":"tier_not_allowed","message":"This model is not
+ * available in your subscription tier"}` to `mistral-large-latest` on a free
+ * account, and that is a different sentence from every other 403 a provider
+ * sends — a key with no permissions at all, an account-level block — so the
+ * body decides, not the status.
+ *
+ * It matters because the answer is the same as a retired model's: ask what
+ * this key can reach and take the best of it. Read only as a status it was
+ * a hard failure, and the panel lost an analyst to a model nobody had to be
+ * using.
+ */
+export function isModelNotAllowed(status: number, body: string): boolean {
+  if (status !== 403) return false;
+  return /tier_not_allowed|not available in your (subscription|tier|plan)|requires? a paid|upgrade your (plan|subscription|tier)/i.test(
+    body,
+  );
+}
+
+/** Either way of being told to use a different model. */
+export function isModelUnusable(status: number, body: string): boolean {
+  return isModelNotFound(status, body) || isModelNotAllowed(status, body);
+}
+
+/**
  * Preferred models per provider, best first.
  *
  * Ordered by what makes a better analyst — a large instruction-tuned model
@@ -95,6 +132,16 @@ export const MODEL_PREFERENCES: Record<string, string[]> = {
     "gemma2-9b",
   ],
   cerebras: ["llama-3.3-70b", "llama3.3-70b", "llama-4-scout", "qwen-3-32b", "llama3.1-8b"],
-  mistral: ["mistral-large", "mistral-medium", "mistral-small", "open-mixtral"],
+  // Largest first, as everywhere here. A free account is refused the first
+  // two and lands on `mistral-small-latest`, which is the substitution above
+  // walking down rather than a list that has to be kept in step with a plan.
+  mistral: [
+    "mistral-large",
+    "mistral-medium",
+    "mistral-small",
+    "open-mixtral",
+    "open-mistral",
+    "ministral",
+  ],
   openrouter: [],
 };

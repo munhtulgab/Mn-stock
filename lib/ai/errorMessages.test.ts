@@ -61,3 +61,31 @@ test("every message survives a second pass unchanged", () => {
     assert.equal(humanizeProviderError("groq", once), once, `unstable: ${raw}`);
   }
 });
+
+test("Mistral's subscription-tier refusal is not called an invalid key", () => {
+  // Observed on a free account asking for mistral-large-latest. The key is
+  // fine and the model is real; this plan may not call it, and sending the
+  // reader to re-paste a key fixes nothing.
+  const raw =
+    'mistral API 403: {"object":"error","message":"This model is not available in your subscription tier","type":"tier_not_allowed","param":null,"code":"1910","raw_status_code":403}';
+  const message = humanizeProviderError("mistral", raw);
+  assert.match(message, /багц/);
+  assert.doesNotMatch(message, /түлхүүр буруу/);
+  assert.doesNotMatch(message, /quota/);
+});
+
+test("the tier message survives being re-read from a stored document", () => {
+  // Cached documents are put back through here every time they are read, so
+  // a rule that does not claim its own output rewrites itself into something
+  // else on the second pass.
+  const raw =
+    'mistral API 403: {"type":"tier_not_allowed","message":"This model is not available in your subscription tier"}';
+  const once = humanizeProviderError("mistral", raw);
+  assert.equal(humanizeProviderError("mistral", once), once);
+});
+
+test("the substitution's own refusal reads as a plan limit, not a missing model", () => {
+  // What is thrown when every model the key lists has been turned down.
+  const raw = 'mistral model "mistral-small-latest" энэ түлхүүрээр ашиглах боломжгүй';
+  assert.match(humanizeProviderError("mistral", raw), /багц/);
+});

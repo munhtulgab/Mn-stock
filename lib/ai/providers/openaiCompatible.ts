@@ -3,7 +3,7 @@ import { parseAiSignal } from "@/lib/ai/schema";
 import { withRetryAfter } from "@/lib/ai/retryAfter";
 import {
   MODEL_PREFERENCES,
-  isModelNotFound,
+  isModelUnusable,
   listModels,
   pickModel,
 } from "./models";
@@ -36,8 +36,24 @@ const DEFAULT_MAX_TOKENS = 1500;
  * Held for the life of the process rather than stored: it is a fact about
  * this afternoon at one provider, and a deployment restarting is exactly when
  * it should be looked up again.
+ *
+ * Written only once a substitute has actually answered. It used to be written
+ * as soon as one was chosen, which on a plan that refuses more than one model
+ * stored the second refusal as the answer: the next call started on a name
+ * already known to be no good and, having "already asked", had no way back.
  */
 const resolvedModels = new Map<string, string>();
+
+/**
+ * How many other models one call may try after being turned away.
+ *
+ * A free Mistral account refuses both `mistral-large-latest` and
+ * `mistral-medium-latest` before `mistral-small-latest` answers, so one
+ * substitution is not enough to get down to what the plan allows. Three is,
+ * with room for a retired name on top — and the cost is paid once, because a
+ * substitute that answers is remembered for the life of the process.
+ */
+const MODEL_SUBSTITUTIONS = 3;
 
 export async function callOpenAiCompatible(opts: {
   provider: ProviderName;
@@ -68,9 +84,12 @@ export async function callOpenAiCompatible(opts: {
 
   const cacheKey = `${provider}:${model}`;
   let using = resolvedModels.get(cacheKey) ?? model;
-  // A model already known to be gone is not worth asking about again — the
-  // substitute stands in from the first call after it was found.
-  let askedForModels = resolvedModels.has(cacheKey);
+  // Everything this call has been turned away from, so the pick below cannot
+  // land on one of them again.
+  const refused = new Set<string>();
+  let substitutions = 0;
+  /** The listing, read at most once however many models get refused. */
+  let available: string[] | null = null;
 
   try {
     for (let attempt = 0; ; attempt++) {
@@ -97,25 +116,33 @@ export async function callOpenAiCompatible(opts: {
       if (!res.ok) {
         const body = await res.text();
 
-        // The configured name has been retired. Ask what this key can reach
-        // and go again with the closest thing to what was wanted — once, so a
-        // provider that answers 404 to everything cannot loop.
-        if (!askedForModels && isModelNotFound(res.status, body)) {
-          askedForModels = true;
-          const available = await listModels(baseUrl, apiKey, extraHeaders);
-          const substitute = pickModel(available, MODEL_PREFERENCES[provider] ?? []);
-          if (substitute && substitute !== using) {
+        // This name is retired, or this plan may not call it. Either way the
+        // answer is the same: ask what the key can reach and go again with
+        // the best of what is left. Bounded, so a provider that turns down
+        // everything it lists cannot loop.
+        if (substitutions < MODEL_SUBSTITUTIONS && isModelUnusable(res.status, body)) {
+          refused.add(using);
+          available ??= await listModels(baseUrl, apiKey, extraHeaders);
+          const substitute = pickModel(
+            available,
+            MODEL_PREFERENCES[provider] ?? [],
+            refused,
+          );
+          if (substitute) {
+            substitutions++;
             console.warn(
-              `${provider}: model ${using} is gone, using ${substitute} instead`,
+              `${provider}: ${using} refused (${res.status}), trying ${substitute}`,
             );
-            resolvedModels.set(cacheKey, substitute);
             using = substitute;
             continue;
           }
           throw new Error(
-            `${provider} model "${using}" байхгүй болсон` +
+            `${provider} model "${using}" энэ түлхүүрээр ашиглах боломжгүй` +
               (available.length > 0
-                ? `. Энэ түлхүүрээр боломжтой: ${available.slice(0, 8).join(", ")}`
+                ? `. Энэ түлхүүрээр боломжтой: ${available
+                    .filter((id) => !refused.has(id))
+                    .slice(0, 8)
+                    .join(", ")}`
                 : ` бөгөөд боломжит загваруудын жагсаалтыг ч уншиж чадсангүй`),
           );
         }
@@ -146,6 +173,9 @@ export async function callOpenAiCompatible(opts: {
         );
       }
       const parsed = parseAiSignal(raw);
+      // Remembered now rather than when it was chosen: what makes a
+      // substitute the answer is that it answered.
+      if (using !== model) resolvedModels.set(cacheKey, using);
       return { provider, ok: true, raw, parsed };
     }
   } catch (err) {
