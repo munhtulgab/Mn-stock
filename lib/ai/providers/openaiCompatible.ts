@@ -8,7 +8,7 @@ import {
   pickModel,
 } from "./models";
 import { TRANSIENT_RETRIES, isTransientStatus, retryDelayMs, sleep } from "./transient";
-import type { ProviderName, ProviderResult } from "./types";
+import { completionTokensFor, type ProviderName, type ProviderResult } from "./types";
 
 /** Standard `Retry-After` header (seconds, or a delay per some providers),
  * falling back to the "try again in 1.23s" phrasing Groq/OpenAI-style APIs
@@ -20,15 +20,7 @@ function extractRetrySeconds(res: Response, bodyText: string): number | null {
   return inBody ? Number(inBody[1]) : null;
 }
 
-/**
- * Room for the answer.
- *
- * Enough for the JSON these prompts ask for, which measures under a thousand
- * tokens. A reasoning model needs far more than the answer is long — see
- * `maxTokens` on the call — because its thinking is charged to this same
- * allowance.
- */
-const DEFAULT_MAX_TOKENS = 1500;
+
 
 /**
  * Models found by asking, keyed by the configured name that failed.
@@ -45,6 +37,21 @@ const DEFAULT_MAX_TOKENS = 1500;
 const resolvedModels = new Map<string, string>();
 
 /**
+ * Models this key has been turned away from, keyed the same way.
+ *
+ * Held across calls, not just within one. Without it every request started
+ * again at the configured name and walked the same refusals — on a free
+ * Mistral account that is three rejected requests and a listing before the
+ * one that answers, every time, against a plan that meters requests. The
+ * tier refusal stopped being the error and the rate limit took its place.
+ *
+ * A refusal is about the plan rather than the moment, so remembering it for
+ * the life of the process is right; a deployment restarting is when it is
+ * worth finding out again, which is the same rule the resolved names follow.
+ */
+const refusedModels = new Map<string, Set<string>>();
+
+/**
  * How many other models one call may try after being turned away.
  *
  * A free Mistral account refuses both `mistral-large-latest` and
@@ -54,6 +61,9 @@ const resolvedModels = new Map<string, string>();
  * substitute that answers is remembered for the life of the process.
  */
 const MODEL_SUBSTITUTIONS = 3;
+
+/** How long one completion request may take. */
+const REQUEST_MS = 40_000;
 
 export async function callOpenAiCompatible(opts: {
   provider: ProviderName;
@@ -83,15 +93,27 @@ export async function callOpenAiCompatible(opts: {
   } = opts;
 
   const cacheKey = `${provider}:${model}`;
+  // Everything this key has been turned away from, so the pick below cannot
+  // land on one of them again — on this call or on any earlier one.
+  const refused = refusedModels.get(cacheKey) ?? new Set<string>();
+  refusedModels.set(cacheKey, refused);
   let using = resolvedModels.get(cacheKey) ?? model;
-  // Everything this call has been turned away from, so the pick below cannot
-  // land on one of them again.
-  const refused = new Set<string>();
   let substitutions = 0;
   /** The listing, read at most once however many models get refused. */
   let available: string[] | null = null;
 
   try {
+    // The name this call would start on is one an earlier call was already
+    // turned away from. Reading the listing costs a request; sending a whole
+    // prompt to be refused again costs a request and the answer's worth of
+    // the plan's allowance, which is what put this provider over its rate
+    // limit in the first place.
+    if (refused.has(using)) {
+      available = await listModels(baseUrl, apiKey, extraHeaders);
+      const known = pickModel(available, MODEL_PREFERENCES[provider] ?? [], refused);
+      if (known) using = known;
+    }
+
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
@@ -103,14 +125,19 @@ export async function callOpenAiCompatible(opts: {
         body: JSON.stringify({
           model: using,
           temperature: 0.3,
-          max_tokens: maxTokens ?? DEFAULT_MAX_TOKENS,
+          max_tokens: maxTokens ?? completionTokensFor(provider),
           messages: [
             { role: "system", content: prompt.system },
             { role: "user", content: prompt.user },
           ],
           ...extraBody,
         }),
-        signal: AbortSignal.timeout(30_000),
+        // Forty seconds rather than thirty. Workers AI answered inside the
+        // old window until the day it did not, and a provider that is merely
+        // slow should not be reported as a failure on a page that is already
+        // waiting on five others in parallel — the wall clock here is the
+        // slowest provider, not the sum of them.
+        signal: AbortSignal.timeout(REQUEST_MS),
       });
 
       if (!res.ok) {
@@ -123,6 +150,7 @@ export async function callOpenAiCompatible(opts: {
         if (substitutions < MODEL_SUBSTITUTIONS && isModelUnusable(res.status, body)) {
           refused.add(using);
           available ??= await listModels(baseUrl, apiKey, extraHeaders);
+
           const substitute = pickModel(
             available,
             MODEL_PREFERENCES[provider] ?? [],

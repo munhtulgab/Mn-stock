@@ -170,9 +170,20 @@ const RULES_AND_FORMAT = `---
  * Numbered here rather than in the text so a prompt missing its fourth
  * section does not hand the model a list that jumps from three to five.
  */
+/**
+ * Asked for where the answer's allowance is tight.
+ *
+ * The three reasons are prose in Mongolian, and Cyrillic costs about a token
+ * a character — so a full-length answer is well over a thousand tokens and
+ * on Groq's minute allowance there is no room to raise the ceiling to meet
+ * it. Shortening the answer is the only lever left, and the reasons lose
+ * little by it: the numbers they must name are the substance.
+ */
+const BREVITY_RULE = `- \`technical_reason\`, \`fundamental_reason\`, \`overall_logic\` бүрийг 1-2 өгүүлбэрт багтаа. Шаардлагатай тоо, үзүүлэлтээ хэвээр дурдана — зөвхөн тайлбарын урт нь богино байна.`;
+
 export function systemPromptFor(
   sections: readonly string[],
-  opts: { withheld?: boolean } = {},
+  opts: { withheld?: boolean; brief?: boolean } = {},
 ): string {
   const guidance = sections
     .map((key) => SECTION_GUIDE[key])
@@ -185,6 +196,7 @@ export function systemPromptFor(
     ...(opts.withheld ? [WITHHOLDING_RULE] : []),
     guidance,
     RULES_AND_FORMAT,
+    ...(opts.brief ? [BREVITY_RULE] : []),
   ].join("\n\n");
 }
 

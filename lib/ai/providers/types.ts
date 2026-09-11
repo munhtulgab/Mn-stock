@@ -47,6 +47,59 @@ export const PROVIDER_TOKEN_BUDGET: Partial<Record<ProviderName, number>> = {
   cerebras: 20_000,
 };
 
+/**
+ * Room for the answer, in tokens — both what is asked for and what is set
+ * aside for it.
+ *
+ * One number, because it is two sides of one subtraction: a provider that
+ * meters the whole exchange refuses a request whose reply would take it past
+ * the ceiling, so the room reserved when the question is built has to be the
+ * room the answer is actually allowed. It lived in two files at 1,500 apiece
+ * and drifting them apart would have been a 413 nobody could see the cause of.
+ *
+ * Raised from that 1,500 because the answer is written in Mongolian. The
+ * three reasons the schema asks for are prose, and Cyrillic costs about a
+ * token a character against five for English — so an answer that reads as
+ * three short paragraphs is well over a thousand tokens before the JSON
+ * around it, and a verbose one ran past the ceiling and was cut off
+ * mid-string. Groq reported `finish_reason: "length"` on a run whose answer
+ * was fine; there was no room to finish it.
+ *
+ * Headroom is close to free: a completion is billed for what it generates,
+ * not for what it was allowed — so the default is set where no answer this
+ * schema asks for can reach it.
+ */
+export const COMPLETION_TOKENS = 4_000;
+
+/**
+ * Where the answer has to be smaller than that.
+ *
+ * Only where a provider meters the whole exchange, because there the room
+ * for the answer is room taken from the question. Groq allows twelve
+ * thousand tokens a minute; the system prompt and the three criteria a
+ * verdict must rest on are about ten thousand of that and cannot be trimmed
+ * further, so what is left for an answer is under two thousand however
+ * generous one would like to be. Asking for four thousand there does not
+ * buy a longer answer — it makes the whole request too large and Groq
+ * refuses it with a 413.
+ *
+ * So Groq is given what fits, and asked for a shorter answer instead: see
+ * `brief` in the system prompt.
+ */
+export const PROVIDER_COMPLETION_TOKENS: Partial<Record<ProviderName, number>> = {
+  groq: 1_500,
+};
+
+export function completionTokensFor(provider: ProviderName): number {
+  return PROVIDER_COMPLETION_TOKENS[provider] ?? COMPLETION_TOKENS;
+}
+
+/**
+ * Below this the three reasons have to be written short, or the answer runs
+ * past its allowance and is cut off mid-string.
+ */
+export const BRIEF_BELOW_TOKENS = 2_500;
+
 export interface ProviderResult {
   provider: ProviderName;
   ok: boolean;

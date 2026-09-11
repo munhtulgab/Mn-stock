@@ -24,23 +24,22 @@ function extractGeminiRetrySeconds(bodyText: string): number | null {
 }
 
 /**
- * What this provider may spend in total, and on any one attempt.
+ * What this provider may spend: one attempt, and a ceiling on retrying.
  *
- * It used to be one attempt of forty-five seconds, and a request that did not
- * come back in time was the end of it — the panel lost this analyst to
- * "timeout" with nothing tried twice. The same forty-five seconds buys two
- * attempts instead, because what was slow was usually the attempt rather than
- * the provider, and a second one lands.
+ * The attempt window went to twenty-two seconds for a moment, so that the
+ * old forty-five could buy two tries instead of one. That was the wrong read
+ * of the failure. Splitting a window only helps where the attempt was
+ * unlucky; where the request simply needs longer than the window, two short
+ * tries fail where one long one would have answered — and the panel reported
+ * the same timeout, now twice as sure of itself. It is back to one long
+ * attempt, and the request has been made faster instead.
  *
- * The whole panel runs inside one request that is holding a page, so this is
- * a ceiling and not a suggestion: attempts stop when the budget will not
- * cover another one, whether or not any were tried.
+ * The deadline is a ceiling on the retries below rather than on the first
+ * attempt: a 503 comes back immediately, so several of those and a slow
+ * answer must not add up to more than the page can hold.
  */
-const BUDGET_MS = 50_000;
-const ATTEMPT_MS = 22_000;
-/** Below this there is no room for an answer, so there is no point asking. */
-const MIN_ATTEMPT_MS = 8_000;
-const MAX_ATTEMPTS = 4;
+const ATTEMPT_MS = 45_000;
+const BUDGET_MS = 75_000;
 
 /** A 400 that is about the key rather than anything in the request. */
 function isKeyRefusal(body: string): boolean {
@@ -58,6 +57,7 @@ export async function callGemini(
 ): Promise<ProviderResult> {
   const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
   const deadline = Date.now() + BUDGET_MS;
+  let attempts = 0;
   /**
    * Whether to ask for the thinking to be skipped.
    *
@@ -78,9 +78,11 @@ export async function callGemini(
   let timedOut = false;
 
   try {
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    for (let attempt = 0; ; attempt++) {
       const left = deadline - Date.now();
-      if (left < MIN_ATTEMPT_MS) break;
+      // The first attempt always runs; later ones only while there is room.
+      if (attempts > 0 && left < ATTEMPT_MS) break;
+      attempts++;
 
       let res: Response;
       try {
@@ -102,15 +104,15 @@ export async function callGemini(
                 ...(skipThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
               },
             }),
-            signal: AbortSignal.timeout(Math.min(ATTEMPT_MS, left)),
+            signal: AbortSignal.timeout(ATTEMPT_MS),
           },
         );
       } catch (err) {
-        // Out of time rather than turned down. Worth another go while the
-        // budget covers one; anything else is a real fault and is reported.
+        // Out of time. Not worth another go — a second wait of the same
+        // length is the same wait, and the panel is holding a page.
         if (!isTimeout(err)) throw err;
         timedOut = true;
-        continue;
+        break;
       }
 
       if (!res.ok) {
@@ -164,7 +166,7 @@ export async function callGemini(
     throw new Error(
       timedOut
         ? "Gemini timed out: хүсэлт хугацаандаа багтсангүй."
-        : "Gemini: хүсэлт илгээх хугацаа хүрэлцсэнгүй.",
+        : "Gemini: дахин оролдох хугацаа хүрэлцсэнгүй.",
     );
   } catch (err) {
     return { provider: "gemini", ok: false, error: (err as Error).message };
