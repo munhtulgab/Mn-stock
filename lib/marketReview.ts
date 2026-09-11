@@ -194,6 +194,39 @@ function lastSessionBefore(byCompany: Map<number, Close[]>, day: string): string
   return latest;
 }
 
+/**
+ * The day's card, never moving back to an earlier session than the one
+ * already shown.
+ *
+ * The exchange publishes a session to its open-data portal well after it
+ * shuts — Friday 11 September was still absent from it seven hours after
+ * the close, while the live feed had carried the session since 12:23 — so
+ * the stored prices are routinely a session short at the tail, and the only
+ * thing covering that gap is a live read made inside a page render.
+ *
+ * Before the market opens there is nothing covering it. The exchange's own
+ * board is deliberately read only between ten and five on a weekday, so that
+ * a weekend reader is not handed the last session dressed as a live one;
+ * marketinfo is all that is left, and a render gives it three and a half
+ * seconds. When it comes back empty on a cold instance the review is built
+ * from a store that is a session short, and the card names the session
+ * before the last one that closed. That is the morning reading that was
+ * wrong, and it corrected itself later in the day — once the board could be
+ * read again and the daily sync had caught the store up — which is what made
+ * it look like a morning problem rather than a missing session.
+ *
+ * A closed session's figures do not change, so the answer built when the
+ * feed was there stands. Forward always wins: this only refuses to go back.
+ */
+function furtherOn(
+  stored: MarketReview | null | undefined,
+  fresh: MarketReview | null,
+): MarketReview | null {
+  if (!stored) return fresh;
+  if (!fresh) return stored;
+  return fresh.to >= stored.to ? fresh : stored;
+}
+
 type IndexSeries = Awaited<ReturnType<typeof fetchIndexSeries>>;
 
 /** Where the exchange's own running index table puts each index. */
@@ -279,7 +312,12 @@ export async function getMarketReviews(
     // Asked for here rather than inside, so a feed that is down costs the
     // review nothing but the newest session.
     const live = await fetchLiveQuotes().catch(() => new Map<number, LiveQuote>());
-    const reviews = await computeMarketReviews(db, weekOf, live);
+    const built = await computeMarketReviews(db, weekOf, live);
+    // Only the day's card is held this way. The week and the month are
+    // calendar windows that closed long enough ago for the store to have
+    // caught up with them, and holding those would keep a window from being
+    // corrected rather than keep it from regressing.
+    const reviews = { ...built, day: furtherOn(cached?.reviews?.day, built.day) };
     await snapshots.updateOne(
       { key: SNAPSHOT_KEY },
       {
@@ -444,4 +482,4 @@ async function computeMarketReviews(
   };
 }
 
-export const __testing = { lastSessionBefore };
+export const __testing = { lastSessionBefore, furtherOn };

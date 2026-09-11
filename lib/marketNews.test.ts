@@ -127,3 +127,22 @@ test("a story with only a day still falls among the hours of that day", () => {
   // 04:30 UTC is half past twelve in Ulaanbaatar.
   assert.equal(moment(dayOnly), "2026-08-14T12:30");
 });
+
+test("a row with no stated hour is placed by its arrival read locally", () => {
+  // The bug the news page had: `addedAt` is an ISO instant in UTC, and taken
+  // raw it was compared against stamps stated in Ulaanbaatar time. A post
+  // the feed met at 09:55Z appeared at 17:55 on the row and sorted as though
+  // it were 09:55 — under every stated-time story of its afternoon.
+  const facebook = item({
+    url: "https://facebook.com/page",
+    date: "2026-08-14",
+    addedAt: "2026-08-14T09:55:02.000Z",
+  });
+  const exchange = item({ url: "https://mse.mn/news/1", date: "2026-08-14T16:24" });
+
+  assert.equal(moment(facebook), "2026-08-14T17:55");
+  assert.deepEqual(
+    [exchange, facebook].sort(byNewest).map((i) => i.url),
+    [facebook.url, exchange.url],
+  );
+});

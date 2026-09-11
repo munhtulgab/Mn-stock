@@ -187,8 +187,15 @@ function collect(
  * When a story counts as having appeared, for ordering.
  *
  * Its own stamp where it has one, and otherwise the moment the feed first
- * carried it — so a row with no stated hour still falls in a sensible place
- * among the rows that have one, instead of sinking to the foot of its day.
+ * carried it — read in Ulaanbaatar time, because that is the clock every
+ * stated stamp here is on and the one the row itself prints. `addedAt` is an
+ * ISO instant in UTC, and comparing its digits against a local stamp is a
+ * comparison eight hours out: a Facebook post the feed met at 09:55Z sorted
+ * as though it were 09:55 in Ulaanbaatar, below a 16:24 exchange notice,
+ * while the row beside it read 17:55.
+ *
+ * So a row with no stated hour still falls in a sensible place among the
+ * rows that have one, instead of sinking to the foot of its day.
  */
 function moment(item: MarketNewsItem): string {
   if (item.date.length > 10) return item.date;
@@ -199,7 +206,15 @@ function moment(item: MarketNewsItem): string {
     : `${item.date.slice(0, 10)}T${ulaanbaatarTime(seen)}`;
 }
 
-function byNewest(a: MarketNewsItem, b: MarketNewsItem): number {
+/**
+ * Newest first, by the moment each story carries.
+ *
+ * Exported because the page sorts each day's rows again after folding its
+ * own summaries in, and it used to do that with a second comparator of its
+ * own — one that took `addedAt` raw. Two orderings of one feed is one too
+ * many, and the one that was visible was the wrong one.
+ */
+export function byNewest(a: MarketNewsItem, b: MarketNewsItem): number {
   return moment(b).localeCompare(moment(a));
 }
 
