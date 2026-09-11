@@ -834,6 +834,44 @@ function escapeRegExp(text: string): string {
  * "БНХАУ-ын төрийн өмчит SAIC Motor". Demanding the form leaves
  * "Инновэйшн ХК" matching while those two do not.
  */
+/**
+ * What a listing is about, where the news never calls it by its name.
+ *
+ * Every other rule here works from the company's own name, because that is
+ * what a story about a company says. A fund that holds one thing is the
+ * exception: ALTT is "Гоулд Траст Хамтын биржээр арилжаалагддаг хөрөнгө
+ * оруулалтын сан", and nothing written about what moves it — the gold price,
+ * a central bank buying, an ounce in dollars — contains any of that. Matched
+ * on its name alone it had no news at all, while the news that decides its
+ * price ran past it every day.
+ *
+ * Kept to listings whose subject is a commodity rather than a business. A
+ * company's own affairs are what its name finds; widening a company to a
+ * theme would file the whole sector under it.
+ */
+const SUBJECT_TERMS: Record<string, MatchTerm[]> = {
+  // Gold, in the forms Mongolian writes it.
+  //
+  // Suffixed explicitly rather than matched as a prefix: Mongolian glues its
+  // endings on, so "алт" has to reach "алтны" and "алтаар" — but a prefix
+  // also reaches "Алтай" and "Алтанбулаг", which are a province and a border
+  // town. Listing the endings keeps the metal and leaves the places out.
+  //
+  // And a company form just after it means the word is a name rather than
+  // the metal. Found against live sources: a piece on power stations and tax
+  // exemptions came back as gold news because the man interviewed chairs
+  // "Монголын Алт" (МАК) ХХК. Only a run of punctuation may sit between, so
+  // "алт олборлогч ХХК" — a sentence about the metal — still counts.
+  ALTT: [
+    /(?<![\p{L}\p{N}])алт(?:ны|наас|анд|аар|ыг|ад|тай)?(?![\p{L}\p{N}])(?![^\p{L}\p{N}]{0,12}(?:ХХК|ХК|МАК))/iu,
+    /(?<![\p{L}\p{N}])үнэт\s+метал[\p{L}]*/iu,
+    /(?<![\p{L}\p{N}])gold(?![\p{L}\p{N}])/iu,
+    /(?<![\p{L}\p{N}])XAU(?![\p{L}\p{N}])/iu,
+    // The fund's own short name, which its registered one buries.
+    /(?<![\p{L}\p{N}])Гоулд(?![\p{L}\p{N}])/iu,
+  ],
+};
+
 export function companyMatchTerms(
   symbol: string,
   name: string,
@@ -851,7 +889,7 @@ export function companyMatchTerms(
       ),
     );
   }
-  return terms;
+  return [...terms, ...(SUBJECT_TERMS[symbol.toUpperCase()] ?? [])];
 }
 
 /** Headlines that name the company, deduplicated across all sources. */

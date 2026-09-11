@@ -14,6 +14,11 @@
  * and the dormant end of the exchange has none at all — those keep the
  * lettered fallback. To add one by hand, drop a square PNG in and list the
  * symbol here.
+ *
+ * ALTT is the one that is drawn rather than collected. It is a fund holding
+ * a metal rather than a company, so it has no mark of its own to take; what
+ * identifies it in a list of forty rows is the thing it holds, and a bullion
+ * bar says that where four letters do not.
  */
 const LOGO_SYMBOLS = new Set([
   "AARD",
@@ -22,6 +27,7 @@ const LOGO_SYMBOLS = new Set([
   "ADU",
   "AIC",
   "AIG",
+  "ALTT",
   "AMT",
   "APU",
   "ATR",
