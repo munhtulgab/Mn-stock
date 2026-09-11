@@ -3,6 +3,7 @@ import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getUnreadCount } from "@/lib/notifications";
 import ThemeToggle from "@/components/ThemeToggle";
+import UnreadBell from "@/components/UnreadBell";
 
 /**
  * The top of a section: its name, and the two things that should be one tap
@@ -48,31 +49,7 @@ export default async function PageHeader({
             />
           </svg>
         </Link>
-        <Link
-          href="/notifications"
-          aria-label={`Мэдэгдэл${unread > 0 ? ` (${unread} шинэ)` : ""}`}
-          className="relative w-10 h-10 rounded-full bg-app-card border border-app-border flex items-center justify-center text-app-muted active:scale-95 transition-transform"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7Z"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M13.7 19a2 2 0 0 1-3.4 0"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-          </svg>
-          {unread > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1 rounded-full bg-brand text-black text-[10px] font-bold flex items-center justify-center">
-              {unread > 99 ? "99+" : unread}
-            </span>
-          )}
-        </Link>
+        <UnreadBell initial={unread} />
       </div>
     </div>
   );
