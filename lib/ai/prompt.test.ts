@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildPrompt, type AnalystInput } from "./prompt";
 import { estimateTokens } from "./tokens";
+import {
+  PROVIDER_TOKEN_BUDGET,
+  completionTokensFor,
+  type ProviderName,
+} from "./providers/types";
 import type { StockAnalysis } from "@/lib/analysis/report";
 import type { Reading, Scorecard } from "@/lib/analysis/indicators";
 
@@ -106,11 +111,16 @@ const input: AnalystInput = {
   analysis,
 } as unknown as AnalystInput;
 
-/** What one request costs the provider that meters the whole exchange. */
-const COMPLETION_TOKENS = 1_500;
-function cost(budget?: number): number {
-  const prompt = buildPrompt({ ...input, budgetTokens: budget });
-  return estimateTokens(prompt.system) + estimateTokens(prompt.user) + COMPLETION_TOKENS;
+/**
+ * What one request costs the provider that meters the whole exchange.
+ *
+ * Imported rather than repeated. It was written out here as well, and the
+ * moment the real one moved this file went on measuring against a number
+ * nothing used — passing, and checking nothing.
+ */
+function cost(budget?: number, completionTokens = completionTokensFor("groq")): number {
+  const prompt = buildPrompt({ ...input, budgetTokens: budget, completionTokens });
+  return estimateTokens(prompt.system) + estimateTokens(prompt.user) + completionTokens;
 }
 
 /** The order sections come off in, most expendable first. */
@@ -139,6 +149,34 @@ test("Groq's twelve thousand a minute is met, which it was not", () => {
   // ceiling of 12,000. The message floor alone was already over the 5,000 it
   // was given, so the builder gave up and sent it anyway. Every request 413'd.
   assert.ok(cost(12_000) <= 12_000, `over budget at ${cost(12_000)}`);
+});
+
+test("every metered provider's whole exchange fits its ceiling", () => {
+  // The one that matters, and the one that is easy to break from a distance:
+  // the room the answer is allowed comes out of the same allowance as the
+  // question, so raising an answer ceiling without checking here is how a
+  // request becomes too large to send at all. Raising the shared allowance to
+  // 4,000 put Groq 2,162 tokens over its minute and every request would have
+  // been refused whole — this failed, which is the only reason it was caught.
+  for (const [provider, budget] of Object.entries(PROVIDER_TOKEN_BUDGET)) {
+    if (budget === undefined) continue;
+    const answer = completionTokensFor(provider as ProviderName);
+    const spent = cost(budget, answer);
+    assert.ok(
+      spent <= budget,
+      `${provider}: ${spent} tokens against a ceiling of ${budget} ` +
+        `(${answer} of it reserved for the answer)`,
+    );
+  }
+});
+
+test("a tight answer allowance asks for a shorter answer", () => {
+  // The other half of the same fix. Groq cannot be given more room, so it is
+  // asked to need less; anything with room is left to write at length.
+  const tight = buildPrompt({ ...input, budgetTokens: 12_000, completionTokens: 1_500 });
+  const roomy = buildPrompt({ ...input, completionTokens: 4_000 });
+  assert.match(tight.system, /1-2 өгүүлбэрт багтаа/);
+  assert.doesNotMatch(roomy.system, /1-2 өгүүлбэрт багтаа/);
 });
 
 test("a provider with room is trimmed for nobody", () => {

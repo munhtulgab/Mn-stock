@@ -10,6 +10,7 @@ import { callCerebras } from "@/lib/ai/providers/cerebras";
 import { callCloudflare } from "@/lib/ai/providers/cloudflare";
 import {
   PROVIDER_TOKEN_BUDGET,
+  completionTokensFor,
   type ProviderName,
   type ProviderResult,
 } from "@/lib/ai/providers/types";
@@ -82,17 +83,24 @@ export async function generateMultiProviderSignal(
     throw new NoProviderConfiguredError();
   }
 
-  // One message per ceiling rather than one for everybody. A provider that
-  // meters tokens by the minute gets a prompt trimmed to fit it; the rest
-  // get the whole thing, because trimming theirs would cost them evidence
-  // they were happy to read.
-  const prompts = new Map<number | undefined, AnalystPrompt>();
+  // One message per pair of ceilings rather than one for everybody. A
+  // provider that meters tokens by the minute gets a prompt trimmed to fit
+  // it; the rest get the whole thing, because trimming theirs would cost
+  // them evidence they were happy to read.
+  //
+  // Both ceilings, not just the one on the question: a provider metering the
+  // whole exchange takes its answer's room out of the question's, and is
+  // asked for a shorter answer to fit — so two providers that agree on the
+  // message ceiling can still need different messages.
+  const prompts = new Map<string, AnalystPrompt>();
   const messageFor = (provider: ProviderName): AnalystPrompt => {
     const budget = PROVIDER_TOKEN_BUDGET[provider];
-    const existing = prompts.get(budget);
+    const completionTokens = completionTokensFor(provider);
+    const key = `${budget ?? "-"}:${completionTokens}`;
+    const existing = prompts.get(key);
     if (existing !== undefined) return existing;
-    const built = buildPrompt({ ...input, budgetTokens: budget });
-    prompts.set(budget, built);
+    const built = buildPrompt({ ...input, budgetTokens: budget, completionTokens });
+    prompts.set(key, built);
     return built;
   };
 

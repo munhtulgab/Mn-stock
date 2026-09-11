@@ -8,6 +8,9 @@ import type { Timeframe } from "@/lib/analysis/series";
 import type { TdbProfile, TdbReturnDistribution } from "@/lib/tdb/datalab";
 import { estimateTokens } from "@/lib/ai/tokens";
 import { systemPromptFor } from "@/lib/ai/systemPrompt";
+// Room left for the answer, counted against the same ceiling as the
+// question: the providers that impose one meter the whole exchange.
+import { BRIEF_BELOW_TOKENS, COMPLETION_TOKENS } from "@/lib/ai/providers/types";
 
 function average(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -22,15 +25,7 @@ function average(values: number[]): number | null {
  */
 const DEFAULT_BUDGET_TOKENS = 30_000;
 
-/**
- * Room left for the answer.
- *
- * Counted against the same ceiling as the question, because the providers
- * that impose one meter the whole exchange: Groq's free tier allows twelve
- * thousand tokens a minute and a request whose reply would take it past that
- * is refused whole, not truncated.
- */
-const COMPLETION_TOKENS = 1_500;
+
 
 /**
  * The two halves of one request.
@@ -153,6 +148,12 @@ export interface AnalystInput {
    * providers whose ceilings are far above anything built here.
    */
   budgetTokens?: number;
+  /**
+   * Room the answer is allowed, which is room the question does not get.
+   * Defaults to the generous allowance; a provider that meters the whole
+   * exchange passes its own. See COMPLETION_TOKENS.
+   */
+  completionTokens?: number;
 }
 
 /**
@@ -465,6 +466,10 @@ export function buildPrompt(input: AnalystInput): AnalystPrompt {
   };
 
   const budget = input.budgetTokens ?? DEFAULT_BUDGET_TOKENS;
+  const answerRoom = input.completionTokens ?? COMPLETION_TOKENS;
+  // Too little room to write at length, so the instructions say so rather
+  // than letting the answer run out of room mid-sentence.
+  const brief = answerRoom < BRIEF_BELOW_TOKENS;
 
   // Assembled largest-first and measured each time, rather than built whole
   // and cut to length. Slicing a finished message in half leaves the model a
@@ -535,7 +540,7 @@ export function buildPrompt(input: AnalystInput): AnalystPrompt {
           ...SECTIONS_BY_VALUE.filter((section) => keep.has(section)),
           ...CORE_GUIDED_SECTIONS.slice(2),
         ],
-        { withheld: Boolean(analysis) && dropped.length > 0 },
+        { withheld: Boolean(analysis) && dropped.length > 0, brief },
       ),
       user: parts.join("\n"),
     };
@@ -564,7 +569,7 @@ export function buildPrompt(input: AnalystInput): AnalystPrompt {
   for (const step of steps) {
     prompt = compose(...step);
     const cost =
-      estimateTokens(prompt.system) + estimateTokens(prompt.user) + COMPLETION_TOKENS;
+      estimateTokens(prompt.system) + estimateTokens(prompt.user) + answerRoom;
     if (cost <= budget) return prompt;
   }
   // Nothing left to give up without giving up the question itself. Sent as it
