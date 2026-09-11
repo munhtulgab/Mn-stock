@@ -1,32 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
+import {
+  readUnread,
+  setUnread,
+  subscribeUnread,
+  unreadOnServer,
+} from "@/lib/unreadCount";
 
 /**
  * The bell, with the number of alerts waiting on it.
  *
- * The count starts as whatever the page was rendered with and then checks
- * itself. It has to: the four pages carrying this header are dynamic, so the
- * server always counts correctly, but a reader arriving by tapping a tab is
- * shown the payload the router already holds for that route — rendered
- * before they cleared anything. Swiping four alerts away and tapping Нүүр
- * left the bell on the figure it had beforehand.
+ * The four pages carrying this header are dynamic, so the server always
+ * counts correctly — but a reader arriving by tapping a tab is shown the
+ * payload the router already holds for that route, rendered before they
+ * cleared anything. Swiping four alerts away and tapping Нүүр left the bell
+ * on the figure it had beforehand.
+ *
+ * So it prefers what this browser already knows, which the feed writes down
+ * as the reader clears and opens things, and falls back to the page's own
+ * figure on a fresh load where there is nothing written down yet. Asking the
+ * server was the first fix for this and it is still here, but only behind
+ * those two: on its own it left the old number on screen for the length of a
+ * round trip, which is the delay this is no longer waiting out.
  *
  * Checked again whenever the tab is looked at, so a bell left open in a
  * background tab is not a stale one either.
  */
 export default function UnreadBell({ initial }: { initial: number }) {
-  /**
-   * What the bell has been told since the page was drawn, if anything.
-   *
-   * Kept apart from the rendered number rather than seeded with it: the
-   * server's figure is right for the render it came from, and mirroring it
-   * into state would have a later render of a stale route overwrite an
-   * answer that is newer than it is.
-   */
-  const [checked, setChecked] = useState<number | null>(null);
-  const unread = checked ?? initial;
+  // Null until this browser has been told a number, which is what makes the
+  // server's figure the answer on a fresh load and never on a stale one.
+  const known = useSyncExternalStore(subscribeUnread, readUnread, unreadOnServer);
+  const unread = known ?? initial;
 
   useEffect(() => {
     let live = true;
@@ -36,7 +42,7 @@ export default function UnreadBell({ initial }: { initial: number }) {
         const res = await fetch("/api/notifications/count", { cache: "no-store" });
         if (!res.ok) return;
         const data: { unread?: number } = await res.json();
-        if (live && typeof data.unread === "number") setChecked(data.unread);
+        if (live && typeof data.unread === "number") setUnread(data.unread);
       } catch {
         // The number on screen is the last one known to be true, which is a
         // better thing to show than nothing.
