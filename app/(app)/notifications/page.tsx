@@ -1,9 +1,7 @@
-import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getNotificationFeed } from "@/lib/notifications";
-import NotificationList from "@/components/NotificationList";
-import { BellIcon } from "@/components/icons";
+import NotificationFeed from "@/components/NotificationFeed";
 
 export const dynamic = "force-dynamic";
 
@@ -14,47 +12,12 @@ export default async function NotificationsPage() {
   // Opening this page reads nothing. An alert is read when the reader opens
   // what it is about, which the row itself reports; until then it keeps its
   // dot however many times the list has been looked at.
-  const { groups, unread, total } = await getNotificationFeed(db, user!);
+  //
+  // The counts are not taken from here either. They are what the reader is
+  // looking at, and the reader changes it — clearing a row, opening one —
+  // without the page being rebuilt, so they are worked out where that state
+  // lives. See {@link NotificationFeed}.
+  const { groups } = await getNotificationFeed(db, user!);
 
-  return (
-    <div className="px-4 pt-6 pb-4 space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-app-text">Мэдэгдэл</h1>
-        <p className="text-xs text-app-muted mt-0.5">
-          {unread > 0
-            ? `${unread} шинэ · нийт ${total}`
-            : total > 0
-              ? `${total} мэдэгдэл`
-              : "Дохио өөрчлөгдөхөд энд харагдана"}
-        </p>
-      </div>
-
-      {total === 0 ? (
-        <div className="rounded-2xl border border-dashed border-app-border p-8 text-center space-y-3">
-          <div className="mx-auto w-12 h-12 rounded-full bg-app-elevated text-app-muted flex items-center justify-center">
-            <BellIcon />
-          </div>
-          <p className="text-sm text-app-muted">
-            Одоогоор мэдэгдэл алга.
-            <br />
-            Хувьцааны дохио өөрчлөгдөхөд энд харагдана.
-          </p>
-          <Link href="/discover" className="inline-block text-sm text-brand font-semibold">
-            Зах зээл харах
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-5">
-        {groups.map((group) => (
-          <section key={group.day}>
-            <h2 className="text-xs font-semibold text-app-muted mb-2">
-              {group.heading}
-            </h2>
-            <NotificationList items={group.items} />
-          </section>
-        ))}
-        </div>
-      )}
-    </div>
-  );
+  return <NotificationFeed groups={groups} />;
 }

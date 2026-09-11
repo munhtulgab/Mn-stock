@@ -15,40 +15,34 @@ import type { FeedNotification } from "@/lib/notifications";
  * counts as read when the reader opens what it is about — not when the page
  * is opened — so a row stays tinted, with a dot on the avatar, until it has
  * actually been followed. Swiping a row to the left throws it away.
+ *
+ * What has been cleared and what has been opened is decided above this, in
+ * {@link NotificationFeed}: the count at the top of the page is drawn from
+ * the same list, and a day holding its own copy left the two disagreeing.
  */
-export default function NotificationList({ items }: { items: FeedNotification[] }) {
-  // Rows leave the list the moment they are swiped away rather than on the
-  // server's reply: the reader has already watched it go.
-  const [dismissed, setDismissed] = useState<string[]>([]);
-  const [read, setRead] = useState<string[]>([]);
-  const visible = items.filter((n) => !dismissed.includes(n.id));
-  if (visible.length === 0) return null;
+export default function NotificationList({
+  items,
+  onOpen,
+  onDismiss,
+}: {
+  items: FeedNotification[];
+  onOpen: (id: string) => void;
+  onDismiss: (id: string) => void;
+}) {
+  if (items.length === 0) return null;
 
   return (
     <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
-      {visible.map((n) => (
+      {items.map((n) => (
         <SwipeRow
           key={n.id}
-          n={{ ...n, isNew: n.isNew && !read.includes(n.id) }}
-          onOpen={() => {
-            setRead((ids) => [...ids, n.id]);
-            send(n.id, "POST");
-          }}
-          onDismiss={() => {
-            setDismissed((ids) => [...ids, n.id]);
-            send(n.id, "DELETE");
-          }}
+          n={n}
+          onOpen={() => onOpen(n.id)}
+          onDismiss={() => onDismiss(n.id)}
         />
       ))}
     </div>
   );
-}
-
-function send(id: string, method: "POST" | "DELETE") {
-  fetch(`/api/notifications/${id}`, { method, keepalive: true }).catch(() => {
-    // Nothing to say to the reader: the row has already moved, and the next
-    // page load reads the server's answer either way.
-  });
 }
 
 /** Past this much of a drag, letting go throws the row away. */
