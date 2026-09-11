@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { __testing } from "./facebook";
 
-const { parseMbasicPosts, toPosts, byNewest } = __testing;
+const { parseMbasicPosts, toPosts, byNewest, worthRechecking } = __testing;
 
 /** Long enough to clear the minimum a post has to meet to count as prose. */
 function prose(n: number): string {
@@ -90,4 +90,47 @@ test("mbasic posts are ordered by their epochs, not by where they sat in the pag
     .join("");
   const dates = parseMbasicPosts(html).map((p) => p.date!);
   assert.deepEqual([...dates].sort().reverse(), dates);
+});
+
+/* ---------------------------------------------------------------------- */
+
+const HOUR = 60 * 60 * 1000;
+const snapshot = (posts: { text: string; date?: string }[], recheckedAt?: Date) => ({
+  key: "apify:https://facebook.com/page",
+  posts,
+  fetchedAt: new Date(),
+  recheckedAt,
+});
+
+test("posts stored without an hour are worth one free look", () => {
+  assert.equal(worthRechecking(snapshot([{ text: "a", date: "2026-09-11" }])), true);
+});
+
+test("posts that already carry an hour are served as they are", () => {
+  assert.equal(
+    worthRechecking(snapshot([{ text: "a", date: "2026-09-11T12:45:02" }])),
+    false,
+  );
+});
+
+test("one post with an hour is enough to call the snapshot current", () => {
+  // A page whose newest post the scraper could not date is not a snapshot
+  // from before the hour was kept.
+  const mixed = snapshot([
+    { text: "a", date: "2026-09-11T12:45:02" },
+    { text: "b", date: undefined },
+  ]);
+  assert.equal(worthRechecking(mixed), false);
+});
+
+test("the look is not taken again for six hours", () => {
+  const justLooked = snapshot([{ text: "a", date: "2026-09-11" }], new Date());
+  assert.equal(worthRechecking(justLooked), false);
+
+  const looked = snapshot([{ text: "a", date: "2026-09-11" }], new Date(Date.now() - 7 * HOUR));
+  assert.equal(worthRechecking(looked), true);
+});
+
+test("an empty snapshot is not something to recover times for", () => {
+  assert.equal(worthRechecking(snapshot([])), false);
 });

@@ -475,6 +475,11 @@ interface FacebookCache {
   key: string;
   posts: FacebookPost[];
   fetchedAt: Date;
+  /**
+   * When the free re-read below was last spent on these posts. Absent on a
+   * snapshot that has never needed one.
+   */
+  recheckedAt?: Date;
 }
 
 async function readCache(db: Db, key: string): Promise<FacebookCache | null> {
@@ -482,9 +487,52 @@ async function readCache(db: Db, key: string): Promise<FacebookCache | null> {
 }
 
 async function writeCache(db: Db, key: string, posts: FacebookPost[]): Promise<void> {
+  await db.collection<FacebookCache>("facebookSnapshots").updateOne(
+    { key },
+    {
+      $set: { key, posts, fetchedAt: new Date() },
+      // These posts are current, so any mark against the ones they replace
+      // is spent on a question that is no longer being asked.
+      $unset: { recheckedAt: "" },
+    },
+    { upsert: true },
+  );
+}
+
+/** Records that the free look below has been taken for this page. */
+async function markRechecked(db: Db, key: string): Promise<void> {
   await db
     .collection<FacebookCache>("facebookSnapshots")
-    .updateOne({ key }, { $set: { key, posts, fetchedAt: new Date() } }, { upsert: true });
+    .updateOne({ key }, { $set: { recheckedAt: new Date() } });
+}
+
+/** Stored posts dated to the day and no further. */
+function undated(posts: FacebookPost[]): boolean {
+  return posts.length > 0 && posts.every((p) => !p.date || p.date.length <= 10);
+}
+
+/** How often a snapshot with no times may pay a free look for them. */
+const RECHECK_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Whether stored posts are worth reading back off the finished run.
+ *
+ * Snapshots written before the hour was kept carry a day and no more, and a
+ * snapshot stands until the next weekday scrape replaces it — so over a
+ * weekend the feed would spend three days with nothing to order a page's
+ * posts by. {@link lastRunPosts} re-reads the dataset the last run already
+ * produced, which spends no credits and touches nothing at facebook.com, and
+ * the parser now takes the hour out of it.
+ *
+ * Bounded, because the last run is one run: where it was for another page
+ * there is nothing to recover and asking again on every five-minute refresh
+ * would be a pair of requests apiece, forever. One look every six hours,
+ * until a scrape replaces the posts and settles it.
+ */
+function worthRechecking(cache: FacebookCache): boolean {
+  if (!undated(cache.posts)) return false;
+  const last = cache.recheckedAt?.getTime();
+  return !last || Date.now() - last > RECHECK_MS;
 }
 
 interface ApifyPost {
@@ -613,7 +661,12 @@ export async function fetchWithApify(
   // At whatever age it has: the alternative is not a newer answer but no
   // Facebook in the feed until the next weekday run, and a post does not
   // stop having been published because the copy of it is a day old.
-  if (spend === "cached" && cached) return { posts: cached.posts };
+  //
+  // Unless it is a copy with no times on it, which is worth one free look
+  // at the finished run before being served — see {@link worthRechecking}.
+  if (spend === "cached" && cached && !worthRechecking(cached)) {
+    return { posts: cached.posts };
+  }
 
   // Free — it reads a finished run's dataset rather than starting one — so
   // it is worth trying before giving up on a cold cache.
@@ -623,9 +676,14 @@ export async function fetchWithApify(
     return { posts: recovered };
   }
 
-  // Nothing stored and nothing to read back off a finished run. A read that
-  // is not allowed to scrape stops here rather than starting a billed one.
-  if (spend === "cached") return { posts: [] };
+  // Nothing to read back off a finished run. A read that is not allowed to
+  // scrape stops here rather than starting a billed one, on whatever is
+  // stored — which is the posts themselves where the look above was for
+  // their missing times rather than for a cache that was never there.
+  if (spend === "cached") {
+    if (db && cached) await markRechecked(db, key);
+    return { posts: cached?.posts ?? [] };
+  }
 
   const since = new Date(Date.now() - APIFY_MAX_AGE_DAYS * 86_400_000)
     .toISOString()
@@ -742,4 +800,4 @@ export async function fetchWithToken(
   }
 }
 
-export const __testing = { parseMbasicPosts, toPosts, byNewest };
+export const __testing = { parseMbasicPosts, toPosts, byNewest, worthRechecking };
