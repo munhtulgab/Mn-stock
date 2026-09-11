@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import NotificationList from "./NotificationList";
 import { BellIcon } from "./icons";
+import { setUnread } from "@/lib/unreadCount";
 import type { FeedNotification } from "@/lib/notifications";
 
 export interface FeedGroup {
@@ -45,6 +46,12 @@ export default function NotificationFeed({ groups }: { groups: FeedGroup[] }) {
     (n, group) => n + group.items.filter((item) => item.isNew).length,
     0,
   );
+
+  // The bell on every other page reads this rather than the count its own
+  // render was built with, so clearing a row here is already accounted for
+  // by the time the reader has tapped a tab. Writing to something outside
+  // React is what an effect is for; it is not this component's state.
+  useEffect(() => setUnread(unread), [unread]);
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-5">
