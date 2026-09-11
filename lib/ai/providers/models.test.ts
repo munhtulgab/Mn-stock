@@ -1,6 +1,13 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { MODEL_PREFERENCES, isChatModel, isModelNotFound, pickModel } from "./models";
+import {
+  MODEL_PREFERENCES,
+  isChatModel,
+  isModelNotAllowed,
+  isModelNotFound,
+  isModelUnusable,
+  pickModel,
+} from "./models";
 import { isTransientStatus, retryDelayMs } from "./transient";
 
 test("speech, embedding and safety models are not analysts", () => {
@@ -63,4 +70,55 @@ test("a busy fleet is retried and a rate limit is not", () => {
 
 test("backoff stays inside what a page render can hold", () => {
   assert.ok(retryDelayMs(1) + retryDelayMs(2) <= 2000);
+});
+
+test("a model the plan may not call is a reason to pick another one", () => {
+  // What a free Mistral account answers to mistral-large-latest. Read as a
+  // status alone it is a hard 403; read as a sentence it says "use a
+  // different model", which is the same answer a retired name gets.
+  const body =
+    '{"object":"error","message":"This model is not available in your subscription tier","type":"tier_not_allowed","param":null,"code":"1910","raw_status_code":403}';
+  assert.equal(isModelNotAllowed(403, body), true);
+  assert.equal(isModelUnusable(403, body), true);
+  // ...and it is not a model-not-found, which is a different status entirely.
+  assert.equal(isModelNotFound(403, body), false);
+});
+
+test("an ordinary 403 is not a reason to go looking for another model", () => {
+  assert.equal(isModelNotAllowed(403, '{"error":"Forbidden"}'), false);
+  assert.equal(isModelNotAllowed(403, "You do not have permission"), false);
+  // Nor is a refusal at any other status.
+  assert.equal(isModelNotAllowed(429, "tier_not_allowed"), false);
+});
+
+test("upgrade-your-plan phrasings count too", () => {
+  assert.equal(isModelNotAllowed(403, "Please upgrade your plan to use this"), true);
+  assert.equal(isModelNotAllowed(403, "This model requires a paid account"), true);
+});
+
+test("a refused model is not picked again", () => {
+  // The listing is the catalogue, not what the key may call: Mistral offers
+  // mistral-large-latest to an account that is told it cannot have it. Left
+  // in, the substitution picks the same name and goes in a circle.
+  const listed = ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest"];
+  assert.equal(pickModel(listed, MODEL_PREFERENCES.mistral), "mistral-large-latest");
+  assert.equal(
+    pickModel(listed, MODEL_PREFERENCES.mistral, new Set(["mistral-large-latest"])),
+    "mistral-medium-latest",
+  );
+  assert.equal(
+    pickModel(
+      listed,
+      MODEL_PREFERENCES.mistral,
+      new Set(["mistral-large-latest", "mistral-medium-latest"]),
+    ),
+    "mistral-small-latest",
+  );
+});
+
+test("every model refused leaves nothing to substitute", () => {
+  assert.equal(
+    pickModel(["mistral-large-latest"], MODEL_PREFERENCES.mistral, new Set(["mistral-large-latest"])),
+    null,
+  );
 });

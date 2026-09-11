@@ -70,6 +70,23 @@ const RULES: Rule[] = [
       `${p}: Токен хүчинтэй ч энэ данс дээр Workers AI эрх алга. Cloudflare dashboard → My Profile → API Tokens дээрээс "Workers AI" эрхтэй, зөв дансанд холбогдсон токен үүсгэж, Account ID-г нь хамт шалгана уу.`,
   },
   {
+    // Above the invalid-key rule, which a bare 403 would otherwise fall into.
+    // The key is fine and the model is real; this plan may not call it.
+    // Mistral answers exactly this to `mistral-large-latest` on a free
+    // account. Telling the reader to re-paste a key sends them to fix
+    // something that was never wrong.
+    //
+    // The Mongolian is in the test as well as the message because a stored
+    // document is put back through here every time it is read, and the
+    // substitution's own wording has to keep landing on this rule.
+    test: (m) =>
+      /tier_not_allowed|not available in your (subscription|tier|plan)|ашиглах боломжгүй/i.test(
+        m,
+      ),
+    message: (p) =>
+      `${p}: Энэ загварыг таны багц дэмжихгүй байна. Систем боломжит загварыг өөрөө сонгож дахин оролдоно — давтагдсаар байвал багцаа шинэчлэх, эсвэл өөр загвар тохируулна уу.`,
+  },
+  {
     test: (m) => /API_KEY_INVALID|API key not valid|invalid.?api.?key|401|Unauthorized|Incorrect API key/i.test(m),
     message: (p) =>
       `${p}: API түлхүүр буруу эсвэл хүчингүй байна. Тохиргоо хуудсан дээрээс шалгаж, дахин оруулна уу.`,
