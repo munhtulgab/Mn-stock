@@ -579,6 +579,8 @@ export async function markNewsSeen(db: Db, userId: string): Promise<void> {
 }
 
 export const __testing = {
+  byNewest,
+  moment,
   newStories,
   recentEnoughToAnnounce,
   storyKey,

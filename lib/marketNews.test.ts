@@ -2,8 +2,15 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { __testing, type MarketNewsItem } from "./marketNews";
 
-const { newStories, recentEnoughToAnnounce, storyKey, dedupe, hostname } =
-  __testing;
+const {
+  byNewest,
+  moment,
+  newStories,
+  recentEnoughToAnnounce,
+  storyKey,
+  dedupe,
+  hostname,
+} = __testing;
 
 function item(over: Partial<MarketNewsItem> = {}): MarketNewsItem {
   return {
@@ -91,4 +98,32 @@ test("hostname drops the scheme and www", () => {
   assert.equal(hostname("https://mse.mn/mn/news"), "mse.mn");
   // A Facebook page is configured by its full url and has to key on something.
   assert.equal(hostname("not a url"), "not a url");
+});
+
+test("a day's stories are ordered by the hour each one states", () => {
+  // What a Facebook page's posts used to look like here: one stated day for
+  // all of them, so the feed had nothing to order them by and showed them in
+  // whatever order the scrape happened to return.
+  const morning = item({ url: "https://example.mn/1", date: "2026-08-14T09:12:00" });
+  const midday = item({ url: "https://example.mn/2", date: "2026-08-14T12:40:00" });
+  const evening = item({ url: "https://example.mn/3", date: "2026-08-14T19:05:00" });
+
+  assert.deepEqual(
+    [morning, evening, midday].sort(byNewest).map((i) => i.url),
+    [evening.url, midday.url, morning.url],
+  );
+});
+
+test("a stated hour outranks the moment the feed happened to see the story", () => {
+  // A post published at nine and fetched at half twelve is a nine o'clock
+  // post. Before the hour was kept, every post of that day was filed under
+  // the fetch instead, which is the same instant for all of them.
+  const stated = item({ date: "2026-08-14T09:12:00", addedAt: "2026-08-14T04:30:00Z" });
+  assert.equal(moment(stated), "2026-08-14T09:12:00");
+});
+
+test("a story with only a day still falls among the hours of that day", () => {
+  const dayOnly = item({ date: "2026-08-14", addedAt: "2026-08-14T04:30:00Z" });
+  // 04:30 UTC is half past twelve in Ulaanbaatar.
+  assert.equal(moment(dayOnly), "2026-08-14T12:30");
 });

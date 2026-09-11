@@ -20,6 +20,18 @@ const TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
   timeZone: ULAANBAATAR_TZ,
   hour: "2-digit",
   minute: "2-digit",
+  // Midnight is 00:00 and not 24:00: the second form reads as the end of the
+  // day rather than the start of it, and sorts after every other hour of a
+  // day it does not belong to.
+  hourCycle: "h23",
+});
+
+const STAMP_FORMAT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: ULAANBAATAR_TZ,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
 });
 
 /** `YYYY-MM-DD` in Ulaanbaatar. */
@@ -30,6 +42,17 @@ export function ulaanbaatarDay(date: Date): string {
 /** `HH:MM` in Ulaanbaatar. */
 export function ulaanbaatarTime(date: Date): string {
   return TIME_FORMAT.format(date);
+}
+
+/**
+ * `YYYY-MM-DDTHH:MM:SS` in Ulaanbaatar: one sortable string for a moment.
+ *
+ * The form the news feed stores a stated publication time in. Compared as
+ * text, so the seconds matter — a page that posts twice in a minute orders
+ * correctly only if the second it happened survives.
+ */
+export function ulaanbaatarStamp(date: Date): string {
+  return `${ulaanbaatarDay(date)}T${STAMP_FORMAT.format(date)}`;
 }
 
 /**
