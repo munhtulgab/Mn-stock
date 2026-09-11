@@ -1,5 +1,6 @@
 import type { Db } from "mongodb";
 import * as cheerio from "cheerio";
+import { ulaanbaatarStamp } from "@/lib/day";
 
 /**
  * Reading a saved Facebook page.
@@ -62,8 +63,52 @@ export interface FacebookPost {
   text: string;
   /** Post permalink, when one is present in the markup. */
   url?: string;
-  /** YYYY-MM-DD, when the timestamp could be read. */
+  /**
+   * When it was posted, in Ulaanbaatar time: `YYYY-MM-DDTHH:MM:SS` where the
+   * hour is known and `YYYY-MM-DD` where only the day is.
+   *
+   * The hour is what puts a page's posts in the order they were written.
+   * Reduced to the day, every post a page made on Monday carries the same
+   * stamp, and the feed — which sorts on this string — is left ordering them
+   * by whatever order they happened to be fetched in.
+   */
   date?: string;
+}
+
+/**
+ * A moment as Ulaanbaatar states it, from an epoch or a parsed instant.
+ * Returns nothing rather than "Invalid Date" for a stamp that did not parse.
+ */
+function stamp(at: Date): string | undefined {
+  return Number.isNaN(at.getTime()) ? undefined : ulaanbaatarStamp(at);
+}
+
+/**
+ * Epoch seconds or milliseconds as Ulaanbaatar time.
+ *
+ * Which of the two a scraper sends is not consistent — mbasic writes
+ * seconds, Apify's `timestamp` has been seen as both — and telling them
+ * apart on magnitude is safe for any date this app deals with: seconds
+ * reach 1e12 in the year 33658.
+ */
+function fromEpoch(value: number): string | undefined {
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  return stamp(new Date(value < 1e12 ? value * 1000 : value));
+}
+
+/**
+ * Newest post first, with undated ones last in the order they arrived.
+ *
+ * The routes disagree about order — the Graph API answers newest first,
+ * mbasic's timeline mostly does, and a scraper run makes no promise at all —
+ * and the posts are stored as they are returned here, so the order is worth
+ * settling once, at the point the dates are known.
+ */
+function byNewest(a: FacebookPost, b: FacebookPost): number {
+  if (!a.date && !b.date) return 0;
+  if (!a.date) return 1;
+  if (!b.date) return -1;
+  return b.date.localeCompare(a.date);
 }
 
 /**
@@ -142,7 +187,9 @@ const CHROME = new RegExp(
 /**
  * A written-out post date: "5 August at 10:03", "August 5 at 10:03", either
  * with a year once the post is old enough. Relative forms ("2 hrs",
- * "Yesterday") are rejected rather than guessed at.
+ * "Yesterday") are rejected rather than guessed at, and so is the hour: the
+ * page renders it in the reading account's own timezone, which is not stated
+ * anywhere in the markup.
  *
  * The year is omitted for anything inside the last twelve months, and
  * Date.parse fills that gap with 2001 — which is how "4 August at 16:20"
@@ -176,8 +223,10 @@ function parseAbbrDate(text: string): string | undefined {
 
 /**
  * mbasic writes an epoch into the post's own <abbr data-store> and falls
- * back to the written form. The epoch is preferred: it is unambiguous and
- * independent of the account's language.
+ * back to the written form. The epoch is preferred: it is unambiguous, it is
+ * independent of the account's language, and it carries the hour — which the
+ * written form states in whatever zone the account is set to, so its time is
+ * dropped rather than filed under a zone it may not be in.
  */
 function postDate($: cheerio.CheerioAPI, node: cheerio.Cheerio<never>): string | undefined {
   const abbr = node.find("abbr").first();
@@ -185,8 +234,9 @@ function postDate($: cheerio.CheerioAPI, node: cheerio.Cheerio<never>): string |
   if (store) {
     try {
       const time = JSON.parse(store)?.time;
-      if (typeof time === "number" && time > 0) {
-        return new Date(time * 1000).toISOString().slice(0, 10);
+      if (typeof time === "number") {
+        const at = fromEpoch(time);
+        if (at) return at;
       }
     } catch {
       // Fall through to the text form.
@@ -269,7 +319,7 @@ function parseMbasicPosts(html: string): FacebookPost[] {
     posts.push({ text, url: postUrl($, node), date: postDate($, node) });
   });
 
-  return posts;
+  return posts.sort(byNewest);
 }
 
 export interface FacebookFetch {
@@ -439,10 +489,29 @@ async function writeCache(db: Db, key: string, posts: FacebookPost[]): Promise<v
 
 interface ApifyPost {
   text?: string;
+  /** ISO 8601, in UTC. */
   time?: string;
+  /** Epoch, on the actor versions that send one. */
+  timestamp?: number;
   url?: string;
   facebookUrl?: string;
   pageName?: string;
+}
+
+/**
+ * When the actor says a post went out, in Ulaanbaatar time.
+ *
+ * The stamp it sends is UTC, and the feed states its own times locally —
+ * taking the UTC digits as local dated an 09:30 post to 01:30 and sorted it
+ * below everything published the evening before. The epoch is preferred
+ * where the actor sends one; `time` parses to the same instant either way.
+ */
+function postedAt(post: ApifyPost): string | undefined {
+  if (typeof post.timestamp === "number") {
+    const at = fromEpoch(post.timestamp);
+    if (at) return at;
+  }
+  return post.time ? stamp(new Date(post.time)) : undefined;
 }
 
 function toPosts(items: unknown): FacebookPost[] {
@@ -451,8 +520,9 @@ function toPosts(items: unknown): FacebookPost[] {
     .map((p) => ({
       text: p.text!.replace(/\s+/g, " ").trim(),
       url: p.url,
-      date: p.time?.slice(0, 10),
-    }));
+      date: postedAt(p),
+    }))
+    .sort(byNewest);
 }
 
 /**
@@ -649,13 +719,17 @@ export async function fetchWithToken(
       return { posts: [], error: `Facebook: ${body.error?.message ?? `Graph API ${res.status}`}` };
     }
 
+    // created_time carries its own offset ("+0000"), so it is an instant
+    // rather than a local reading and is moved into Ulaanbaatar time like
+    // every other stated hour in the feed.
     const posts = (body.data ?? [])
       .filter((p) => p.message?.trim())
       .map((p) => ({
         text: p.message!.replace(/\s+/g, " ").trim(),
         url: p.permalink_url,
-        date: p.created_time?.slice(0, 10),
-      }));
+        date: p.created_time ? stamp(new Date(p.created_time)) : undefined,
+      }))
+      .sort(byNewest);
     return posts.length > 0
       ? { posts }
       : { posts: [], error: "Facebook хуудсанд бичвэртэй пост олдсонгүй." };
@@ -667,3 +741,5 @@ export async function fetchWithToken(
     };
   }
 }
+
+export const __testing = { parseMbasicPosts, toPosts, byNewest };

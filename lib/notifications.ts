@@ -2,6 +2,10 @@ import type { Db } from "mongodb";
 import { dayHeading, todayAndYesterday, ulaanbaatarDay, ulaanbaatarTime } from "@/lib/day";
 import type { AppNotification, User } from "@/lib/types";
 
+/**
+ * How many alerts the feed keeps. Everything older is trimmed away on the
+ * next write, so this is also the most the page can ever have to show.
+ */
 const KEEP = 200;
 
 /**
@@ -62,15 +66,22 @@ export async function recordNotifications(
   }
 }
 
-async function getNotifications(
-  db: Db,
-  limit = 50,
-): Promise<AppNotification[]> {
+/**
+ * The alerts the feed holds, newest first.
+ *
+ * All of them: the limit is the size of the feed rather than a page of it.
+ * It used to be fifty, which was a page's worth and not a stated one — the
+ * feed keeps four times that, the page has no "show more", and the unread
+ * count is taken from the same list. A reader with fifty unread alerts saw
+ * the count stick at fifty, and the hundred and fifty behind them were
+ * unreachable: still stored, never shown.
+ */
+async function getNotifications(db: Db): Promise<AppNotification[]> {
   return db
     .collection<AppNotification>("notifications")
     .find({})
     .sort({ createdAt: -1 })
-    .limit(limit)
+    .limit(KEEP)
     .toArray();
 }
 

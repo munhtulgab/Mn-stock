@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { __testing } from "./marketReview";
 
-const { lastSessionBefore } = __testing;
+const { lastSessionBefore, furtherOn } = __testing;
 
 /**
  * The day's card covers the last session that has closed, not the newest one
@@ -56,4 +56,56 @@ test("nothing before the day is null rather than a guess", () => {
 
 test("no prices at all is null", () => {
   assert.equal(lastSessionBefore(new Map(), "2026-08-13"), null);
+});
+
+/* ---------------------------------------------------------------------- */
+
+/** A day's card, reduced to the one field the hold is decided on. */
+function day(to: string) {
+  return {
+    from: to,
+    to,
+    sessions: 1,
+    traded: 40,
+    turnover: 1_000,
+    gainers: [],
+    losers: [],
+    indices: [],
+  };
+}
+
+/** The session a hold settled on, which every case below but one has. */
+function settled(review: ReturnType<typeof furtherOn>) {
+  assert.ok(review, "expected a card, got none");
+  return review;
+}
+
+test("the day's card does not fall back to an earlier session", () => {
+  // The morning reading with no live feed to cover the store's lag: what was
+  // built is a session short of what was already being shown.
+  assert.equal(settled(furtherOn(day("2026-09-11"), day("2026-09-10"))).to, "2026-09-11");
+});
+
+test("a newer session always replaces the one held", () => {
+  assert.equal(settled(furtherOn(day("2026-09-10"), day("2026-09-11"))).to, "2026-09-11");
+});
+
+test("rebuilding the same session takes the fresh figures", () => {
+  // Same day, but the store has since caught up with companies the live feed
+  // never named, so the fresh one is the fuller count.
+  const held = { ...day("2026-09-11"), traded: 12 };
+  const rebuilt = { ...day("2026-09-11"), traded: 47 };
+  assert.equal(settled(furtherOn(held, rebuilt)).traded, 47);
+});
+
+test("nothing held yet is whatever was built", () => {
+  assert.equal(settled(furtherOn(null, day("2026-09-11"))).to, "2026-09-11");
+  assert.equal(settled(furtherOn(undefined, day("2026-09-11"))).to, "2026-09-11");
+});
+
+test("a build that found no session keeps the card already shown", () => {
+  // Not an empty card: the session it describes closed and is still the last
+  // one that did.
+  assert.equal(settled(furtherOn(day("2026-09-11"), null)).to, "2026-09-11");
+  assert.equal(furtherOn(null, null), null);
 });

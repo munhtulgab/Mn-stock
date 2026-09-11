@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import {
+  byNewest,
   countNewSince,
   getMarketNews,
   markNewsSeen,
@@ -53,28 +54,21 @@ function weeklyReviewStory(review: MarketReview): MarketNewsItem {
   };
 }
 
-/**
- * Newest first, by the moment each story carries.
- *
- * A day's rows are whatever order the sources were read in otherwise, which
- * put an 18:25 story under a 16:24 one and the app's own summary above both.
- * Rows without a stated time fall back to when the feed first saw them, the
- * same figure the row itself prints, so what a reader sees and what decides
- * the order are the same thing.
- */
-function byNewest(a: MarketNewsItem, b: MarketNewsItem): number {
-  const at = (item: MarketNewsItem) =>
-    item.date.length > 10 ? item.date : (item.addedAt ?? item.date);
-  return at(b).localeCompare(at(a));
-}
-
 function groupByDay(items: MarketNewsItem[]): [string, MarketNewsItem[]][] {
   const groups = new Map<string, MarketNewsItem[]>();
   for (const item of items) {
     const day = item.date.slice(0, 10);
     groups.set(day, [...(groups.get(day) ?? []), item]);
   }
-  // Days newest first, and each day's stories newest first within it.
+  // Days newest first, and each day's stories newest first within it — by
+  // the feed's own comparator, so what a reader sees and what decides the
+  // order are the same thing. This used to have a comparator of its own that
+  // fell back to `addedAt` as the feed stores it, an ISO instant in UTC,
+  // and compared it against stamps stated in Ulaanbaatar time. Eight hours
+  // adrift, that put every row without a stated hour — which is what every
+  // Facebook post was — below the day's stated-time stories regardless of
+  // when it had actually appeared, while the row printed the local time and
+  // showed the contradiction.
   return [...groups.entries()]
     .sort((a, b) => b[0].localeCompare(a[0]))
     .map(([day, dayItems]) => [day, [...dayItems].sort(byNewest)]);
