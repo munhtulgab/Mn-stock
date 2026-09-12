@@ -9,6 +9,8 @@ import SyncButton from "@/components/admin/SyncButton";
 import PageHead from "@/components/admin/PageHead";
 import Panel from "@/components/admin/Panel";
 import OrdersStrip from "@/components/admin/OrdersStrip";
+import PeriodPicker from "@/components/admin/PeriodPicker";
+import { periodFrom } from "@/lib/adminPeriod";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +21,15 @@ export const dynamic = "force-dynamic";
  * No prices anywhere. An administrator wanting to know what the market did
  * opens the app, which is one link away in the bar.
  */
-export default async function AdminOverviewPage() {
+export default async function AdminOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>;
+}) {
   const db = await getDb();
   await requireAdminPage(db);
-  const o = await getAdminOverview(db);
+  const days = periodFrom((await searchParams).days);
+  const o = await getAdminOverview(db, days);
 
   /**
    * The change as a share of what was there a week ago.
@@ -49,12 +56,7 @@ export default async function AdminOverviewPage() {
   return (
     <div className="space-y-4">
       <PageHead title="Хяналтын самбар" sub="Системийн болон хэрэглэгчийн өнөөгийн байдал">
-        <Link
-          href="/admin/settings"
-          className="flex items-center rounded-full border border-app-border px-4 py-2.5 text-sm font-semibold text-app-text hover:bg-app-elevated"
-        >
-          Тохиргоо
-        </Link>
+        <PeriodPicker days={o.windowDays} />
         <SyncButton />
       </PageHead>
 
@@ -69,7 +71,7 @@ export default async function AdminOverviewPage() {
           value={o.users.total.toLocaleString("mn-MN")}
           delta={users.delta}
           direction={users.direction}
-          previous={`7 хоногийн өмнө: ${users.before.toLocaleString("mn-MN")}`}
+          previous={`${o.windowDays} хоногийн өмнө: ${users.before.toLocaleString("mn-MN")}`}
         />
 
         <div className="grid divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border bg-app-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">

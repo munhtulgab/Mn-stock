@@ -48,6 +48,8 @@ export default async function AdminLayout({
       <div className="sheet mx-auto w-full max-w-[1320px] overflow-hidden bg-app-bg sm:rounded-[26px]">
         <AdminNav
           username={admin.username}
+          email={admin.email}
+          avatar={admin.avatar}
           serviceAdmin={isServiceAdmin(admin)}
           accountHref={`/admin/users/${admin._id}`}
           counts={counts}
