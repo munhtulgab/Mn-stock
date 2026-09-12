@@ -23,11 +23,13 @@ export interface RecentOrder {
   createdAt: Date;
 }
 
-/** One day's worth of orders, for the fortnight strip on the dashboard. */
+/** One day's worth of orders, for the year strip on the dashboard. */
 export interface DailyOrders {
   /** `YYYY-MM-DD` in Ulaanbaatar. */
   day: string;
   count: number;
+  /** What changed hands that day, in tögrög. */
+  turnover: number;
 }
 
 export interface AdminOverview {
@@ -51,8 +53,9 @@ export interface AdminOverview {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const FORTNIGHT_DAYS = 14;
-const FORTNIGHT_MS = FORTNIGHT_DAYS * DAY_MS;
+/** How far the activity strip looks back. A year, so a season is visible. */
+const STRIP_DAYS = 365;
+const STRIP_MS = STRIP_DAYS * DAY_MS;
 
 /**
  * @param windowDays how far back "recent" reaches, which the period control
@@ -116,8 +119,8 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
     // database happens to be running.
     db
       .collection<Transaction>("transactions")
-      .aggregate<{ _id: string; n: number }>([
-        { $match: { createdAt: { $gte: new Date(Date.now() - FORTNIGHT_MS) } } },
+      .aggregate<{ _id: string; n: number; sum: number }>([
+        { $match: { createdAt: { $gte: new Date(Date.now() - STRIP_MS) } } },
         {
           $group: {
             _id: {
@@ -128,6 +131,7 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
               },
             },
             n: { $sum: 1 },
+            sum: { $sum: "$total" },
           },
         },
       ])
@@ -135,11 +139,14 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
   ]);
 
   // Every day in the window, including the quiet ones — a strip with gaps in
-  // it reads as missing data rather than as a day nobody traded.
-  const byDay = new Map(dailyRows.map((r) => [r._id, r.n]));
-  const daily: DailyOrders[] = Array.from({ length: FORTNIGHT_DAYS }, (_, i) => {
-    const day = ulaanbaatarDaysAgo(FORTNIGHT_DAYS - 1 - i);
-    return { day, count: byDay.get(day) ?? 0 };
+  // it reads as missing data rather than as a day nobody traded. An exchange
+  // is shut two days in seven and on every public holiday, so most of a year
+  // is legitimately empty and the shape depends on those blanks being drawn.
+  const byDay = new Map(dailyRows.map((r) => [r._id, r]));
+  const daily: DailyOrders[] = Array.from({ length: STRIP_DAYS }, (_, i) => {
+    const day = ulaanbaatarDaysAgo(STRIP_DAYS - 1 - i);
+    const row = byDay.get(day);
+    return { day, count: row?.n ?? 0, turnover: row?.sum ?? 0 };
   });
 
   // The names for the recent orders, asked for once rather than per row.
@@ -197,15 +204,21 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
 }
 
 /**
- * The figure the rail shows beside Хэрэглэгч.
+ * The figures the bar shows beside Хэрэглэгч and Захиалга.
  *
- * One count, read on every admin page because the rail is on every admin
- * page — the price of a number that saves an administrator from clicking
- * through to find out whether anyone new has arrived. Only that one: a tally
+ * Two counts, read on every admin page because the bar is on every admin
+ * page — the price of numbers that save an administrator from clicking
+ * through to find out whether anything has arrived. Only those two: a tally
  * beside Хяналт would be a tally of nothing in particular, and beside Систем
  * there is nothing to count.
  */
 export async function countSections(db: Db): Promise<Record<string, number>> {
-  const users = await db.collection<User>("users").countDocuments({});
-  return { "/admin/users": users };
+  const [users, orders] = await Promise.all([
+    db.collection<User>("users").countDocuments({}),
+    // Estimated: this is a tally beside a nav label, not a figure anyone
+    // reconciles, and an exact count of a collection that only grows is a
+    // full scan on every admin page.
+    db.collection<Transaction>("transactions").estimatedDocumentCount(),
+  ]);
+  return { "/admin/users": users, "/admin/orders": orders };
 }

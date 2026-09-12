@@ -10,7 +10,7 @@ import Avatar from "@/components/Avatar";
  * signed in.
  *
  * The rail this replaces put the sections down the left, which is right for
- * an application with fifteen destinations and wasteful for one with three —
+ * an application with fifteen destinations and wasteful for one with four —
  * it spent 236 pixels of every screen on a list that fits in a pill. Across
  * the top the sections sit in the middle where the eye lands first, the
  * account and the way out sit at the right where they are looked for, and the
@@ -23,6 +23,7 @@ import Avatar from "@/components/Avatar";
 const SECTIONS = [
   { href: "/admin", label: "Хяналт" },
   { href: "/admin/users", label: "Хэрэглэгч" },
+  { href: "/admin/orders", label: "Захиалга" },
   { href: "/admin/settings", label: "Систем" },
 ];
 

@@ -60,12 +60,12 @@ export default async function AdminOverviewPage({
         <SyncButton />
       </PageHead>
 
-      {/* One filled card, then three sharing a sheet and told apart by a
-          hairline. Four separate cards in a row read as four unrelated
-          numbers; this reads as one figure and the context around it. */}
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
+      {/* A colour each. Four identical cards are four cards nobody learns
+          the position of; after a week the blue one is where the orders are,
+          before the word is read. */}
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          primary
+          tone="brand"
           icon="users"
           label="Хэрэглэгч"
           value={o.users.total.toLocaleString("mn-MN")}
@@ -73,63 +73,67 @@ export default async function AdminOverviewPage({
           direction={users.direction}
           previous={`${o.windowDays} хоногийн өмнө: ${users.before.toLocaleString("mn-MN")}`}
         />
-
-        <div className="grid divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border bg-app-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          <StatCard
-            icon="sessions"
-            badge="ink"
-            label="Нэвтэрсэн сешн"
-            value={o.users.sessions.toLocaleString("mn-MN")}
-            delta="Идэвхтэй"
-            previous="Хугацаа нь дуусаагүй"
-          />
-          <StatCard
-            icon="orders"
-            label="Захиалга"
-            value={o.orders.total.toLocaleString("mn-MN")}
-            delta={orders.delta}
-            direction={orders.direction}
-            previous={`${o.orders.buys.toLocaleString("mn-MN")} авсан · ${o.orders.sells.toLocaleString("mn-MN")} зарсан`}
-          />
-          <StatCard
-            icon="alerts"
-            label="Мэдэгдэл"
-            value={o.alerts.total.toLocaleString("mn-MN")}
-            delta={alerts.delta}
-            direction={alerts.direction}
-            previous={
-              o.alerts.lastAt
-                ? `Сүүлийнх: ${ulaanbaatarDateTime(o.alerts.lastAt)}`
-                : "Хараахан алга"
-            }
-          />
-        </div>
+        <StatCard
+          tone="slate"
+          icon="sessions"
+          label="Нэвтэрсэн сешн"
+          value={o.users.sessions.toLocaleString("mn-MN")}
+          delta="Идэвхтэй"
+          previous="Хугацаа нь дуусаагүй"
+        />
+        <StatCard
+          tone="blue"
+          icon="orders"
+          label="Захиалга"
+          value={o.orders.total.toLocaleString("mn-MN")}
+          delta={orders.delta}
+          direction={orders.direction}
+          previous={`${o.orders.buys.toLocaleString("mn-MN")} авсан · ${o.orders.sells.toLocaleString("mn-MN")} зарсан`}
+        />
+        <StatCard
+          tone="violet"
+          icon="alerts"
+          label="Мэдэгдэл"
+          value={o.alerts.total.toLocaleString("mn-MN")}
+          delta={alerts.delta}
+          direction={alerts.direction}
+          previous={
+            o.alerts.lastAt
+              ? `Сүүлийнх: ${ulaanbaatarDateTime(o.alerts.lastAt)}`
+              : "Хараахан алга"
+          }
+        />
       </section>
 
       <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Panel title="Арилжааны идэвх" note="Сүүлийн 14 хоног">
+        <Panel title="Арилжааны идэвх" note="Сүүлийн 365 хоног">
           <OrdersStrip days={o.daily} />
         </Panel>
 
         <Panel title="Системийн байдал">
           <dl className="text-sm">
-            <Row label="Сүүлийн синк">
+            <Row label="Сүүлийн синк" icon={<SyncGlyph />}>
               {o.system.lastSecuritiesSyncAt
                 ? ulaanbaatarDateTime(o.system.lastSecuritiesSyncAt)
                 : "—"}
             </Row>
-            <Row label="Мэдээллийн эх сурвалж">{o.system.newsSources}</Row>
-            <Row label="Push мэдэгдэл">
+            <Row label="Мэдээллийн эх сурвалж" icon={<GlobeGlyph />}>
+              {o.system.newsSources}
+            </Row>
+            <Row label="Push мэдэгдэл" icon={<BellGlyph />}>
               <State on={o.system.pushEnabled} />
             </Row>
-            <Row label="SMS">
+            <Row label="SMS" icon={<ChatGlyph />}>
               <State on={o.system.smsEnabled} />
             </Row>
           </dl>
 
           <div className="mt-4 rounded-xl bg-app-elevated p-3.5">
             <div className="flex items-baseline justify-between text-[13px]">
-              <span className="text-app-muted">AI түлхүүр</span>
+              <span className="flex items-center gap-2 text-app-muted">
+                <KeyGlyph />
+                AI түлхүүр
+              </span>
               <span className="font-semibold tabular-nums">
                 {o.system.aiKeys} / {o.system.aiKeysPossible}
               </span>
@@ -152,8 +156,8 @@ export default async function AdminOverviewPage({
         <Panel
           title="Сүүлийн захиалгууд"
           note={
-            <Link href="/admin/users" className="font-semibold text-brand">
-              Хэрэглэгчид →
+            <Link href="/admin/orders" className="font-semibold text-brand">
+              Бүгд →
             </Link>
           }
           flush
@@ -306,12 +310,85 @@ function SidePill({ side }: { side: "BUY" | "SELL" }) {
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * One line of the system panel. The mark is not decoration: five rows of
+ * label-and-value are five rows the eye has to read in order, and a small
+ * glyph at the head of each is what lets the one being looked for be found
+ * without reading the other four.
+ */
+function Row({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-app-divider py-2.5 last:border-0">
-      <dt className="text-app-muted">{label}</dt>
-      <dd className="font-semibold tabular-nums">{children}</dd>
+      <dt className="flex min-w-0 items-center gap-2 text-app-muted">
+        {icon}
+        <span className="truncate">{label}</span>
+      </dt>
+      <dd className="shrink-0 font-semibold tabular-nums">{children}</dd>
     </div>
+  );
+}
+
+const GLYPH = {
+  width: 15,
+  height: 15,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.8,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  className: "shrink-0 text-app-muted",
+};
+
+function SyncGlyph() {
+  return (
+    <svg {...GLYPH}>
+      <path d="M20 12a8 8 0 1 1-2.6-5.9" />
+      <path d="M20 4.5V10h-5.5" />
+    </svg>
+  );
+}
+
+function GlobeGlyph() {
+  return (
+    <svg {...GLYPH}>
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M3.4 12h17.2M12 3.4c2.2 2.4 3.4 5.4 3.4 8.6s-1.2 6.2-3.4 8.6c-2.2-2.4-3.4-5.4-3.4-8.6S9.8 5.8 12 3.4Z" />
+    </svg>
+  );
+}
+
+function BellGlyph() {
+  return (
+    <svg {...GLYPH}>
+      <path d="M18 9a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7Z" />
+      <path d="M13.7 19.5a2 2 0 0 1-3.4 0" />
+    </svg>
+  );
+}
+
+function ChatGlyph() {
+  return (
+    <svg {...GLYPH}>
+      <path d="M20.5 11.6c0 3.9-3.8 7.1-8.5 7.1a10 10 0 0 1-2.4-.3L4.5 20l1.2-3.4a6.7 6.7 0 0 1-2.2-5c0-3.9 3.8-7.1 8.5-7.1s8.5 3.2 8.5 7.1Z" />
+    </svg>
+  );
+}
+
+function KeyGlyph() {
+  return (
+    <svg {...GLYPH}>
+      <circle cx="8" cy="15.5" r="3.6" />
+      <path d="m10.7 13 8-8M17.2 6.5l2 2M14.7 9l2 2" />
+    </svg>
   );
 }
 
