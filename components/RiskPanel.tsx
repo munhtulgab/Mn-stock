@@ -37,9 +37,12 @@ function betaHint(beta: number | null): string {
 export default function RiskPanel({
   risk,
   years,
+  basis,
 }: {
   risk: RiskMetrics;
   years: number;
+  /** Named where the figures are not this listing's own price. */
+  basis?: string;
 }) {
   const metrics: Metric[] = [
     {
@@ -85,7 +88,7 @@ export default function RiskPanel({
       <div className="flex items-baseline justify-between gap-2 mb-3">
         <h2 className="text-sm font-semibold text-app-text">Эрсдэлийн үзүүлэлт</h2>
         <span className="text-[10px] text-app-muted">
-          Сүүлийн {years} жил
+          {basis ? `${basis} · ` : ""}Сүүлийн {years} жил
           {risk.annualReturn !== null &&
             ` · жилийн өгөөж ${fmt(risk.annualReturn, 1, "%")}`}
         </span>

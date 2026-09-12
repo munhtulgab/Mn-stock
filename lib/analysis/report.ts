@@ -17,6 +17,8 @@ import {
 } from "./fundamentals";
 import { buildScorecard, type Scorecard } from "./indicators";
 import { computeRisk, RISK_YEARS, type RiskMetrics } from "./risk";
+import { buildGoldBasis, type GoldBasis } from "./goldBasis";
+import { getGoldPrices, tracksGold } from "@/lib/gold";
 import { combineSignal, type CombinedSignal } from "./signal";
 import { TIMEFRAMES, type Candle, type Timeframe } from "./series";
 import { withLiveCandle } from "@/lib/liveCandle";
@@ -98,6 +100,15 @@ export interface StockAnalysis {
   candles: Candle[];
   /** False for a listing too new or too thinly traded to read a chart from. */
   enoughHistory: boolean;
+  /**
+   * The same analysis run on the metal, for a listing that is the metal.
+   *
+   * Null for everything else. A gold tracker three months old has no history
+   * to read a scorecard from and no accounts to draw a ratio from, while what
+   * it holds has seventeen years of daily prices — so the panels are given
+   * those instead, and say so.
+   */
+  goldBasis: GoldBasis | null;
 }
 
 /**
@@ -577,7 +588,7 @@ export async function buildAnalysis(
 ): Promise<StockAnalysis> {
   const from = `${Number(today.slice(0, 4)) - HISTORY_YEARS}${today.slice(4)}`;
 
-  const [storedCandles, context, noticeDividends, tdb] =
+  const [storedCandles, context, noticeDividends, tdb, goldPoints] =
     await Promise.all([
       getCandles(db, security.companyCode, from),
       loadMarketContext(db),
@@ -586,6 +597,15 @@ export async function buildAnalysis(
         profile: null,
         distribution: null,
       })),
+      // Only for the listings that are a metal. Every other company reads
+      // its own history, and asking Mongolbank about APU would be a request
+      // per page view for a series nothing on the page would draw.
+      tracksGold(security.symbol)
+        ? getGoldPrices(db).catch((err) => {
+            console.error("gold basis unavailable", err);
+            return [];
+          })
+        : Promise.resolve([]),
     ]);
 
   // Today's bar goes on before anything is computed from the series, so the
@@ -601,5 +621,6 @@ export async function buildAnalysis(
     dividends: dividendRows(noticeDividends),
     candles,
     enoughHistory: candles.length >= MIN_CANDLES,
+    goldBasis: buildGoldBasis(goldPoints, candles, context.top20, today),
   };
 }
