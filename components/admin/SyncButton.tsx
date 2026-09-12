@@ -41,7 +41,8 @@ export default function SyncButton() {
     <button
       onClick={run}
       disabled={running}
-      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm font-semibold text-app-text disabled:opacity-60"
+      style={{ background: "linear-gradient(142deg, var(--admin-fill-from), var(--admin-fill-to))" }}
+      className="flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
     >
       <RefreshIcon size={15} />
       {running ? "Ажиллаж байна…" : "Одоо синк хийх"}

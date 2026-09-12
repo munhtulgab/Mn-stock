@@ -13,16 +13,19 @@ export const metadata: Metadata = {
 };
 
 /**
- * The shell for everything under /admin.
+ * The shell for everything under /admin: one white sheet on a cool grey
+ * ground, with the bar across the top of it.
  *
- * A separate shell rather than a section of the app's: no tab bar, no market
- * ticker keeping prices warm in the background, no header carrying search and
- * the alert bell. None of those belong on a page about accounts, and the
- * ticker in particular is a poll this side of the app has no use for.
+ * Separate from the app's shell rather than a section of it — no tab bar, no
+ * market ticker keeping prices warm in the background, no header carrying
+ * search and the alert bell. None of those belong on a page about accounts,
+ * and the ticker in particular is a poll this side has no use for.
  *
- * `admin-surface` is what makes this room light in both themes — see the
- * block of the same name in globals.css. It is one class on one element
- * because every colour under it is already a custom property.
+ * The sheet is what makes the section read as an application rather than as a
+ * document: the ground around it says where the work stops. `admin-surface`
+ * is what makes both of them light in either theme — see the block of the
+ * same name in globals.css. It is one class on one element because every
+ * colour under it is already a custom property.
  *
  * The check here is for the shell it draws. Each page checks again — a layout
  * is not re-rendered when the reader moves between two routes it covers, so a
@@ -38,16 +41,19 @@ export default async function AdminLayout({
   const counts = await countSections(db);
 
   return (
-    <div className="admin-surface flex min-h-dvh flex-col bg-app-bg text-app-text md:flex-row">
-      <AdminNav
-        username={admin.username}
-        serviceAdmin={isServiceAdmin(admin)}
-        accountHref={`/admin/users/${admin._id}`}
-        counts={counts}
-      />
-      <main className="min-w-0 flex-1 px-4 pt-5 pb-16 md:px-7 md:pt-6">
-        <div className="mx-auto w-full max-w-[1180px]">{children}</div>
-      </main>
+    <div
+      className="admin-surface min-h-dvh px-0 py-0 text-app-text sm:px-5 sm:py-5"
+      style={{ backgroundColor: "var(--admin-ground)" }}
+    >
+      <div className="sheet mx-auto w-full max-w-[1320px] overflow-hidden bg-app-bg sm:rounded-[26px]">
+        <AdminNav
+          username={admin.username}
+          serviceAdmin={isServiceAdmin(admin)}
+          accountHref={`/admin/users/${admin._id}`}
+          counts={counts}
+        />
+        <main className="px-4 pt-2 pb-10 md:px-6 md:pb-12">{children}</main>
+      </div>
     </div>
   );
 }

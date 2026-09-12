@@ -1,5 +1,6 @@
 import type { Db } from "mongodb";
 import { getSettings } from "@/lib/settings";
+import { ulaanbaatarDaysAgo } from "@/lib/day";
 import type { AppNotification, Session, Transaction, User } from "@/lib/types";
 
 /**
@@ -22,6 +23,13 @@ export interface RecentOrder {
   createdAt: Date;
 }
 
+/** One day's worth of orders, for the fortnight strip on the dashboard. */
+export interface DailyOrders {
+  /** `YYYY-MM-DD` in Ulaanbaatar. */
+  day: string;
+  count: number;
+}
+
 export interface AdminOverview {
   users: { total: number; admins: number; recent: number; sessions: number };
   orders: { total: number; recent: number; buys: number; sells: number; turnover: number };
@@ -35,11 +43,14 @@ export interface AdminOverview {
     lastSecuritiesSyncAt: Date | null;
     lastFullPriceSyncCompletedAt: Date | null;
   };
+  daily: DailyOrders[];
   latestOrders: RecentOrder[];
   latestUsers: { id: string; username: string; fullName: string | null; createdAt: Date | null }[];
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const FORTNIGHT_DAYS = 14;
+const FORTNIGHT_MS = FORTNIGHT_DAYS * 24 * 60 * 60 * 1000;
 
 export async function getAdminOverview(db: Db): Promise<AdminOverview> {
   const since = new Date(Date.now() - WEEK_MS);
@@ -58,6 +69,7 @@ export async function getAdminOverview(db: Db): Promise<AdminOverview> {
     syncState,
     latestOrderDocs,
     latestUserDocs,
+    dailyRows,
   ] = await Promise.all([
     db.collection<User>("users").countDocuments({}),
     db.collection<User>("users").countDocuments({ role: "admin" }),
@@ -92,7 +104,36 @@ export async function getAdminOverview(db: Db): Promise<AdminOverview> {
       .collection<User>("users")
       .find({}, { sort: { createdAt: -1 }, limit: 5, projection: { username: 1, fullName: 1, createdAt: 1 } })
       .toArray(),
+    // Grouped by the Ulaanbaatar day rather than the server's: an order
+    // filled at nine in the morning belongs to that trading day wherever the
+    // database happens to be running.
+    db
+      .collection<Transaction>("transactions")
+      .aggregate<{ _id: string; n: number }>([
+        { $match: { createdAt: { $gte: new Date(Date.now() - FORTNIGHT_MS) } } },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                date: "$createdAt",
+                format: "%Y-%m-%d",
+                timezone: "Asia/Ulaanbaatar",
+              },
+            },
+            n: { $sum: 1 },
+          },
+        },
+      ])
+      .toArray(),
   ]);
+
+  // Every day in the window, including the quiet ones — a strip with gaps in
+  // it reads as missing data rather than as a day nobody traded.
+  const byDay = new Map(dailyRows.map((r) => [r._id, r.n]));
+  const daily: DailyOrders[] = Array.from({ length: FORTNIGHT_DAYS }, (_, i) => {
+    const day = ulaanbaatarDaysAgo(FORTNIGHT_DAYS - 1 - i);
+    return { day, count: byDay.get(day) ?? 0 };
+  });
 
   // The names for the recent orders, asked for once rather than per row.
   const owners = await db
@@ -118,6 +159,7 @@ export async function getAdminOverview(db: Db): Promise<AdminOverview> {
       turnover: (buys?.total ?? 0) + (sells?.total ?? 0),
     },
     alerts: { total: alerts, recent: recentAlerts, lastAt: lastAlert?.createdAt ?? null },
+    daily,
     system: {
       aiKeys: apiKeys,
       aiKeysPossible: 7,

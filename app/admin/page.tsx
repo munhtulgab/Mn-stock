@@ -8,6 +8,7 @@ import StatCard from "@/components/admin/StatCard";
 import SyncButton from "@/components/admin/SyncButton";
 import PageHead from "@/components/admin/PageHead";
 import Panel from "@/components/admin/Panel";
+import OrdersStrip from "@/components/admin/OrdersStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -16,63 +17,137 @@ export const dynamic = "force-dynamic";
  * what they have traded, and whether the machinery behind it is configured.
  *
  * No prices anywhere. An administrator wanting to know what the market did
- * opens the app, which is one link away in the rail.
+ * opens the app, which is one link away in the bar.
  */
 export default async function AdminOverviewPage() {
   const db = await getDb();
   await requireAdminPage(db);
   const o = await getAdminOverview(db);
 
-  return (
-    <div className="space-y-5">
-      <PageHead
-        title="Хяналтын самбар"
-        sub="Системийн болон хэрэглэгчийн ерөнхий байдал"
-      />
+  /**
+   * The change as a share of what was there a week ago.
+   *
+   * Only when there was something: a count that went from nothing to six is
+   * not "+600%", it is six — and printing the first is how a dashboard ends
+   * up showing Infinity at somebody on their second day.
+   */
+  const movement = (total: number, recent: number) => {
+    const before = total - recent;
+    if (recent === 0) return { delta: undefined, direction: "flat" as const, before };
+    if (before <= 0) return { delta: `+${recent}`, direction: "up" as const, before };
+    return {
+      delta: `${((recent / before) * 100).toFixed(1)}%`,
+      direction: "up" as const,
+      before,
+    };
+  };
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+  const users = movement(o.users.total, o.users.recent);
+  const orders = movement(o.orders.total, o.orders.recent);
+  const alerts = movement(o.alerts.total, o.alerts.recent);
+
+  return (
+    <div className="space-y-4">
+      <PageHead title="Хяналтын самбар" sub="Системийн болон хэрэглэгчийн өнөөгийн байдал">
+        <Link
+          href="/admin/settings"
+          className="flex items-center rounded-full border border-app-border px-4 py-2.5 text-sm font-semibold text-app-text hover:bg-app-elevated"
+        >
+          Тохиргоо
+        </Link>
+        <SyncButton />
+      </PageHead>
+
+      {/* One filled card, then three sharing a sheet and told apart by a
+          hairline. Four separate cards in a row read as four unrelated
+          numbers; this reads as one figure and the context around it. */}
+      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
         <StatCard
-          tone="emerald"
+          primary
           icon="users"
           label="Хэрэглэгч"
           value={o.users.total.toLocaleString("mn-MN")}
-          delta={o.users.recent > 0 ? `+${o.users.recent}` : undefined}
-          compare={o.users.recent > 0 ? "(7 хоногт)" : "шинэ бүртгэл алга"}
+          delta={users.delta}
+          direction={users.direction}
+          previous={`7 хоногийн өмнө: ${users.before.toLocaleString("mn-MN")}`}
         />
-        <StatCard
-          tone="amber"
-          icon="sessions"
-          label="Нэвтэрсэн сешн"
-          value={o.users.sessions.toLocaleString("mn-MN")}
-          delta="Идэвхтэй"
-          direction="flat"
-          compare="(хугацаа дуусаагүй)"
-        />
-        <StatCard
-          tone="blue"
-          icon="orders"
-          label="Захиалга"
-          value={o.orders.total.toLocaleString("mn-MN")}
-          delta={o.orders.recent > 0 ? `+${o.orders.recent}` : undefined}
-          compare={`(${o.orders.buys} авсан · ${o.orders.sells} зарсан)`}
-        />
-        <StatCard
-          tone="violet"
-          icon="alerts"
-          label="Мэдэгдэл"
-          value={o.alerts.total.toLocaleString("mn-MN")}
-          delta={o.alerts.recent > 0 ? `+${o.alerts.recent}` : undefined}
-          compare={
-            o.alerts.lastAt
-              ? `(сүүлийнх ${ulaanbaatarDateTime(o.alerts.lastAt)})`
-              : "хараахан алга"
-          }
-        />
+
+        <div className="grid divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border bg-app-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <StatCard
+            icon="sessions"
+            badge="ink"
+            label="Нэвтэрсэн сешн"
+            value={o.users.sessions.toLocaleString("mn-MN")}
+            delta="Идэвхтэй"
+            previous="Хугацаа нь дуусаагүй"
+          />
+          <StatCard
+            icon="orders"
+            label="Захиалга"
+            value={o.orders.total.toLocaleString("mn-MN")}
+            delta={orders.delta}
+            direction={orders.direction}
+            previous={`${o.orders.buys.toLocaleString("mn-MN")} авсан · ${o.orders.sells.toLocaleString("mn-MN")} зарсан`}
+          />
+          <StatCard
+            icon="alerts"
+            label="Мэдэгдэл"
+            value={o.alerts.total.toLocaleString("mn-MN")}
+            delta={alerts.delta}
+            direction={alerts.direction}
+            previous={
+              o.alerts.lastAt
+                ? `Сүүлийнх: ${ulaanbaatarDateTime(o.alerts.lastAt)}`
+                : "Хараахан алга"
+            }
+          />
+        </div>
       </section>
 
-      <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+      <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <Panel title="Арилжааны идэвх" note="Сүүлийн 14 хоног">
+          <OrdersStrip days={o.daily} />
+        </Panel>
+
+        <Panel title="Системийн байдал">
+          <dl className="text-sm">
+            <Row label="Сүүлийн синк">
+              {o.system.lastSecuritiesSyncAt
+                ? ulaanbaatarDateTime(o.system.lastSecuritiesSyncAt)
+                : "—"}
+            </Row>
+            <Row label="Мэдээллийн эх сурвалж">{o.system.newsSources}</Row>
+            <Row label="Push мэдэгдэл">
+              <State on={o.system.pushEnabled} />
+            </Row>
+            <Row label="SMS">
+              <State on={o.system.smsEnabled} />
+            </Row>
+          </dl>
+
+          <div className="mt-4 rounded-xl bg-app-elevated p-3.5">
+            <div className="flex items-baseline justify-between text-[13px]">
+              <span className="text-app-muted">AI түлхүүр</span>
+              <span className="font-semibold tabular-nums">
+                {o.system.aiKeys} / {o.system.aiKeysPossible}
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+              <span
+                className="block h-full rounded-full"
+                style={{
+                  width: `${Math.round((o.system.aiKeys / o.system.aiKeysPossible) * 100)}%`,
+                  background:
+                    "linear-gradient(90deg, var(--admin-fill-from), var(--admin-fill-to))",
+                }}
+              />
+            </div>
+          </div>
+        </Panel>
+      </section>
+
+      <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Panel
-          eyebrow="Идэвх"
           title="Сүүлийн захиалгууд"
           note={
             <Link href="/admin/users" className="font-semibold text-brand">
@@ -82,7 +157,7 @@ export default async function AdminOverviewPage() {
           flush
         >
           {o.latestOrders.length === 0 ? (
-            <p className="px-4 pb-4 text-sm text-app-muted">
+            <p className="px-5 pb-5 text-sm text-app-muted">
               Хараахан арилжаа хийгдээгүй байна.
             </p>
           ) : (
@@ -104,14 +179,15 @@ export default async function AdminOverviewPage() {
                   {o.latestOrders.map((t) => (
                     <tr key={t.id} className="rowlink border-b border-app-divider last:border-0">
                       <Td>
-                        <Link href={`/admin/users/${t.userId}`} className="block">
-                          <span className="text-[13px] font-semibold text-app-text">
-                            @{t.username}
-                          </span>
+                        <Link
+                          href={`/admin/users/${t.userId}`}
+                          className="font-semibold text-app-text"
+                        >
+                          @{t.username}
                         </Link>
                       </Td>
                       <Td>
-                        <span className="text-[13px] font-semibold">{t.symbol}</span>
+                        <span className="font-semibold">{t.symbol}</span>
                       </Td>
                       <Td>
                         <SidePill side={t.side} />
@@ -137,7 +213,7 @@ export default async function AdminOverviewPage() {
                   <Link
                     key={t.id}
                     href={`/admin/users/${t.userId}`}
-                    className="rowlink flex items-center gap-3 px-4 py-3"
+                    className="rowlink flex items-center gap-3 px-5 py-3"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
@@ -161,79 +237,33 @@ export default async function AdminOverviewPage() {
           )}
         </Panel>
 
-        <div className="grid gap-3">
-          <Panel eyebrow="Байдал" title="Систем">
-            <dl className="text-sm">
-              <Row label="Сүүлийн синк">
-                {o.system.lastSecuritiesSyncAt
-                  ? ulaanbaatarDateTime(o.system.lastSecuritiesSyncAt)
-                  : "—"}
-              </Row>
-              <Row label="Мэдээллийн эх сурвалж">{o.system.newsSources}</Row>
-              <Row label="Push мэдэгдэл">
-                <State on={o.system.pushEnabled} />
-              </Row>
-              <Row label="SMS">
-                <State on={o.system.smsEnabled} />
-              </Row>
-            </dl>
-
-            <div className="mt-4">
-              <div className="flex items-baseline justify-between text-[11px] text-app-muted">
-                <span>AI түлхүүр</span>
-                <span className="tabular-nums">
-                  {o.system.aiKeys} / {o.system.aiKeysPossible}
-                </span>
-              </div>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-app-elevated">
-                <span
-                  className="block h-full rounded-full bg-brand"
-                  style={{
-                    width: `${Math.round((o.system.aiKeys / o.system.aiKeysPossible) * 100)}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <SyncButton />
-              <Link
-                href="/admin/settings"
-                className="flex flex-1 items-center justify-center rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm font-semibold text-app-text"
-              >
-                Тохиргоо
-              </Link>
-            </div>
-          </Panel>
-
-          <Panel eyebrow="Шинэ" title="Бүртгэл" flush>
-            {o.latestUsers.length === 0 ? (
-              <p className="px-4 pb-4 text-sm text-app-muted">Бүртгэл алга.</p>
-            ) : (
-              <div className="divide-y divide-app-divider">
-                {o.latestUsers.map((u) => (
-                  <Link
-                    key={u.id}
-                    href={`/admin/users/${u.id}`}
-                    className="rowlink flex items-baseline justify-between gap-3 px-4 py-2.5"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-semibold">
-                        @{u.username}
-                      </span>
-                      <span className="block truncate text-[11px] text-app-muted">
-                        {u.fullName || "нэр оруулаагүй"}
-                      </span>
+        <Panel title="Шинэ бүртгэл" flush>
+          {o.latestUsers.length === 0 ? (
+            <p className="px-5 pb-5 text-sm text-app-muted">Бүртгэл алга.</p>
+          ) : (
+            <div className="divide-y divide-app-divider">
+              {o.latestUsers.map((u) => (
+                <Link
+                  key={u.id}
+                  href={`/admin/users/${u.id}`}
+                  className="rowlink flex items-baseline justify-between gap-3 px-5 py-3"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-semibold">
+                      @{u.username}
                     </span>
-                    <span className="shrink-0 text-[11px] text-app-muted">
-                      {u.createdAt ? ulaanbaatarDateTime(u.createdAt) : "—"}
+                    <span className="block truncate text-[11px] text-app-muted">
+                      {u.fullName || "нэр оруулаагүй"}
                     </span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </Panel>
-        </div>
+                  </span>
+                  <span className="shrink-0 text-[11px] text-app-muted">
+                    {u.createdAt ? ulaanbaatarDateTime(u.createdAt) : "—"}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Panel>
       </section>
     </div>
   );
@@ -242,7 +272,7 @@ export default async function AdminOverviewPage() {
 function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <th
-      className={`border-b border-app-divider px-4 pb-2.5 text-[10px] font-semibold tracking-[0.09em] text-app-muted uppercase ${
+      className={`border-b border-app-divider px-5 pb-3 text-[11px] font-medium text-app-muted ${
         right ? "text-right" : "text-left"
       }`}
     >
@@ -253,9 +283,7 @@ function Th({ children, right }: { children: React.ReactNode; right?: boolean })
 
 function Td({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
-    <td
-      className={`px-4 py-2.5 text-[13px] ${right ? "text-right tabular-nums" : "text-left"}`}
-    >
+    <td className={`px-5 py-3 text-[13px] ${right ? "text-right tabular-nums" : "text-left"}`}>
       {children}
     </td>
   );
@@ -278,7 +306,7 @@ function SidePill({ side }: { side: "BUY" | "SELL" }) {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-app-divider py-2 first:border-0 first:pt-0">
+    <div className="flex items-center justify-between gap-3 border-b border-app-divider py-2.5 last:border-0">
       <dt className="text-app-muted">{label}</dt>
       <dd className="font-semibold tabular-nums">{children}</dd>
     </div>
