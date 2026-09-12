@@ -1,11 +1,18 @@
 import type { Db } from "mongodb";
 import { getTokenFromCookieHeader, getUserByToken } from "@/lib/auth";
+import { isAdmin } from "@/lib/roles";
 
 /**
- * Settings used to sit behind its own password prompt on top of the app
- * login. That second gate is redundant now that `/settings` already lives
- * inside the `(app)` layout, which redirects anyone without a session to
- * `/login` — so being logged in is the only check left.
+ * Who may read and write the installation's settings.
+ *
+ * It began as a password prompt on top of the app login, then became "anyone
+ * signed in" once `/settings` moved inside the `(app)` layout — which was the
+ * right answer while every account belonged to the operator. It is not the
+ * right answer now that the app has readers: API keys, the Facebook cookie,
+ * the SMS sender and the push switch are the installation's, not theirs.
+ *
+ * Reads the cookie header rather than the request store because these are
+ * called from route handlers that already hold the header.
  */
 export async function isSettingsRequestAuthorized(
   db: Db,
@@ -13,5 +20,5 @@ export async function isSettingsRequestAuthorized(
 ): Promise<boolean> {
   const token = getTokenFromCookieHeader(cookieHeader);
   if (!token) return false;
-  return (await getUserByToken(db, token)) !== null;
+  return isAdmin(db, await getUserByToken(db, token));
 }

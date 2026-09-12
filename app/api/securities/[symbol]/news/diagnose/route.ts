@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAdminRequest } from "@/lib/roles";
 import { getSettings } from "@/lib/settings";
 import {
   companyMatchTerms,
@@ -33,9 +33,11 @@ export async function GET(
 ) {
   const { symbol } = await params;
   const db = await getDb();
-  if (!(await getCurrentUser(db))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Operator's information, not a reader's: it names the sources configured,
+  // which of them answered, and what each returned. Signed in used to be
+  // enough, back when every account was the operator's own.
+  const gate = await requireAdminRequest(db);
+  if (gate.error) return gate.error;
 
   const security = await db
     .collection<Security>("securities")

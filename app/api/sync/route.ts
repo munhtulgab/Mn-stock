@@ -5,18 +5,30 @@ import { checkSignalChangesAndNotify } from "@/lib/signalHistory";
 import { refreshDashboardSnapshot } from "@/lib/data";
 import { refreshMarketIndices } from "@/lib/indices";
 import { refreshMarketNews } from "@/lib/marketNews";
+import { isSettingsRequestAuthorized } from "@/lib/settingsAuth";
 
 export const maxDuration = 300;
 
-function isAuthorized(req: NextRequest): boolean {
+/**
+ * Two callers, one door.
+ *
+ * Vercel Cron sends the secret and nothing else; an administrator pressing
+ * the button on the admin overview sends a session cookie and nothing else.
+ * Before that button existed the secret was the only key, which meant a
+ * deployment with CRON_SECRET set — every real one — had no way to run a sync
+ * by hand at all.
+ */
+async function isAuthorized(req: NextRequest): Promise<boolean> {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return true; // no secret configured: open (local/dev use only)
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${secret}`;
+  if (secret && req.headers.get("authorization") === `Bearer ${secret}`) return true;
+  const db = await getDb();
+  if (await isSettingsRequestAuthorized(db, req.headers.get("cookie"))) return true;
+  // No secret configured: open (local/dev use only).
+  return !secret;
 }
 
 async function handle(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await isAuthorized(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
