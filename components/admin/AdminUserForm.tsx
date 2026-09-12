@@ -217,7 +217,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
             <button
               type="button"
               onClick={() => setConfirmingDelete(true)}
-              className="mt-2 flex items-center gap-1.5 rounded-xl border border-app-border px-3 py-2 text-sm font-semibold text-app-negative"
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-app-border px-3 py-2 text-sm font-semibold text-app-negative"
             >
               <TrashIcon size={15} /> Хэрэглэгчийг устгах
             </button>
