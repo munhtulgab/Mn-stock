@@ -4,6 +4,7 @@ import { getDb } from "@/lib/mongodb";
 import { fetchCompanyNews, type CompanyNewsItem } from "@/lib/mse/news";
 import {
   companyMatchTerms,
+  companySearchTerms,
   distinctiveNameWords,
   fetchNewsSources,
   matchHeadlines,
@@ -23,11 +24,13 @@ const CACHE_MS = 60 * 60 * 1000;
  * title alone (v3), and then gained tavanbogdcapital.com as an API-read
  * source (v4), then bloombergtv.mn, which is asked about the company by
  * name rather than filtered afterwards (v5), and then required a company
- * name to be a word rather than a run of letters inside one (v6). A row
- * cached under an older version is missing whatever the newer one would
- * have found — or carries what it should not have matched.
+ * name to be a word rather than a run of letters inside one (v6), and then
+ * let a listing name its subject and be searched for it, which is how a
+ * fund holding a metal finds the stories that move it (v7). A row cached
+ * under an older version is missing whatever the newer one would have found
+ * — or carries what it should not have matched.
  */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 interface NewsSnapshot {
   key: string;
@@ -95,7 +98,11 @@ async function build(
             // Sources with their own search are asked about the company
             // rather than filtered afterwards, which reaches stories older
             // than whatever their front page happens to list.
-            searchTerms: terms.filter((t): t is string => typeof t === "string"),
+            searchTerms: companySearchTerms(
+              security.symbol,
+              security.name,
+              distinctiveNameWords(names.map((n) => n.name)),
+            ),
           }),
           EXTERNAL_BUDGET_MS,
         )
