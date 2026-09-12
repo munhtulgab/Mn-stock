@@ -154,30 +154,35 @@ export async function getGoldPrices(db: Db): Promise<GoldPoint[]> {
   }
 }
 
-/** A plot row as this module needs to see it: dated, and open to a gold field. */
+/** A row this module can align against: dated, and in date order. */
 export interface DatedRow {
   date: string;
 }
 
 /**
- * The gold price against each bar of a price chart.
+ * Attach the latest value at or before each row's date.
  *
- * The bank quotes on working days and the chart may be drawn weekly or
- * monthly, so a bar takes the last price quoted on or before its own date
- * rather than looking for an exact match — a monthly bar dated the 30th
- * would otherwise find nothing whenever the 30th was a Sunday.
+ * Used in both directions. When the chart's spine is the security, the metal
+ * is joined onto it; when the spine is the metal — which it is in the gold
+ * view, because seventeen years of it is the point — the security's own
+ * closes are joined onto that instead.
  *
- * Both sides are in date order, so this walks them once instead of searching
- * two and a half thousand points per bar. Bars before the series begins are
- * left without a price rather than given the oldest one: the chart connects
- * across a gap, and inventing a flat decade of gold at the left edge would
- * be a line saying something that never happened.
+ * At or before, rather than an exact match: the two calendars do not line up.
+ * The bank quotes on days the exchange is shut, the exchange trades on days
+ * the bank has not published, and a weekly or monthly bar carries one date
+ * for five or twenty of them.
+ *
+ * Rows before the other series begins are left without a value rather than
+ * given its oldest one. Gold started in 2009 and ALTT listed in 2026; a fund
+ * price carried back seventeen years would be a line saying something that
+ * never happened.
  */
-export function withGold<T extends DatedRow>(
+export function alignByDate<T extends DatedRow, K extends string>(
   rows: T[],
-  points: GoldPoint[] | null,
-): (T & { gold?: number })[] {
-  if (!points || points.length === 0) return rows;
+  points: { date: string; price: number }[] | null,
+  key: K,
+): (T & Partial<Record<K, number>>)[] {
+  if (!points || points.length === 0) return rows as (T & Partial<Record<K, number>>)[];
 
   let i = 0;
   let latest: number | undefined;
@@ -186,6 +191,8 @@ export function withGold<T extends DatedRow>(
       latest = points[i].price;
       i++;
     }
-    return latest === undefined ? row : { ...row, gold: latest };
+    return latest === undefined
+      ? (row as T & Partial<Record<K, number>>)
+      : ({ ...row, [key]: latest } as T & Partial<Record<K, number>>);
   });
 }

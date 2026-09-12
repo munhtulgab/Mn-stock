@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseGoldRows, withGold } from "./gold";
+import { alignByDate, parseGoldRows } from "./gold";
 
 /** A page of the bank's answer, shaped as it really comes back. */
 const PAYLOAD = {
@@ -75,12 +75,13 @@ const POINTS = [
   { date: "2026-09-11", price: 120 },
 ];
 
-test("a bar takes the last price quoted on or before its own day", () => {
+test("a bar takes the last value quoted on or before its own day", () => {
   // The 9th and 10th are unquoted; the 12th is a Saturday the bank skipped.
   assert.deepEqual(
-    withGold(
+    alignByDate(
       [{ date: "2026-09-08" }, { date: "2026-09-10" }, { date: "2026-09-12" }],
       POINTS,
+      "gold",
     ),
     [
       { date: "2026-09-08", gold: 110 },
@@ -90,17 +91,30 @@ test("a bar takes the last price quoted on or before its own day", () => {
   );
 });
 
-test("bars before the series begins are left without one", () => {
-  assert.deepEqual(withGold([{ date: "2026-09-01" }, { date: "2026-09-07" }], POINTS), [
-    { date: "2026-09-01" },
-    { date: "2026-09-07", gold: 100 },
-  ]);
+test("rows before the other series begins are left without one", () => {
+  assert.deepEqual(
+    alignByDate([{ date: "2026-09-01" }, { date: "2026-09-07" }], POINTS, "gold"),
+    [{ date: "2026-09-01" }, { date: "2026-09-07", gold: 100 }],
+  );
+});
+
+test("it joins the other way too, which is the gold view", () => {
+  // The metal is the spine and the fund, listed late, is attached to it.
+  const spine = [{ date: "2009-01-02" }, { date: "2026-05-14" }, { date: "2026-09-11" }];
+  assert.deepEqual(
+    alignByDate(spine, [{ date: "2026-05-14", price: 5000 }], "close"),
+    [
+      { date: "2009-01-02" },
+      { date: "2026-05-14", close: 5000 },
+      { date: "2026-09-11", close: 5000 },
+    ],
+  );
 });
 
 test("no series means the rows are handed back untouched", () => {
   const rows = [{ date: "2026-09-08", close: 5 }];
-  assert.equal(withGold(rows, null), rows);
-  assert.equal(withGold(rows, []), rows);
+  assert.equal(alignByDate(rows, null, "gold"), rows);
+  assert.equal(alignByDate(rows, [], "gold"), rows);
 });
 
 test("the walk is monotonic, so a long chart is one pass", () => {
@@ -108,6 +122,5 @@ test("the walk is monotonic, so a long chart is one pass", () => {
     date: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
     price: i,
   }));
-  const rows = [{ date: "2026-01-28" }];
-  assert.equal(withGold(rows, points)[0].gold, 499);
+  assert.equal(alignByDate([{ date: "2026-01-28" }], points, "gold")[0].gold, 499);
 });

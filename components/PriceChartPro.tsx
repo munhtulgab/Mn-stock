@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   Bar,
@@ -16,7 +16,8 @@ import {
 } from "recharts";
 import { aggregate, type Candle, type Timeframe } from "@/lib/analysis/series";
 import { buildPlotRows, type PlotRow } from "@/lib/analysis/plot";
-import { withGold, type GoldPoint } from "@/lib/gold";
+import { alignByDate, type GoldPoint } from "@/lib/gold";
+import { goldCandles } from "@/lib/analysis/goldBasis";
 
 /**
  * The price, drawn as candles or as a line, with the whole technical
@@ -101,6 +102,9 @@ const RANGES: { label: string; days: number | null; timeframe: Timeframe }[] = [
 
 /** Opens on five years: long enough to show a cycle, short enough to read. */
 const DEFAULT_RANGE = RANGES.findIndex((r) => r.label === "5 жил");
+
+/** Everything there is, which is what the gold view opens on. */
+const WHOLE_HISTORY = RANGES.findIndex((r) => r.days === null);
 
 const INTERVAL_LABELS: Record<Timeframe, string> = {
   "1D": "өдрийн",
@@ -425,6 +429,28 @@ export default function PriceChartPro({
 
   const range = RANGES[rangeIndex];
 
+  /**
+   * Picking Алт opens the whole of the metal's history, and leaving it puts
+   * the range back where it was.
+   *
+   * The point of the view is seventeen years; opening it on the five the
+   * chart defaults to shows a third of the series and hides the years that
+   * make it worth looking at. The range the reader had chosen for the listing
+   * is theirs, though, so it is given back rather than left on "all time"
+   * when they switch away.
+   */
+  const beforeGold = useRef<number | null>(null);
+  function pickType(next: ChartType) {
+    if (next === "gold" && type !== "gold") {
+      beforeGold.current = rangeIndex;
+      setRangeIndex(WHOLE_HISTORY);
+    } else if (next !== "gold" && type === "gold" && beforeGold.current !== null) {
+      setRangeIndex(beforeGold.current);
+      beforeGold.current = null;
+    }
+    setType(next);
+  }
+
   // The page is sent with twelve years, which is what the scorecards need.
   // "Бүх цаг үе" means more than that for anything listed longer ago, so the
   // rest is fetched the first time that range is picked — and kept, so
@@ -469,10 +495,21 @@ export default function PriceChartPro({
     // Whichever is longer. The stored series ends at the last close, while
     // the page's own candles may carry today's live bar on the end, so the
     // two are joined rather than swapped.
-    const source =
+    const own =
       range.days === null && everything
         ? [...everything, ...candles.filter((c) => c.date > (everything.at(-1)?.date ?? ""))]
         : candles;
+
+    // In the gold view the metal is the chart, and the listing is drawn on
+    // it. That is the whole reason for the view: ALTT has traded since May
+    // 2026 and gold has been quoted since January 2009, and a chart of the
+    // metal that begins where the fund listed shows three months of a
+    // seventeen-year series. So the spine — the dates, the range chips, the
+    // bar interval, the averages laid over it — is gold's, and the fund's
+    // own closes are attached to it where they exist.
+    const onGold = type === "gold" && gold !== null && gold.length > 0;
+    const source = onGold ? goldCandles(gold) : own;
+
     let windowed = source;
     if (range.days !== null) {
       const from = new Date();
@@ -494,9 +531,27 @@ export default function PriceChartPro({
 
     // Indicators are computed on the interval being drawn, so a weekly chart
     // shows weekly averages — the same figures the scorecard reports when it
-    // is set to the same interval.
-    return { rows: buildPlotRows(bars), timeframe: chosen };
-  }, [candles, everything, range]);
+    // is set to the same interval. On the gold spine they are the metal's,
+    // which is what the panels under this chart report too.
+    const plot = buildPlotRows(bars);
+    if (!onGold) return { rows: plot, timeframe: chosen };
+
+    // `close` is the spine's, so on the gold spine it is the metal's. It
+    // moves to `gold`, and `close` is emptied before the listing's own is
+    // joined on — left in place it would still hold the metal's price for
+    // every bar before the fund existed, and the fund's line would be drawn
+    // over seventeen years of gold pretending to be ALTT.
+    const spine = plot.map(({ close, ...rest }) => ({ ...rest, gold: close }));
+    const withFund = alignByDate(
+      spine,
+      own.map((c) => ({ date: c.date, price: c.close })),
+      "close",
+    );
+    // The rows carry every field a pane reads; `close` is the one that may be
+    // absent, and recharts draws a gap where a key is missing — which is what
+    // a fund that had not listed yet should look like.
+    return { rows: withFund as unknown as PlotRow[], timeframe: chosen };
+  }, [candles, everything, range, type, gold]);
 
   const toggle = <T extends string>(list: T[], key: T, set: (next: T[]) => void) =>
     set(list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
@@ -505,7 +560,7 @@ export default function PriceChartPro({
     return <p className="text-xs text-app-muted">Арилжааны түүх алга.</p>;
   }
 
-  const priceRows = withGold(rows, type === "gold" ? gold : null);
+  const priceRows = rows;
 
   return (
     <div>
@@ -517,7 +572,7 @@ export default function PriceChartPro({
             <Chip
               key={option.key}
               active={option.key === type}
-              onClick={() => setType(option.key)}
+              onClick={() => pickType(option.key)}
             >
               {option.label}
             </Chip>
