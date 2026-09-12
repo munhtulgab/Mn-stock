@@ -124,9 +124,9 @@ export function ChevronRightIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-export function EyeIcon({ off }: { off?: boolean }) {
+export function EyeIcon({ off, size = 18 }: { off?: boolean; size?: number }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <path
         d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
         stroke="currentColor"

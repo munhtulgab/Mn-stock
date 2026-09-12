@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "./Toast";
-import { CloseIcon, EditIcon, SaveIcon, PhoneIcon, MailIcon } from "./icons";
+import { CloseIcon, EditIcon, EyeIcon, SaveIcon, PhoneIcon, MailIcon } from "./icons";
 
 function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
@@ -114,16 +114,38 @@ export default function ProfileForm({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ fullName, email, phone });
+  const [form, setForm] = useState({ username, fullName, email, phone });
+  /**
+   * The credentials, kept apart from the rest of the form.
+   *
+   * They are not saved unless they are touched: an empty new password means
+   * the password is not being changed, and the current one is asked for only
+   * where something that decides how the account is signed into has moved.
+   */
+  const [creds, setCreds] = useState({ current: "", next: "", again: "" });
+  const [showPasswords, setShowPasswords] = useState(false);
   const [picture, setPicture] = useState(avatar);
   const [uploading, setUploading] = useState(false);
 
   const displayName = fullName || username;
 
+  const renaming = form.username.trim() !== username;
+  const rekeying = creds.next !== "";
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!form.fullName.trim()) {
       setError("Нэрээ оруулна уу");
+      return;
+    }
+    // Checked here as well as on the server, which cannot see the second box
+    // at all: the two together are the reader saying what they meant.
+    if (rekeying && creds.next !== creds.again) {
+      setError("Шинэ нууц үг хоёр талдаа таарахгүй байна");
+      return;
+    }
+    if ((renaming || rekeying) && !creds.current) {
+      setError("Одоогийн нууц үгээ оруулна уу");
       return;
     }
     setSaving(true);
@@ -132,7 +154,13 @@ export default function ProfileForm({
       const res = await fetch("/api/auth/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, avatar: picture }),
+        body: JSON.stringify({
+          ...form,
+          avatar: picture,
+          ...(renaming || rekeying
+            ? { currentPassword: creds.current, newPassword: creds.next }
+            : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -141,8 +169,13 @@ export default function ProfileForm({
         toast({ variant: "error", title: "Хадгалж чадсангүй", body: message });
         return;
       }
+      setCreds({ current: "", next: "", again: "" });
       setEditing(false);
-      toast({ variant: "success", title: "Профайл хадгалагдлаа" });
+      toast({
+        variant: "success",
+        title: rekeying ? "Нууц үг солигдлоо" : "Профайл хадгалагдлаа",
+        body: rekeying ? "Бусад төхөөрөмж дээрх нэвтрэлт цуцлагдлаа." : undefined,
+      });
       router.refresh();
     } finally {
       setSaving(false);
@@ -197,6 +230,21 @@ export default function ProfileForm({
           </div>
         </div>
         <div className="space-y-2.5">
+          {/* The name the account is signed into, so it sits above the rest
+              rather than among the details. The @ is drawn beside the box
+              rather than typed into it — it is punctuation, not a character
+              of the name, and a reader who types it would be renamed to
+              "@thing". */}
+          <label className="flex items-center gap-2 rounded-xl border border-app-border bg-app-bg px-4 focus-within:border-brand">
+            <span className="text-sm text-app-muted">@</span>
+            <input
+              value={form.username}
+              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              placeholder="Хэрэглэгчийн нэр"
+              autoComplete="username"
+              className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-app-text outline-none"
+            />
+          </label>
           <input
             value={form.fullName}
             onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
@@ -216,12 +264,64 @@ export default function ProfileForm({
             className="w-full rounded-xl border border-app-border bg-app-bg px-4 py-2.5 text-sm text-app-text outline-none focus:border-brand"
           />
         </div>
+        {/* Left blank, nothing here is saved: the password only changes when
+            a new one is typed. The current one is asked for the moment
+            either credential moves — see the route. */}
+        <div className="space-y-2.5 rounded-xl border border-app-border/70 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-app-text">Нууц үг солих</span>
+            <button
+              type="button"
+              onClick={() => setShowPasswords((v) => !v)}
+              aria-label={showPasswords ? "Нууц үгийг нуух" : "Нууц үгийг харуулах"}
+              className="text-app-muted"
+            >
+              <EyeIcon off={showPasswords} />
+            </button>
+          </div>
+          <input
+            type={showPasswords ? "text" : "password"}
+            value={creds.next}
+            onChange={(e) => setCreds((c) => ({ ...c, next: e.target.value }))}
+            placeholder="Шинэ нууц үг"
+            autoComplete="new-password"
+            className="w-full rounded-xl border border-app-border bg-app-bg px-4 py-2.5 text-sm text-app-text outline-none focus:border-brand"
+          />
+          {rekeying && (
+            <input
+              type={showPasswords ? "text" : "password"}
+              value={creds.again}
+              onChange={(e) => setCreds((c) => ({ ...c, again: e.target.value }))}
+              placeholder="Шинэ нууц үгээ давтах"
+              autoComplete="new-password"
+              className="w-full rounded-xl border border-app-border bg-app-bg px-4 py-2.5 text-sm text-app-text outline-none focus:border-brand"
+            />
+          )}
+          {(renaming || rekeying) && (
+            <input
+              type={showPasswords ? "text" : "password"}
+              value={creds.current}
+              onChange={(e) => setCreds((c) => ({ ...c, current: e.target.value }))}
+              placeholder="Одоогийн нууц үг"
+              autoComplete="current-password"
+              className="w-full rounded-xl border border-app-border bg-app-bg px-4 py-2.5 text-sm text-app-text outline-none focus:border-brand"
+            />
+          )}
+          <p className="text-[11px] text-app-muted">
+            {renaming && !rekeying
+              ? "Хэрэглэгчийн нэрээ солихын тулд одоогийн нууц үгээ баталгаажуулна уу."
+              : rekeying
+                ? "Хадгалснаар бусад төхөөрөмж дээрх нэвтрэлт цуцлагдана."
+                : "Хоосон орхивол нууц үг хэвээр үлдэнэ."}
+          </p>
+        </div>
         {error && <p className="text-xs text-app-negative">{error}</p>}
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => {
-              setForm({ fullName, email, phone });
+              setForm({ username, fullName, email, phone });
+              setCreds({ current: "", next: "", again: "" });
               setError(null);
               setEditing(false);
             }}

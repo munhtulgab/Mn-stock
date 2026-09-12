@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { getCurrentUser, toSafeUser } from "@/lib/auth";
-import type { User } from "@/lib/types";
+import {
+  getCurrentUser,
+  getTokenFromCookieHeader,
+  hashPassword,
+  toSafeUser,
+  usernameFilter,
+  verifyPassword,
+} from "@/lib/auth";
+import type { Session, User } from "@/lib/types";
+
+/** The same floors signup holds new accounts to; see its route. */
+const MIN_USERNAME = 3;
+const MIN_PASSWORD = 4;
 
 export async function PATCH(req: NextRequest) {
   const db = await getDb();
@@ -15,6 +26,51 @@ export async function PATCH(req: NextRequest) {
   const email = typeof body.email === "string" ? body.email.trim() : undefined;
   const phone = typeof body.phone === "string" ? body.phone.trim() : undefined;
   const avatar = typeof body.avatar === "string" ? body.avatar.trim() : undefined;
+  const username = typeof body.username === "string" ? body.username.trim() : undefined;
+  const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+  const currentPassword =
+    typeof body.currentPassword === "string" ? body.currentPassword : "";
+
+  // The two that change how the account is signed into. Both are proved with
+  // the password already on the account: a session left open on a borrowed
+  // phone should not be enough to take the account over, which is what
+  // changing the name to log in under and the password to log in with is.
+  const renaming = username !== undefined && username !== user.username;
+  const rekeying = newPassword !== "";
+
+  if (renaming && username.length < MIN_USERNAME) {
+    return NextResponse.json(
+      { error: `Хэрэглэгчийн нэр дор хаяж ${MIN_USERNAME} тэмдэгт байна` },
+      { status: 400 },
+    );
+  }
+  if (rekeying && newPassword.length < MIN_PASSWORD) {
+    return NextResponse.json(
+      { error: `Нууц үг дор хаяж ${MIN_PASSWORD} тэмдэгт байна` },
+      { status: 400 },
+    );
+  }
+  if (renaming || rekeying) {
+    if (!verifyPassword(currentPassword, user.passwordHash, user.passwordSalt)) {
+      return NextResponse.json(
+        { error: "Одоогийн нууц үг буруу байна" },
+        { status: 403 },
+      );
+    }
+  }
+  if (renaming) {
+    // Case-insensitively, the way signing in matches it — and excluding this
+    // account, so changing the capitalisation of your own name is allowed.
+    const taken = await db
+      .collection<User>("users")
+      .findOne({ ...usernameFilter(username), _id: { $ne: user._id } } as never);
+    if (taken) {
+      return NextResponse.json(
+        { error: "Энэ хэрэглэгчийн нэр аль хэдийн бүртгэгдсэн байна" },
+        { status: 409 },
+      );
+    }
+  }
 
   // Sent as a data URL, so its size is the request's size. The picture is
   // shrunk to 256px before it leaves the browser; anything much larger than
@@ -42,6 +98,12 @@ export async function PATCH(req: NextRequest) {
     ["avatar", avatar],
   ];
   const toSet: Record<string, string> = {};
+  if (renaming) toSet.username = username;
+  if (rekeying) {
+    const { hash, salt } = hashPassword(newPassword);
+    toSet.passwordHash = hash;
+    toSet.passwordSalt = salt;
+  }
   const toUnset: Record<string, ""> = {};
   for (const [key, value] of fields) {
     if (value === undefined) continue;
@@ -54,6 +116,16 @@ export async function PATCH(req: NextRequest) {
       ...(Object.keys(toSet).length > 0 && { $set: toSet }),
       ...(Object.keys(toUnset).length > 0 && { $unset: toUnset }),
     });
+  }
+
+  // A new password ends every other session. The one making the change keeps
+  // its own — being signed out of the page you just used to change it is a
+  // way of asking whether it worked.
+  if (rekeying) {
+    const token = getTokenFromCookieHeader(req.headers.get("cookie"));
+    await db
+      .collection<Session>("sessions")
+      .deleteMany({ userId: user._id, ...(token ? { token: { $ne: token } } : {}) } as never);
   }
 
   const updated = await db.collection<User>("users").findOne({ _id: user._id } as never);
