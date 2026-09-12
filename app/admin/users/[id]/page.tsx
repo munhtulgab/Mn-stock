@@ -66,7 +66,7 @@ export default async function AdminUserPage({
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-app-text">
-          Байрлал <span className="font-normal text-app-muted">({user.holdings.length})</span>
+          Хувьцаа <span className="font-normal text-app-muted">({user.holdings.length})</span>
         </h2>
         {user.holdings.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-muted">
@@ -96,7 +96,7 @@ export default async function AdminUserPage({
           <span className="font-normal text-app-muted">({user.orders.length})</span>
         </h2>
         <p className="text-xs text-app-muted">
-          Засах, буцаах, устгах бүр мөнгөн үлдэгдэл болон хувьцааны байрлалыг зөрүүгээр нь
+          Засах, буцаах, устгах бүр мөнгөн үлдэгдэл болон хувьцааны тоог зөрүүгээр нь
           хамт хөдөлгөнө.
         </p>
         <AdminOrderRows userId={user.id} orders={user.orders} />

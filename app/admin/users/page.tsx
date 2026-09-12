@@ -95,7 +95,7 @@ export default async function AdminUsersPage({
                     <Num value={u.cash} digits={0} suffix="₮" />
                   </span>
                   <span className="block text-xs text-app-muted">
-                    {u.orderCount} захиалга · {u.positionCount} байрлал
+                    {u.orderCount} захиалга · {u.positionCount} хувьцаа
                   </span>
                 </span>
               </Link>
