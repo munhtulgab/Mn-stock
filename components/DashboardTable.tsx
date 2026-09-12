@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { DashboardRow } from "@/lib/data";
+import { byLatestThenScore } from "@/lib/marketOrder";
 import SignalBadge from "./SignalBadge";
 import Sparkline from "./Sparkline";
 import StockAvatar from "./StockAvatar";
@@ -17,16 +18,11 @@ const FILTER_ICONS: Record<string, React.ReactNode> = {
   HOLD: <rect x="1.5" y="5" width="9" height="2" rx="1" />,
 };
 
-type SortKey = "symbol" | "lastPrice" | "changePct" | "score";
-
 export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
   const [query, setQuery] = useState("");
   const [signalFilter, setSignalFilter] = useState<"ALL" | DashboardRow["signal"]>(
     "ALL",
   );
-  const [sortKey] = useState<SortKey>("score");
-  const [sortDir] = useState<1 | -1>(-1);
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let result = rows.filter(
@@ -36,19 +32,12 @@ export default function DashboardTable({ rows }: { rows: DashboardRow[] }) {
     if (signalFilter !== "ALL") {
       result = result.filter((r) => r.signal === signalFilter);
     }
-    result = [...result].sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
-      if (av === null && bv === null) return 0;
-      if (av === null) return 1;
-      if (bv === null) return -1;
-      if (typeof av === "string" || typeof bv === "string") {
-        return sortDir * String(av).localeCompare(String(bv));
-      }
-      return sortDir * ((av as number) - (bv as number));
-    });
-    return result;
-  }, [rows, query, signalFilter, sortKey, sortDir]);
+    // The latest session first, best score within it — see byLatestThenScore
+    // for why the date leads. There is no control for this: the state that
+    // used to hold a sort key and a direction had no setter and never held
+    // anything but the score.
+    return [...result].sort(byLatestThenScore);
+  }, [rows, query, signalFilter]);
 
   // Computed here rather than imported from lib/data: that module reaches
   // into MongoDB, and this component ships to the browser.
