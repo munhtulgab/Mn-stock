@@ -1,8 +1,10 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
+import * as cheerio from "cheerio";
 import {
   companyMatchTerms,
   companySearchTerms,
+  extractHeadlines,
   matchHeadlines,
   type NewsSourceResult,
 } from "./newsSources";
@@ -106,4 +108,91 @@ test("a fund is searched for its subject before its name", () => {
 test("a company is searched for its own name and nothing else", () => {
   const search = companySearchTerms("APU", "АПУ ХК");
   assert.deepEqual(search, ["APU", "АПУ", "АПУ ХК"]);
+});
+
+/**
+ * Dating a scraped listing.
+ *
+ * The market page drops a story it cannot date, so a listing whose dates the
+ * scraper cannot see is a publisher that never appears — which is what every
+ * HTML source on the installation was.
+ */
+function dated(html: string, base = "https://example.mn"): (string | undefined)[] {
+  return extractHeadlines(cheerio.load(html), base).map((h) => h.date);
+}
+
+test("a date in the link's own text is kept, not just used and dropped", () => {
+  assert.deepEqual(
+    dated('<a href="/a/1">2026-09-12 Хувьцааны арилжаа идэвхжлээ</a>'),
+    ["2026-09-12"],
+  );
+});
+
+test("a date printed beside the headline is found on the card", () => {
+  assert.deepEqual(
+    dated(`<div class="card">
+             <a href="/a/1">Хөрөнгийн зах зээлийн долоо хоногийн тойм</a>
+             <span class="date">2026.09.11</span>
+           </div>`),
+    ["2026-09-11"],
+  );
+});
+
+test("a <time> element counts, by its machine value", () => {
+  assert.deepEqual(
+    dated(`<article><a href="/a/1">Банкны салбарын ашиг өслөө</a>
+           <time datetime="2026-09-10T08:00:00+08:00">өнөөдөр</time></article>`),
+    ["2026-09-10"],
+  );
+});
+
+test("the long Mongolian form on the card is read", () => {
+  assert.deepEqual(
+    dated(`<li><a href="/mn/read/409596">Монголбанк бодлогын хүүгээ хэвээр үлдээлээ</a>
+           <p>Улаанбаатар, 2026 оны есдүгээр сарын 7 /МОНЦАМЭ/.</p></li>`),
+    ["2026-09-07"],
+  );
+});
+
+test("a date hidden in the thumbnail's address is still a date", () => {
+  // unuudur.mn prints nothing on the card and paths its uploads by the day.
+  assert.deepEqual(
+    dated(`<div class="feature-top">
+             <img src="//cdn.example.org/image/2026/09/11/x/1.jpg">
+             <a href="/as/economy/100007">Биржийн арилжаа өнгөрсөн долоо хоногт</a>
+           </div>`),
+    ["2026-09-11"],
+  );
+});
+
+test("a listing that states nothing anywhere leaves the story undated", () => {
+  assert.deepEqual(
+    dated('<div><a href="/i/9683">Өнөөдрийн вакцин ирээдүйн хамгаалалт</a></div>'),
+    [undefined],
+  );
+});
+
+test("the story next door's date is not borrowed", () => {
+  // Two cards side by side: the walk stops before it reaches the list.
+  const html = `<ul>
+    <li><a href="/a/1">Хөрөнгийн биржийн арилжаа тогтвортой байна</a></li>
+    <li><a href="/a/2">Ногдол ашгийн хуваарилалт эхэллээ</a><span>2026-09-11</span></li>
+  </ul>`;
+  assert.deepEqual(dated(html), [undefined, "2026-09-11"]);
+});
+
+test("a listing's age caption is not part of the headline", () => {
+  const [one] = extractHeadlines(
+    cheerio.load('<a href="/a/1">ОРХОН: Молибдены баяжмалын анхны арилжааг биржээр хийлээ 1 өдөр</a>'),
+    "https://example.mn",
+  );
+  assert.equal(one.title, "ОРХОН: Молибдены баяжмалын анхны арилжааг биржээр хийлээ");
+});
+
+test("a number that belongs to the story is left alone", () => {
+  const [one] = extractHeadlines(
+    cheerio.load('<a href="/a/1">Засгийн газар 226.2 тэрбум төгрөгийн бонд гаргалаа</a>'),
+    "https://example.mn",
+  );
+  assert.equal(one.title, "Засгийн газар 226.2 тэрбум төгрөгийн бонд гаргалаа");
 });
