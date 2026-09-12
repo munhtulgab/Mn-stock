@@ -32,13 +32,35 @@ const USER_AGENT =
 
 const TIMEOUT_MS = 20_000;
 
-/** How much history to ask for. The chart's longest range is ten years. */
-const YEARS = 10;
+/**
+ * How far back to ask.
+ *
+ * The bank's series begins on 2 January 2009 at 35,282.84₮ a gram, and all
+ * of it is worth having: ten years covered the chart's longest range but
+ * not the analysis, which wants as long a run of daily returns as exists
+ * before it says anything about drawdown or a two-hundred-day average.
+ */
+const SINCE = "2009-01-01";
 
 /** How long a stored copy stands before it is worth asking again. */
 const STALE_MS = 6 * 60 * 60 * 1000;
 
 const SNAPSHOT_KEY = "mongolbank-gold";
+
+/**
+ * Listings whose price is the metal rather than a business.
+ *
+ * Keyed by symbol like the news subjects in `lib/mse/newsSources`, and for
+ * the same reason: nothing in "Гоулд Траст Хамтын биржээр арилжаалагддаг
+ * хөрөнгө оруулалтын сан" says gold, so there is nothing to infer it from.
+ * One entry today; a second gold fund would be one line.
+ */
+const TRACKS_GOLD = new Set(["ALTT"]);
+
+/** True where the analysis should be read off the metal, not the listing. */
+export function tracksGold(symbol: string): boolean {
+  return TRACKS_GOLD.has(symbol.toUpperCase());
+}
 
 export interface GoldPoint {
   /** `YYYY-MM-DD`. */
@@ -81,14 +103,11 @@ export function parseGoldRows(payload: unknown): GoldPoint[] {
   return [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** Ten years of the bank's buying price, straight from the source. */
-export async function fetchGoldPrices(years = YEARS): Promise<GoldPoint[]> {
-  const end = new Date();
-  const start = new Date(end);
-  start.setUTCFullYear(start.getUTCFullYear() - years);
+/** Every day the bank has published, straight from the source. */
+export async function fetchGoldPrices(since = SINCE): Promise<GoldPoint[]> {
   const query = new URLSearchParams({
-    startDate: start.toISOString().slice(0, 10),
-    endDate: end.toISOString().slice(0, 10),
+    startDate: since,
+    endDate: new Date().toISOString().slice(0, 10),
   });
 
   const res = await fetch(`${ENDPOINT}?${query}`, {

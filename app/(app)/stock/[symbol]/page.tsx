@@ -26,6 +26,7 @@ import MetricInfo, { type MetricTerm } from "@/components/MetricInfo";
 import TechnicalScorecard from "@/components/TechnicalScorecard";
 import FundamentalPanel from "@/components/FundamentalPanel";
 import RiskPanel from "@/components/RiskPanel";
+import GoldFundamentals from "@/components/GoldFundamentals";
 import ReturnDistribution from "@/components/ReturnDistribution";
 import YearPanel from "@/components/YearPanel";
 import DividendNotices from "@/components/DividendNotices";
@@ -403,21 +404,37 @@ export default async function StockDetailPage({
           beside them instead of under them. */}
       {analysis && (
         <>
+          {/* Read off the metal for a listing that is the metal. A fund
+              three months old has no history to score and no accounts to
+              rate, while what it holds has seventeen years of daily prices —
+              so the panels take those, and each says so rather than letting
+              the figures pass as the fund's own. */}
           <div className="md:order-5 md:col-span-3">
-            <TechnicalScorecard scorecards={analysis.scorecards} />
+            <TechnicalScorecard
+              scorecards={analysis.goldBasis?.scorecards ?? analysis.scorecards}
+              basis={
+                analysis.goldBasis
+                  ? `Монголбанкны алт авах ханшаар (${analysis.goldBasis.from} – ${analysis.goldBasis.to}). Сан өөрөө ${analysis.candles.length} өдөр л арилжаалагдсан тул уншихад хүрэлцэхгүй.`
+                  : undefined
+              }
+            />
           </div>
 
           <div className="md:order-6 md:col-span-2">
-            <FundamentalPanel
-              ratios={analysis.ratios}
-              period={analysis.period}
-              sectorLabel={analysis.sectorLabel}
-              peerCount={analysis.peerCount}
-              price={currentPrice}
-              weekHigh52={recommendation.indicators.weekHigh52}
-              weekLow52={recommendation.indicators.weekLow52}
-              comparedToMarket={analysis.comparedToMarket}
-            />
+            {analysis.goldBasis ? (
+              <GoldFundamentals basis={analysis.goldBasis} />
+            ) : (
+              <FundamentalPanel
+                ratios={analysis.ratios}
+                period={analysis.period}
+                sectorLabel={analysis.sectorLabel}
+                peerCount={analysis.peerCount}
+                price={currentPrice}
+                weekHigh52={recommendation.indicators.weekHigh52}
+                weekLow52={recommendation.indicators.weekLow52}
+                comparedToMarket={analysis.comparedToMarket}
+              />
+            )}
           </div>
 
           <div className="md:order-7 md:self-start">
@@ -451,7 +468,11 @@ export default async function StockDetailPage({
             {analysis.profile && (
               <YearPanel profile={analysis.profile} price={currentPrice} />
             )}
-            <RiskPanel risk={analysis.risk} years={analysis.riskYears} />
+            <RiskPanel
+              risk={analysis.goldBasis?.risk ?? analysis.risk}
+              years={analysis.goldBasis?.riskYears ?? analysis.riskYears}
+              basis={analysis.goldBasis ? "Алтны ханшаар" : undefined}
+            />
           </div>
 
           {/* Directly under the risk figures, which state a spread where this

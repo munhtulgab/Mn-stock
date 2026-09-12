@@ -65,7 +65,10 @@ function Row({ reading }: { reading: Reading }) {
 
 export default function TechnicalScorecard({
   scorecards,
+  basis,
 }: {
+  /** Named where the readings are not this listing's own price. */
+  basis?: string;
   scorecards: Record<Timeframe, Scorecard>;
 }) {
   // Opens on the monthly reading. A daily scorecard on this market is mostly
@@ -79,7 +82,7 @@ export default function TechnicalScorecard({
 
   return (
     <div className="rounded-2xl border border-app-border bg-app-card p-4">
-      <div className="flex items-center justify-between gap-2 mb-3">
+      <div className="flex items-center justify-between gap-2 mb-1">
         <h2 className="text-sm font-semibold text-app-text">Техник шинжилгээ</h2>
         <div className="flex items-center gap-1 shrink-0">
           {TIMEFRAMES.map(({ key, label }) => (
@@ -97,6 +100,13 @@ export default function TechnicalScorecard({
           ))}
         </div>
       </div>
+
+      {/* Whose numbers these are, where they are not this listing's own. */}
+      {basis ? (
+        <p className="mb-3 text-[10px] text-app-muted">{basis}</p>
+      ) : (
+        <div className="mb-2" />
+      )}
 
       {total === 0 ? (
         <p className="text-xs text-app-muted">
