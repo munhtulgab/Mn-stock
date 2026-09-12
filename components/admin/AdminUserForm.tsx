@@ -126,14 +126,11 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
   return (
     <form
       onSubmit={submit}
-      className="lift space-y-4 rounded-2xl border border-app-border bg-app-card p-4"
+      className="space-y-4 rounded-2xl border border-app-border bg-app-card p-5"
     >
-      <div className="flex items-baseline gap-2.5">
-        <span className="text-[10px] font-semibold tracking-[0.11em] text-app-muted uppercase">
-          Бүртгэл
-        </span>
-        <h2 className="text-[15px] font-semibold text-app-text">Мэдээлэл</h2>
-      </div>
+      <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-app-text">
+        Бүртгэлийн мэдээлэл
+      </h2>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-xs text-app-muted">
           Хэрэглэгчийн нэр

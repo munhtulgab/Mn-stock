@@ -76,12 +76,11 @@ export default async function AdminUserPage({
           <AdminUserForm user={user} />
 
           <Panel
-            eyebrow="Түүх"
-            title="Захиалга"
+            title="Захиалгын түүх"
             note={`${user.orders.length} бичлэг`}
             flush
           >
-            <p className="px-4 pb-3 text-xs text-app-muted">
+            <p className="px-5 pb-4 text-[13px] text-app-muted">
               Засах, буцаах, устгах бүр мөнгөн үлдэгдэл болон хувьцааны тоог зөрүүгээр нь
               хамт хөдөлгөнө.
             </p>
@@ -90,7 +89,7 @@ export default async function AdminUserPage({
         </div>
 
         <div className="grid gap-3">
-          <Panel eyebrow="Данс" title="Хураангуй">
+          <Panel title="Дансны хураангуй">
             <dl className="text-sm">
               <Row label="Мөнгөн үлдэгдэл">
                 <Num value={user.cash} digits={0} suffix="₮" />
@@ -102,19 +101,18 @@ export default async function AdminUserPage({
           </Panel>
 
           <Panel
-            eyebrow="Эзэмшил"
-            title="Хувьцаа"
+            title="Эзэмшиж буй хувьцаа"
             note={`${user.holdings.length}`}
             flush
           >
             {user.holdings.length === 0 ? (
-              <p className="px-4 pb-4 text-sm text-app-muted">
+              <p className="px-5 pb-5 text-sm text-app-muted">
                 Хувьцаа эзэмшээгүй байна.
               </p>
             ) : (
               <div className="divide-y divide-app-divider">
                 {user.holdings.map((h) => (
-                  <div key={h.companyCode} className="flex items-center gap-3 px-4 py-3">
+                  <div key={h.companyCode} className="flex items-center gap-3 px-5 py-3">
                     <StockAvatar symbol={h.symbol} size={32} />
                     <span className="flex-1 text-sm font-semibold">{h.symbol}</span>
                     <span className="text-right">

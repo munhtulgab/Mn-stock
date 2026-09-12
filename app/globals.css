@@ -338,9 +338,7 @@ body {
  * Not a preference the reader forgot to set — a deliberate mark that this is
  * a different place. The app is a dark trading screen someone watches; the
  * admin area is a workbench where accounts are read, compared and corrected,
- * and the two should not be mistaken for each other at a glance. Whichever
- * theme the app is in, stepping into /admin should feel like stepping into a
- * different room, and stepping back out should feel like coming home.
+ * and the two should not be mistaken for each other at a glance.
  *
  * Scoped rather than set on <html>, which is what makes it free: every
  * `bg-app-card`, `text-app-muted` and `border-app-border` in the section
@@ -349,47 +347,55 @@ body {
  * confirmation dialog carries the class itself — it renders through a portal
  * into <body>, outside this element, and would otherwise come out dark.
  *
- * The palette is the app's own daylight set, opened up: the surfaces a little
- * cooler and further apart than the phone's, because this is a wide screen
- * read at a desk rather than a small one read in the hand.
+ * The shape is a white sheet floating on a cool grey ground. `--app-bg` is
+ * the sheet, not the ground: everything inside it is white on white, told
+ * apart by a hairline rather than by a fill, which is what makes a page of
+ * eight cards read as calm instead of as eight boxes. `--admin-ground` is the
+ * only colour outside the sheet, and the only place it is used.
  */
 .admin-surface {
   color-scheme: light;
 
-  --app-bg: #f6f7f9;
+  --admin-ground: #e8eaf1;
+  --app-bg: #ffffff;
   --app-card: #ffffff;
-  --app-elevated: #f1f3f7;
-  /* Quieter than the app's outline: at this size the cards are large and a
-     heavy border draws boxes rather than separating them. */
-  --app-border: #e4e7ee;
-  --app-divider: #eef0f5;
-  --app-text: #0f1319;
-  --app-muted: #6b7280;
+  /* Where a field or a quiet control needs to sit back from the sheet. */
+  --app-elevated: #f5f6fa;
+  --app-border: #ebedf3;
+  --app-divider: #f1f2f7;
+  --app-text: #101828;
+  --app-muted: #667085;
 
   --brand: #00a857;
   --brand-dark: #00874a;
-  --brand-light: #e4f7ed;
-  --app-positive: #00a857;
-  --app-positive-bg: #e4f7ed;
-  --app-negative: #d92d33;
-  --app-negative-bg: #fdeaea;
-  --app-warn: #b26a00;
-  --app-warn-bg: #fdf2df;
+  --brand-light: #e6f6ee;
+  --app-positive: #067647;
+  --app-positive-bg: #ecfdf3;
+  --app-negative: #d92d20;
+  --app-negative-bg: #fef3f2;
+  --app-warn: #b54708;
+  --app-warn-bg: #fffaeb;
 
-  /* The ink that goes on top of the brand colour. White on #00a857 is 3:1,
-     which is a button people have to squint at; this is nearer 7:1. */
-  --on-brand: #04160d;
+  /* The filled card and the primary button. Deeper than the brand so white
+     sits on it at better than four to one; white on #00a857 is barely three,
+     which is a label people have to lean in for. */
+  --admin-fill-from: #06996a;
+  --admin-fill-to: #047a55;
+  --on-brand: #ffffff;
+
+  /* The one dark accent, for the badge that should not be another green. */
+  --admin-ink: #101828;
 }
 
-/* One pixel of light along the top edge, the same trick the app's tab bar
-   uses to look raised rather than drawn. Barely visible and doing all the
-   work: without it a white card on a near-white page has no edge at all. */
-.admin-surface .lift {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(15, 19, 25, 0.04);
+/* The sheet: one soft shadow, no border. A border would draw a rectangle
+   around the whole application, which is the one thing on this page that
+   does not need outlining. */
+.admin-surface .sheet {
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 32px -12px rgba(16, 24, 40, 0.1);
 }
 
-/* A row that answers the pointer. Sized in the row rather than the cell so a
-   table row lights up whole. */
+/* A row that answers the pointer, sized in the row so a table row lights up
+   whole rather than cell by cell. */
 .admin-surface .rowlink:hover {
-  background-color: rgba(15, 19, 25, 0.022);
+  background-color: #fafbfc;
 }

@@ -52,10 +52,10 @@ export default async function AdminUsersPage({
             name="q"
             defaultValue={q ?? ""}
             placeholder="Нэр, утас, и-мэйлээр хайх"
-            className="w-full rounded-xl border border-app-border bg-app-card py-2.5 pr-3 pl-9 text-sm text-app-text placeholder:text-app-muted"
+            className="w-full rounded-full border border-app-border bg-app-card py-2.5 pr-4 pl-9 text-sm text-app-text placeholder:text-app-muted"
           />
         </div>
-        <button className="rounded-xl border border-app-border bg-app-card px-4 py-2 text-sm font-semibold text-app-text">
+        <button className="rounded-full border border-app-border bg-app-card px-5 py-2.5 text-sm font-semibold text-app-text hover:bg-app-elevated">
           Хайх
         </button>
       </form>
@@ -65,7 +65,7 @@ export default async function AdminUsersPage({
           Илэрц олдсонгүй.
         </p>
       ) : (
-        <div className="lift overflow-hidden rounded-2xl border border-app-border bg-app-card">
+        <div className="overflow-hidden rounded-2xl border border-app-border bg-app-card">
           <table className="hidden w-full border-collapse sm:table">
             <thead>
               <tr>
@@ -80,7 +80,7 @@ export default async function AdminUsersPage({
             <tbody>
               {users.map((u) => (
                 <tr key={u.id} className="rowlink border-b border-app-divider last:border-0">
-                  <td className="py-2.5 pr-4 pl-4">
+                  <td className="py-3 pr-4 pl-5">
                     <Link href={`/admin/users/${u.id}`} className="flex items-center gap-2.5">
                       <Avatar src={u.avatar ?? ""} name={u.fullName || u.username} size={32} />
                       <span className="min-w-0">
@@ -93,7 +93,7 @@ export default async function AdminUsersPage({
                       </span>
                     </Link>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-3">
                     <RolePill user={u} />
                   </td>
                   <Td>{u.orderCount.toLocaleString("mn-MN")}</Td>
@@ -118,7 +118,7 @@ export default async function AdminUsersPage({
               <Link
                 key={u.id}
                 href={`/admin/users/${u.id}`}
-                className="rowlink flex items-center gap-3 px-4 py-3"
+                className="rowlink flex items-center gap-3 px-5 py-3"
               >
                 <Avatar src={u.avatar ?? ""} name={u.fullName || u.username} size={36} />
                 <span className="min-w-0 flex-1">
@@ -162,7 +162,7 @@ function RolePill({ user }: { user: AdminUserRow }) {
 function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <th
-      className={`border-b border-app-divider px-4 pt-4 pb-2.5 text-[10px] font-semibold tracking-[0.09em] text-app-muted uppercase ${
+      className={`border-b border-app-divider px-5 pt-5 pb-3 text-[11px] font-medium text-app-muted ${
         right ? "text-right" : "text-left"
       }`}
     >
@@ -172,5 +172,5 @@ function Th({ children, right }: { children: React.ReactNode; right?: boolean })
 }
 
 function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-4 py-2.5 text-right text-[13px] tabular-nums">{children}</td>;
+  return <td className="px-5 py-3 text-right text-[13px] tabular-nums">{children}</td>;
 }

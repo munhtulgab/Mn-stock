@@ -60,8 +60,8 @@ export default function NewUserForm() {
     return (
       <button
         onClick={() => setOpen(true)}
-        style={{ color: "var(--on-brand)" }}
-        className="flex items-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-sm font-semibold"
+        style={{ background: "linear-gradient(142deg, var(--admin-fill-from), var(--admin-fill-to))" }}
+        className="flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-semibold text-white"
       >
         <PlusIcon size={15} /> Хэрэглэгч нэмэх
       </button>
@@ -71,7 +71,7 @@ export default function NewUserForm() {
   return (
     <form
       onSubmit={submit}
-      className="lift w-full rounded-2xl border border-app-border bg-app-card p-4 space-y-3"
+      className="w-full rounded-2xl border border-app-border bg-app-card p-5 space-y-3"
     >
       <h2 className="text-sm font-semibold text-app-text">Шинэ хэрэглэгч</h2>
       <div className="grid gap-3 sm:grid-cols-2">
