@@ -112,8 +112,10 @@ export default function AdminOrderRows({
               </div>
             </div>
 
+            {/* No wrapping: each action takes an equal share of the row
+                instead, so two of them are halves and three are thirds. */}
             {!open && (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex gap-2">
                 <Action onClick={() => setPending({ id: order.id, mode: "edit" })}>
                   <EditIcon /> Засах
                 </Action>
@@ -321,6 +323,15 @@ function Confirm({
 const FIELD =
   "mt-1 w-full rounded-lg border border-app-border bg-app-card px-2 py-1.5 text-sm text-app-text";
 
+/**
+ * One of the row's actions, taking an equal share of the row's width.
+ *
+ * They were content-width chips before, which left them huddled at the left
+ * of a row that is otherwise full-bleed, and gave each a tap target the size
+ * of its own word — so Засах, the least destructive of the three, was also
+ * the smallest thing to hit. An equal share puts them under the figures they
+ * act on and makes them the same size as each other.
+ */
 function Action({
   children,
   onClick,
@@ -333,7 +344,7 @@ function Action({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-lg border border-app-border px-2.5 py-1.5 text-xs font-semibold ${
+      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-app-border px-2.5 py-2 text-xs font-semibold ${
         danger ? "text-app-negative" : "text-app-text"
       }`}
     >
