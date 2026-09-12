@@ -1,6 +1,10 @@
 import type { Db } from "mongodb";
 import { getSettings } from "@/lib/settings";
-import { fetchNewsSources, type NewsHeadline } from "@/lib/mse/newsSources";
+import {
+  fetchArticleDates,
+  fetchNewsSources,
+  type NewsHeadline,
+} from "@/lib/mse/newsSources";
 import type { FacebookSpend } from "@/lib/mse/facebook";
 import { fetchArticleTimes, fetchExchangeNews } from "@/lib/mse/exchangeNews";
 import { todayAndYesterday, ulaanbaatarDaysAgo, ulaanbaatarTime } from "@/lib/day";
@@ -150,34 +154,65 @@ function hostname(url: string): string {
   }
 }
 
-function collect(
+/**
+ * How many undated stories a run will open to find out when they happened.
+ *
+ * A ceiling rather than a setting. Only stories that already read as market
+ * news get opened, and on a normal day a publisher files a handful of those;
+ * the cap is what stops a site that suddenly dates nothing from turning one
+ * sync into two hundred requests.
+ */
+const DATES_TO_FETCH = 24;
+
+async function collect(
   results: { url: string; status: string; headlines: NewsHeadline[] }[],
   from: string,
   symbols: Set<string>,
-): MarketNewsItem[] {
+  extraCaCerts?: string,
+): Promise<MarketNewsItem[]> {
   const seen = new Set<string>();
-  const items: MarketNewsItem[] = [];
+  const candidates: { headline: NewsHeadline; source: string }[] = [];
 
+  // Relevance before dates, which is the other way round from how this ran.
+  // The date test used to come first and threw away every story a scraped
+  // listing had not dated — which was every story from every HTML source on
+  // the installation. Judging relevance first leaves a short list worth
+  // opening to ask when it was published.
   for (const result of results) {
     if (result.status !== "ok") continue;
     const source = hostname(result.url);
 
     for (const headline of result.headlines) {
-      if (!headline.date || !withinWindow(headline.date, from)) continue;
+      if (headline.date && !withinWindow(headline.date, from)) continue;
       if (!isMarketRelated(`${headline.title} ${headline.summary ?? ""}`, symbols)) {
         continue;
       }
-      // The same story syndicated twice is one story.
-      const key = storyKey({ ...headline, source, date: headline.date });
-      if (seen.has(key)) continue;
-      seen.add(key);
-      items.push({
-        title: headline.title,
-        url: headline.url,
-        source,
-        date: headline.date,
-      });
+      candidates.push({ headline, source });
     }
+  }
+
+  const undated = candidates.filter((c) => !c.headline.date).map((c) => c.headline.url);
+  const fetched =
+    undated.length > 0
+      ? await fetchArticleDates(undated, { extraCaCerts, limit: DATES_TO_FETCH }).catch(
+          (err) => {
+            console.error("article date fetch failed", err);
+            return new Map<string, string>();
+          },
+        )
+      : new Map<string, string>();
+
+  const items: MarketNewsItem[] = [];
+  for (const { headline, source } of candidates) {
+    const date = headline.date ?? fetched.get(headline.url);
+    // Still undated: a thirty-day window cannot honestly include something
+    // that might be from 2019.
+    if (!date || !withinWindow(date, from)) continue;
+    // The same story syndicated twice is one story.
+    const key = storyKey({ ...headline, source, date });
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({ title: headline.title, url: headline.url, source, date });
   }
 
   return items.sort(byNewest).slice(0, MAX_ITEMS);
@@ -318,7 +353,7 @@ export async function refreshMarketNews(
 
   const fetched = [
     ...(await withStatedTimes(exchangeItems, cached)),
-    ...collect(results, cutoff, symbols),
+    ...(await collect(results, cutoff, symbols, settings.extraCaCerts)),
   ];
 
   // Merged with what is already stored rather than replacing it, on every run

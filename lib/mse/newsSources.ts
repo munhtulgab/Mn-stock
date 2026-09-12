@@ -1,5 +1,6 @@
 import type { Db } from "mongodb";
 import * as cheerio from "cheerio";
+import type { AnyNode } from "domhandler";
 import {
   fetchWithExtraCa,
   parsePemBundle,
@@ -21,6 +22,8 @@ import {
   newsToText as bloombergTvNewsToText,
 } from "@/lib/bloombergtv/news";
 import { extractNextPayloadText } from "./nextPayload";
+import { dateFromArticle, dateFromText, dateFromUrl } from "./newsDates";
+import { fetchExchangeNews } from "./exchangeNews";
 import {
   fetchWithApify,
   fetchWithCookie,
@@ -173,16 +176,40 @@ function bodyShowsTlsFailure(body: string): boolean {
  * headline reads as a headline, and report whether one was there: a date
  * beside a link is strong evidence the link is an article rather than a
  * menu entry, which lets a dated headline clear a lower length bar.
+ *
+ * The date itself comes back rather than being dropped on the floor. It was
+ * being found, used to judge the link, and then discarded — while the page
+ * that consumes these headlines was throwing every undated one away.
  */
-function cleanHeadline(text: string): { title: string; dated: boolean } {
-  const title = text
+function cleanHeadline(text: string): { title: string; dated: boolean; date?: string } {
+  const stripped = text
     .replace(
       /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*\d{1,2}\s+\w{3,}\s+\d{4}[\s,]*\d{0,2}:?\d{0,2}:?\d{0,2}\s*(?:[+-]\d{4}|GMT|UTC|Z)?\s*/i,
       "",
     )
     .replace(/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?)?\s*/, "")
     .trim();
-  return { title, dated: title.length !== text.length };
+  const dated = stripped.length !== text.length;
+  return {
+    title: trimAge(stripped),
+    dated,
+    date: dated ? (dateFromText(text.slice(0, text.length - stripped.length)) ?? undefined) : undefined,
+  };
+}
+
+/**
+ * Drops the "2 цагийн өмнө" a listing prints under the headline and inside
+ * the same link, so it does not read as part of the title. montsame.mn's
+ * cards ended "… ХИЙЛЭЭ 1 өдөр", which is the card's furniture rather than
+ * anything the story says.
+ */
+function trimAge(title: string): string {
+  return title
+    .replace(
+      /\s+\d+\s*(?:минут|цаг|өдөр|хоног|долоо хоног|сар|жил)[а-яөүё]*(?:\s+өмнө)?$/i,
+      "",
+    )
+    .trim();
 }
 
 /**
@@ -218,13 +245,25 @@ function fail(
 /**
  * Anchor texts long enough to be a headline rather than a menu item. Gives
  * the company-news view real title/link pairs instead of a wall of text.
+ *
+ * Each one is dated where the page makes that possible, because the market
+ * page drops what it cannot date and every HTML source on the installation
+ * was arriving undated.
  */
-function extractHeadlines($: cheerio.CheerioAPI, baseUrl: string): NewsHeadline[] {
-  const seen = new Set<string>();
-  const headlines: NewsHeadline[] = [];
+export function extractHeadlines(
+  $: cheerio.CheerioAPI,
+  baseUrl: string,
+): NewsHeadline[] {
+  // Keyed by address, because one address is one story. A listing routinely
+  // links the same article twice — once from its picture and once from its
+  // headline — and keying by title as well let both through as two rows for
+  // one story. The longer text wins: the picture's link is the one with
+  // three words in it.
+  const byUrl = new Map<string, NewsHeadline>();
 
   $("a").each((_, el) => {
-    const { title, dated } = cleanHeadline($(el).text().replace(/\s+/g, " ").trim());
+    const raw = $(el).text().replace(/\s+/g, " ").trim();
+    const { title, dated, date } = cleanHeadline(raw);
     const min = dated ? MIN_DATED_HEADLINE_CHARS : MIN_HEADLINE_CHARS;
     if (title.length < min || title.length > 250) return;
     const href = $(el).attr("href");
@@ -243,13 +282,157 @@ function extractHeadlines($: cheerio.CheerioAPI, baseUrl: string): NewsHeadline[
     }
     // A link back to the page it sits on is navigation, not an article.
     if (absolute.replace(/[#?].*$/, "") === baseUrl.replace(/[#?].*$/, "")) return;
-    const key = `${title}|${absolute}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    headlines.push({ title, url: absolute });
+
+    const already = byUrl.get(absolute);
+    if (already && already.title.length >= title.length) {
+      // Keep the better title, but take a date from whichever card has one.
+      already.date ??= date ?? dateFromUrl(absolute) ?? dateNear($, el) ?? undefined;
+      return;
+    }
+    byUrl.set(absolute, {
+      title,
+      url: absolute,
+      date:
+        date ?? dateFromUrl(absolute) ?? dateNear($, el) ?? already?.date ?? undefined,
+    });
   });
 
-  return headlines;
+  return [...byUrl.values()];
+}
+
+/** How far up from the link to look for its date before giving up. */
+const CARD_DEPTH = 4;
+
+/**
+ * The date printed on the card the link sits in.
+ *
+ * A listing puts the day beside the headline rather than inside the link, so
+ * the search walks up a few ancestors — far enough to leave the anchor and
+ * reach the article card.
+ *
+ * It stops the moment the ancestor holds a second article. One more step up
+ * from a card is the list of cards, and the date found there belongs to
+ * whichever story printed one first — so a story with no date of its own
+ * would quietly take its neighbour's. Undated is the honest answer; the
+ * article itself can be opened later to settle it.
+ *
+ * Four places per card, cheapest first: a `<time>` element's machine value,
+ * a date attribute, the card's own visible text, and any dated URL inside it.
+ * The last is not a stretch — unuudur.mn dates its thumbnails by upload day
+ * and prints nothing on the card at all.
+ */
+function dateNear($: cheerio.CheerioAPI, el: AnyNode): string | null {
+  let node = $(el);
+  for (let up = 0; up <= CARD_DEPTH; up++) {
+    // Only once the walk has left the anchor: the link's own text was
+    // already read, and reading it again here would find nothing new.
+    if (up > 0) {
+      if (holdsAnotherArticle($, node)) return null;
+
+      const found = dateFromText(node.text().replace(/\s+/g, " "));
+      if (found) return found;
+
+      for (const src of node.find("[src], [data-src]").toArray()) {
+        const url = $(src).attr("src") ?? $(src).attr("data-src") ?? "";
+        const dated = url && dateFromUrl(url);
+        if (dated) return dated;
+      }
+    }
+
+    const time = node.find("time").first();
+    const stamp = time.attr("datetime") ?? time.text();
+    if (stamp) {
+      const found = dateFromText(stamp);
+      if (found) return found;
+    }
+
+    for (const attr of ["data-date", "data-time", "data-published", "content"]) {
+      const value = node.find(`[${attr}]`).first().attr(attr) ?? node.attr(attr);
+      if (value) {
+        const found = dateFromText(value);
+        if (found) return found;
+      }
+    }
+
+    const parent = node.parent();
+    if (parent.length === 0) break;
+    node = parent;
+  }
+  return null;
+}
+
+/** True once the container has grown to hold more than this one story. */
+function holdsAnotherArticle($: cheerio.CheerioAPI, node: cheerio.Cheerio<AnyNode>): boolean {
+  const targets = new Set<string>();
+  for (const a of node.find("a").toArray()) {
+    const href = $(a).attr("href");
+    if (!href || href.startsWith("#") || href === "%23" || href.startsWith("javascript:")) {
+      continue;
+    }
+    targets.add(href.replace(/[#?].*$/, ""));
+    if (targets.size > 1) return true;
+  }
+  return false;
+}
+
+/** How long to wait on one article. Shorter than a listing: there are many. */
+const ARTICLE_TIMEOUT_MS = 8_000;
+/** How many at once, so a slow publisher does not serialise the batch. */
+const ARTICLE_BATCH = 5;
+
+/**
+ * The dates of stories whose listing did not state one.
+ *
+ * The last resort behind `extractHeadlines`, and the only thing that works
+ * for a site like montsame.mn, which prints no date on its front page and a
+ * full timestamp on every article. It costs a request per story, so the
+ * caller decides how many are worth opening — and should ask only about
+ * stories it would publish if it had the date, rather than about every
+ * anchor on the page.
+ *
+ * A story that cannot be dated is simply left undated; nothing here throws.
+ */
+export async function fetchArticleDates(
+  urls: string[],
+  options: { extraCaCerts?: string; limit?: number } = {},
+): Promise<Map<string, string>> {
+  const found = new Map<string, string>();
+  const wanted = [...new Set(urls)].slice(0, options.limit ?? 20);
+  if (wanted.length === 0) return found;
+  const extraCerts = options.extraCaCerts ? parsePemBundle(options.extraCaCerts) : [];
+
+  for (let i = 0; i < wanted.length; i += ARTICLE_BATCH) {
+    const batch = wanted.slice(i, i + ARTICLE_BATCH);
+    await Promise.all(
+      batch.map(async (url) => {
+        try {
+          const res = await fetch(url, {
+            headers: BROWSER_HEADERS,
+            redirect: "follow",
+            signal: AbortSignal.timeout(ARTICLE_TIMEOUT_MS),
+          });
+          if (!res.ok) return;
+          const date = dateFromArticle(await res.text());
+          if (date) found.set(url, date);
+        } catch (err) {
+          if (!isTlsFailure(err)) return;
+          try {
+            const page = await fetchWithExtraCa(url, {
+              extraCerts,
+              headers: BROWSER_HEADERS,
+              timeoutMs: ARTICLE_TIMEOUT_MS,
+            });
+            const date = dateFromArticle(page.body);
+            if (date) found.set(url, date);
+          } catch {
+            // Undated, like it was before.
+          }
+        }
+      }),
+    );
+  }
+
+  return found;
 }
 
 /**
@@ -559,6 +742,46 @@ async function fetchBloombergTv(
   }
 }
 
+/** The exchange, whatever path the operator saved it under. */
+function isExchangeHost(host: string): boolean {
+  return host === "mse.mn" || host.endsWith(".mse.mn");
+}
+
+/**
+ * The exchange's own newsroom, read the way the rest of the app reads it.
+ *
+ * Adding mse.mn as a source used to report "empty": the news page renders
+ * its list in the browser and publishes no feed, so the scraper found a
+ * shell. The app has known how to read that newsroom all along — it is the
+ * same endpoint the market-news page already calls — and the only thing
+ * missing was pointing a configured source at it. It answers on any mse.mn
+ * address, including the /mn/news the site used to serve and now 404s.
+ */
+async function fetchExchange(url: string): Promise<NewsSourceResult> {
+  try {
+    const items = await fetchExchangeNews(60);
+    if (items.length === 0) {
+      return fail(url, "empty", "Биржийн мэдээний жагсаалт хоосон байна.");
+    }
+    return {
+      url,
+      status: "ok",
+      via: "api",
+      text: items.map((n) => `${n.date} ${n.title}. ${n.description}`).join("\n"),
+      chars: items.reduce((n, i) => n + i.title.length + i.description.length, 0),
+      headlines: items.map((n) => ({
+        title: n.title,
+        url: n.url,
+        date: n.date,
+        summary: n.description,
+      })),
+      reason: "Биржийн мэдээний API-аас уншлаа.",
+    };
+  } catch (err) {
+    return fail(url, "error", `Биржийн мэдээ: ${(err as Error).message}`);
+  }
+}
+
 /**
  * Reads a site's news section when the address configured was its root and
  * that root turned out to be an empty shell. Only ever a fallback, and the
@@ -624,6 +847,7 @@ async function extractOne(
   const host = hostOf(url);
   if (!host) return fail(url, "error", "Линк буруу байна.");
   if (hostMatches(host, FACEBOOK_HOSTS)) return fetchFacebook(url, facebook);
+  if (isExchangeHost(host)) return fetchExchange(url);
   if (isMarketInfoHost(host)) return fetchMarketInfo(url);
   if (isTavanBogdHost(host)) return fetchTavanBogd(url);
   if (isBloombergTvHost(host)) return fetchBloombergTv(url, searchTerms);
