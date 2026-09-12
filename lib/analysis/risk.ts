@@ -151,12 +151,20 @@ function beta(stock: number[], index: number[]): number | null {
   return covariance / variance;
 }
 
+/**
+ * @param window how many years back to measure. Three by default, which is the
+ *   window every listing is compared over. The gold basis passes its own
+ *   because the chart it is read from is the whole published series, and a
+ *   panel that says three years beside a chart that says seventeen is two
+ *   answers to one question.
+ */
 export function computeRisk(
   candles: Candle[],
   indexSeries: { date: string; value: number }[],
   today: string,
+  window = RISK_YEARS,
 ): RiskMetrics {
-  const from = `${Number(today.slice(0, 4)) - RISK_YEARS}${today.slice(4)}`;
+  const from = `${Number(today.slice(0, 4)) - window}${today.slice(4)}`;
   const windowed = candles.filter((c) => c.date >= from);
   if (windowed.length < 2) return EMPTY;
 

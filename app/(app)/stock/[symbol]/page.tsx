@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { after } from "next/server";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { ensurePricesCurrent, getStockDetail } from "@/lib/data";
@@ -86,6 +86,12 @@ export default async function StockDetailPage({
     getCurrentUser(db),
   ]);
   if (!detail) notFound();
+  // Signed out. The layout guards this page and redirects first in the
+  // ordinary case, but a session that expires between the layout reading it
+  // and this one got as far as `user!._id!` and threw — which production
+  // logged as a TypeError on /stock/ALTT. To the same place the layout sends
+  // them, rather than a second front door with different manners.
+  if (!user) redirect("/login");
 
   const { security, financials, priceHistory, fullHistory, recommendation, marketMedianPe } =
     detail;
@@ -107,8 +113,8 @@ export default async function StockDetailPage({
   // Resolved during render, not after: leaving it to the client meant the
   // page painted the stored close and visibly corrected itself a moment later.
   const [portfolio, watchlist, marketOpen, analysis] = await Promise.all([
-    getPortfolioSummary(db, user!._id!),
-    getWatchlist(db, user!._id!),
+    getPortfolioSummary(db, user._id!),
+    getWatchlist(db, user._id!),
     fetchMarketOpen().catch(() => null),
     // The scorecards, ratios, risk figures and peer ranking, all built from
     // the same candles on the server. It reads the whole market's latest
@@ -125,6 +131,19 @@ export default async function StockDetailPage({
   // picks the rebuild up on the next visit; putting it in front of the render
   // is what made this page sit on a skeleton.
   after(() => refreshDividendsIfStale(db));
+
+  /**
+   * What the four analysis panels were computed on, where that is not this
+   * listing's own price.
+   *
+   * The same sentence on all four, because they are one reading split into
+   * four cards: a verdict, the chart behind it, the returns behind that, and
+   * the risk. Naming the span on each is what stops a reader taking any of
+   * them for the fund's own three months.
+   */
+  const goldSpan = analysis?.goldBasis
+    ? `Алтны ханшаар · ${analysis.goldBasis.from} – ${analysis.goldBasis.to}`
+    : undefined;
 
   const closedAt = sessionEnd(liveQuotes);
   const holding = portfolio.holdings.find((h) => h.symbol === security.symbol);
@@ -230,7 +249,7 @@ export default async function StockDetailPage({
         {analysis ? (
           <CombinedSignalCard
             combined={analysis.combined}
-            basis={analysis.goldBasis ? "Алтны ханшаар" : undefined}
+            basis={goldSpan}
           />
         ) : (
           <div className="rounded-2xl border border-app-border bg-app-card p-4">
@@ -417,7 +436,7 @@ export default async function StockDetailPage({
               scorecards={analysis.goldBasis?.scorecards ?? analysis.scorecards}
               basis={
                 analysis.goldBasis
-                  ? `Монголбанкны алт авах ханшаар (${analysis.goldBasis.from} – ${analysis.goldBasis.to}). Сан өөрөө ${analysis.candles.length} өдөр л арилжаалагдсан тул уншихад хүрэлцэхгүй.`
+                  ? `${goldSpan}. Сан өөрөө ${analysis.candles.length} өдөр л арилжаалагдсан тул уншихад хүрэлцэхгүй.`
                   : undefined
               }
             />
@@ -474,7 +493,7 @@ export default async function StockDetailPage({
             <RiskPanel
               risk={analysis.goldBasis?.risk ?? analysis.risk}
               years={analysis.goldBasis?.riskYears ?? analysis.riskYears}
-              basis={analysis.goldBasis ? "Алтны ханшаар" : undefined}
+              basis={goldSpan}
             />
           </div>
 
