@@ -1,5 +1,5 @@
 import { buildScorecard, type Scorecard } from "./indicators";
-import { computeRisk, RISK_YEARS, type RiskMetrics } from "./risk";
+import { computeRisk, type RiskMetrics } from "./risk";
 import { TIMEFRAMES, type Candle, type Timeframe } from "./series";
 import type { GoldPoint } from "@/lib/gold";
 
@@ -202,6 +202,13 @@ export function buildGoldBasis(
 ): GoldBasis | null {
   if (points.length < 2) return null;
   const bars = goldCandles(points);
+  const coveredYears = Math.max(
+    1,
+    Math.ceil(
+      (Date.parse(points[points.length - 1].date) - Date.parse(points[0].date)) /
+        31_557_600_000,
+    ),
+  );
 
   return {
     from: points[0].date,
@@ -210,8 +217,11 @@ export function buildGoldBasis(
     scorecards: Object.fromEntries(
       TIMEFRAMES.map(({ key }) => [key, buildScorecard(bars, key)]),
     ) as Record<Timeframe, Scorecard>,
-    risk: computeRisk(bars, index, today),
-    riskYears: RISK_YEARS,
+    // Over the whole published series, not the three years every listing is
+    // compared on: this is read off the gold chart, and the gold chart is
+    // seventeen years long.
+    risk: computeRisk(bars, index, today, coveredYears),
+    riskYears: Math.round(coveredYears),
     returns: goldReturns(points, today),
     premium: goldPremium(candles, points),
   };
