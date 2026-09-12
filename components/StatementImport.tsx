@@ -2,7 +2,14 @@
 
 import { useRef, useState } from "react";
 import Num from "@/components/Num";
-import { AlertIcon, CheckIcon, CloseIcon, DownloadIcon } from "@/components/icons";
+import {
+  AlertIcon,
+  CheckIcon,
+  CloseIcon,
+  DownloadIcon,
+  EyeIcon,
+  SaveIcon,
+} from "@/components/icons";
 
 interface Position {
   symbol: string;
@@ -150,19 +157,27 @@ export default function StatementImport() {
         </ul>
       )}
 
+      {/* A half each, so the pair reads as one choice with two sides rather
+          than a button and whatever happened to sit next to it. `flex-1` on
+          both rather than a fixed width: the labels change while they work
+          ("Уншиж байна…"), and a width that fits one of those does not fit
+          the other. The glyphs say which is which before the words are
+          read — look at it, or write it in. */}
       <div className="flex gap-2 mt-3">
         <button
           onClick={() => run(true)}
           disabled={busy !== null || files.length === 0}
-          className="rounded-full border border-app-border px-4 py-2 text-sm font-medium text-app-text disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-app-border px-4 py-2 text-sm font-medium text-app-text disabled:opacity-50"
         >
+          <EyeIcon size={15} />
           {busy === "preview" ? "Уншиж байна..." : "Урьдчилж харах"}
         </button>
         <button
           onClick={() => run(false)}
           disabled={busy !== null || files.length === 0}
-          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
         >
+          <SaveIcon size={15} />
           {busy === "import" ? "Бичиж байна..." : "Импортлох"}
         </button>
       </div>
