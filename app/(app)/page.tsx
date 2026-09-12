@@ -18,6 +18,8 @@ import { checkSignalChangesIfDue } from "@/lib/signalHistory";
 import { getMarketNews, refreshMarketNews } from "@/lib/marketNews";
 import { getSettings } from "@/lib/settings";
 import StockAvatar from "@/components/StockAvatar";
+import Section from "@/components/Section";
+import WatchlistPane from "@/components/WatchlistPane";
 import SignalBadge from "@/components/SignalBadge";
 import Sparkline from "@/components/Sparkline";
 import Num, { Pct } from "@/components/Num";
@@ -255,54 +257,7 @@ export default async function HomePage() {
         )}
       </Section>
 
-      {watchlist.length > 0 && (
-        <Section title="Хяналтын жагсаалт" fill>
-          {/* Six at a time on the wide layout, and sideways for the rest.
-              Cards fill downward in threes and then start a new column, so
-              two columns of three are on screen and the next two arrive by
-              scrolling right — the same gesture the phone layout already
-              uses, rather than a second scroll direction to learn.
-
-              The columns are 47% rather than half, so the pair does not fill
-              the width exactly and the next column shows an edge. Without
-              that there is nothing to say a seventh card exists: scrollbars
-              are hidden throughout this app and some browsers draw them as an
-              overlay that takes no layout space at all.
-
-              The three rows are `1fr` each and nothing pins them to the top,
-              so they divide whatever height the row settles at. That is what
-              makes the two panels exactly the same height rather than
-              approximately: five holding rows come to 327px and three cards
-              of their own accord to 312, and the cards take the difference
-              instead of leaving fifteen pixels of nothing under the last
-              one. */}
-          <div className="pane-scroll flex gap-3 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-flow-col lg:grid-rows-3 lg:auto-cols-[47%] lg:flex-1 lg:min-h-0">
-            {watchlist.map((w) => (
-              <Link
-                key={w.symbol}
-                href={`/stock/${w.symbol}`}
-                className="shrink-0 w-60 lg:w-auto rounded-2xl border border-app-border bg-app-card px-4 py-3 active:bg-app-elevated"
-              >
-                <div className="flex items-center gap-3">
-                  <StockAvatar symbol={w.symbol} size={40} />
-                  <div className="min-w-0">
-                    <div className="font-semibold text-app-text text-sm">{w.symbol}</div>
-                    <div className="text-xs text-app-muted truncate">{w.name}</div>
-                  </div>
-                </div>
-                <div className="flex items-baseline justify-between mt-2.5">
-                  <span className="text-sm text-app-text">
-                    <Num value={w.currentPrice ?? 0} digits={2} suffix="₮" />
-                  </span>
-                  <span className="text-sm">
-                    <Pct value={w.changePct} />
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </Section>
-      )}
+      {watchlist.length > 0 && <WatchlistPane items={watchlist} />}
 
       <Section
         title="Өсөлттэй"
@@ -391,60 +346,6 @@ export default async function HomePage() {
       )}
       </div>
     </div>
-  );
-}
-
-function Section({
-  title,
-  note,
-  action,
-  className = "",
-  fill = false,
-  children,
-}: {
-  title: string;
-  /** Which session the figures belong to, when that isn't obvious. */
-  note?: string | null;
-  action?: { href: string; label: string };
-  /** Placement in the wide-screen grid. */
-  className?: string;
-  /**
-   * Stretch to the height of whatever shares this grid row, and give the body
-   * the leftover space.
-   *
-   * For the two side-by-side panels on the wide layout. The grid is
-   * `items-start`, so each section is otherwise as tall as its own contents
-   * and the two columns end at different places — which looks like one of
-   * them failed to load. Stretching both makes the taller one set the height
-   * and the shorter one fill it, rather than either being given a fixed
-   * figure that is wrong whenever the lists are short.
-   */
-  fill?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      className={`${fill ? "lg:self-stretch lg:flex lg:flex-col" : ""} ${className}`}
-    >
-      <div className="flex items-center justify-between mb-3 lg:shrink-0">
-        <h2 className="font-semibold text-app-text text-sm">
-          {title}
-          {note && <span className="text-app-muted font-normal ml-1.5">· {note}</span>}
-        </h2>
-        {action && (
-          <Link href={action.href} className="text-xs text-brand font-medium">
-            {action.label}
-          </Link>
-        )}
-      </div>
-      {/* min-h-0 or the body refuses to shrink below its content and the
-          scroll never engages — a flex item's default minimum is its content. */}
-      {fill ? (
-        <div className="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">{children}</div>
-      ) : (
-        children
-      )}
-    </section>
   );
 }
 
