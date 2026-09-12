@@ -612,15 +612,30 @@ export async function buildAnalysis(
   // scorecards, the risk figures and the chart all describe the same market.
   const candles = withLiveCandle(storedCandles, live);
   const analysis = analyseCompany(context, security, candles, price, today);
+  const goldBasis = buildGoldBasis(goldPoints, candles, context.top20, today);
 
   return {
     ...analysis,
+    // The verdict is the three readings added up, so where the readings come
+    // from the metal it has to as well. Left as the company's own otherwise.
+    // Ratios stay empty for a fund that files none, and the score is
+    // renormalised over the parts that exist — which is the honest reading:
+    // a tracker has a chart and a risk profile and no accounts.
+    combined: goldBasis
+      ? combineSignal({
+          scorecard: goldBasis.scorecards["1D"],
+          ratios: analysis.ratios,
+          risk: goldBasis.risk,
+          sectorLabel: analysis.sectorLabel,
+          peerCount: analysis.peerCount,
+        })
+      : analysis.combined,
     riskYears: RISK_YEARS,
     profile: tdb.profile,
     distribution: tdb.distribution,
     dividends: dividendRows(noticeDividends),
     candles,
     enoughHistory: candles.length >= MIN_CANDLES,
-    goldBasis: buildGoldBasis(goldPoints, candles, context.top20, today),
+    goldBasis,
   };
 }

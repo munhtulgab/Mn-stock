@@ -228,7 +228,10 @@ export default async function StockDetailPage({
           stands in rather than leaving the page with no conclusion at all. */}
       <div className="md:order-1 md:col-span-3">
         {analysis ? (
-          <CombinedSignalCard combined={analysis.combined} />
+          <CombinedSignalCard
+            combined={analysis.combined}
+            basis={analysis.goldBasis ? "Алтны ханшаар" : undefined}
+          />
         ) : (
           <div className="rounded-2xl border border-app-border bg-app-card p-4">
             <div className="flex items-center gap-3 mb-3">
