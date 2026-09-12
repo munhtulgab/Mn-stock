@@ -1,10 +1,17 @@
 /**
  * Takes orders back out of an account, cash and holding with them.
  *
- * Deleting a row from `transactions` is not enough on its own: `holdings`
- * and `portfolios` are their own collections, written alongside the history
- * rather than derived from it, so a history row removed by hand leaves the
- * shares in the portfolio and the money still spent. This reverses all three.
+ * The admin area does this from a page now — Хэрэглэгч → the account → its
+ * order history. This stays for the case that page cannot help with: an
+ * installation whose administrator cannot sign in, or a correction wanted
+ * before the deploy carrying that page is out.
+ *
+ * Deleting a row from `transactions` is not enough on its own: `holdings` and
+ * `portfolios` are their own collections, written alongside the history rather
+ * than derived from it, so a history row removed by hand leaves the shares in
+ * the portfolio and the money still spent. The arithmetic that reverses all
+ * three is `lib/adminOrders.ts`, shared with the page so the two cannot
+ * disagree about what undoing an order means.
  *
  * Dry by default — it prints what it found and what it would do, and changes
  * nothing until `--apply` is passed.
@@ -21,6 +28,7 @@
  * `--include-imported` overrides that for the case where it is really wanted.
  */
 import { MongoClient, type Db } from "mongodb";
+import { afterChange, checkChange, type AccountState } from "../lib/adminOrders";
 
 interface Row {
   _id: unknown;
@@ -91,33 +99,28 @@ try {
     process.exit(0);
   }
 
-  // A buy took cash out and put shares in; undoing it does the reverse. A
-  // sell is the other way round.
-  const cashBack = chosen.reduce((n, t) => n + (t.side === "BUY" ? t.total : -t.total), 0);
-  const shares = chosen.reduce((n, t) => n + (t.side === "BUY" ? t.quantity : -t.quantity), 0);
-
+  const { companyCode } = chosen[0];
   const portfolio = await db.collection("portfolios").findOne({ userId });
-  const holding = await db.collection("holdings").findOne({ userId, companyCode: chosen[0].companyCode });
-  const cashNow = (portfolio?.cashBalance as number) ?? 0;
-  const heldNow = (holding?.quantity as number) ?? 0;
-  const heldAfter = heldNow - shares;
+  const holding = await db.collection("holdings").findOne({ userId, companyCode });
+  const before: AccountState = {
+    cash: (portfolio?.cashBalance as number) ?? 0,
+    held: (holding?.quantity as number) ?? 0,
+    avgCost: (holding?.avgCost as number) ?? 0,
+  };
 
-  if (heldAfter < 0) {
-    throw new Error(
-      `The holding is ${heldNow} shares and this would take ${shares} out of it. ` +
-        `Something else has already moved it; nothing changed.`,
-    );
+  // Newest first, one at a time. Taken as a batch the average cost would be
+  // computed against a holding two orders too large.
+  let after = before;
+  for (const t of chosen) {
+    after = afterChange(after, t, null);
+    checkChange(after, symbol);
   }
 
-  // The average cost with these orders never having happened. Exact where
-  // they are the newest ones, which is what --last takes.
-  const spentBack = chosen.reduce((n, t) => n + (t.side === "BUY" ? t.total : 0), 0);
-  const avgNow = (holding?.avgCost as number) ?? 0;
-  const avgAfter = heldAfter > 0 ? (avgNow * heldNow - spentBack) / heldAfter : 0;
-
-  console.log(`\n  cash     ${money(cashNow)} → ${money(cashNow + cashBack)}₮`);
-  console.log(`  ${symbol} held  ${heldNow} → ${heldAfter}${heldAfter === 0 ? " (holding removed)" : ""}`);
-  if (heldAfter > 0) console.log(`  avg cost ${money(avgNow)} → ${money(avgAfter)}₮`);
+  console.log(`\n  cash     ${money(before.cash)} → ${money(after.cash)}₮`);
+  console.log(
+    `  ${symbol} held  ${before.held} → ${after.held}${after.held === 0 ? " (holding removed)" : ""}`,
+  );
+  if (after.held > 0) console.log(`  avg cost ${money(before.avgCost)} → ${money(after.avgCost)}₮`);
 
   if (!apply) {
     console.log("\nDry run. Add --apply to write it.\n");
@@ -127,14 +130,14 @@ try {
   await db.collection("transactions").deleteMany({ _id: { $in: chosen.map((t) => t._id) } } as never);
   await db.collection("portfolios").updateOne(
     { userId },
-    { $inc: { cashBalance: cashBack }, $set: { updatedAt: new Date() } },
+    { $set: { cashBalance: after.cash, updatedAt: new Date() } },
   );
-  if (heldAfter === 0) {
-    await db.collection("holdings").deleteOne({ userId, companyCode: chosen[0].companyCode });
+  if (after.held === 0) {
+    await db.collection("holdings").deleteOne({ userId, companyCode });
   } else {
     await db.collection("holdings").updateOne(
-      { userId, companyCode: chosen[0].companyCode },
-      { $set: { quantity: heldAfter, avgCost: avgAfter, updatedAt: new Date() } },
+      { userId, companyCode },
+      { $set: { quantity: after.held, avgCost: after.avgCost, updatedAt: new Date() } },
     );
   }
   console.log(`\nDone: ${chosen.length} order(s) removed.\n`);

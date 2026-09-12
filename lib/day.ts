@@ -67,6 +67,32 @@ export function ulaanbaatarDateTime(date: Date | string): string {
   return `${ulaanbaatarDay(at)} ${ulaanbaatarTime(at)}`;
 }
 
+/**
+ * The moment whose Ulaanbaatar clock reads `local` — the inverse of
+ * {@link ulaanbaatarStamp}, for a form that lets someone type a time.
+ *
+ * A datetime-local input has no zone: it hands back the digits on the face of
+ * a clock, and which clock is the reader's browser. An administrator in
+ * Ulaanbaatar correcting the time an order filled means Ulaanbaatar, and one
+ * looking at the same account from abroad means the same thing — the order
+ * filled on a Mongolian trading day either way.
+ *
+ * Found by measuring rather than by adding eight hours. Mongolia keeps no
+ * summer time today but did within the span of a broker statement, so the
+ * offset is read off the zone at that date instead of assumed.
+ *
+ * @param local `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS`.
+ */
+export function fromUlaanbaatarStamp(local: string): Date {
+  const padded = local.length === 16 ? `${local}:00` : local;
+  const asUtc = new Date(`${padded}Z`);
+  if (Number.isNaN(asUtc.getTime())) return asUtc;
+  // What that instant's clock reads in Ulaanbaatar, minus what we wanted it
+  // to read, is exactly how far the guess is out.
+  const drift = Date.parse(`${ulaanbaatarStamp(asUtc)}Z`) - asUtc.getTime();
+  return new Date(asUtc.getTime() - drift);
+}
+
 /** The Ulaanbaatar day `days` before today, as `YYYY-MM-DD`. */
 export function ulaanbaatarDaysAgo(days: number): string {
   return ulaanbaatarDay(new Date(Date.now() - days * 86_400_000));

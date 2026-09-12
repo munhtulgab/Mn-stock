@@ -3,43 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "./Toast";
+import Avatar from "./Avatar";
 import { CloseIcon, EditIcon, EyeIcon, SaveIcon, PhoneIcon, MailIcon } from "./icons";
-
-function initials(name: string): string {
-  return name.slice(0, 2).toUpperCase();
-}
-
-function Avatar({
-  src,
-  name,
-  size,
-}: {
-  src: string;
-  name: string;
-  size: number;
-}) {
-  if (src) {
-    return (
-      /* eslint-disable-next-line @next/next/no-img-element */
-      <img
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        style={{ width: size, height: size }}
-        className="rounded-full object-cover shrink-0"
-      />
-    );
-  }
-  return (
-    <div
-      style={{ width: size, height: size, fontSize: size * 0.32 }}
-      className="flex items-center justify-center rounded-full bg-brand text-white font-bold shrink-0"
-    >
-      {initials(name)}
-    </div>
-  );
-}
 
 function CameraIcon({ size = 16 }: { size?: number }) {
   return (

@@ -139,6 +139,8 @@ export interface AiSignal {
   providers: AiSignalProviderSummary[];
 }
 
+export type UserRole = "admin" | "user";
+
 export interface User {
   _id?: string;
   username: string;
@@ -148,6 +150,13 @@ export interface User {
   email?: string;
   phone?: string;
   createdAt: Date;
+  /**
+   * What this account may do. Absent means an ordinary reader — the field was
+   * added after every existing account, so absence has to mean the common
+   * case. See `lib/roles.ts` for the rule that keeps one administrator
+   * reachable when no document says `admin` at all.
+   */
+  role?: UserRole;
   /**
    * Profile picture as a `data:image/...` URL. Held on the user document
    * rather than in object storage: it is cropped and shrunk to a couple of
@@ -222,6 +231,12 @@ export interface Holding {
 export type OrderSide = "BUY" | "SELL";
 
 export interface Transaction {
+  /**
+   * Mongo's own, as a string. Orders are inserted without one and read back
+   * with an ObjectId; the admin area addresses a single row by it, and the
+   * pages that only list orders never look at it.
+   */
+  _id?: string;
   userId: string;
   companyCode: number;
   symbol: string;
@@ -230,6 +245,13 @@ export interface Transaction {
   price: number;
   total: number;
   createdAt: Date;
+  /** Set by the statement importer on rows it owns and rebuilds. */
+  source?: string;
+  /** On a correcting order: the id of the order it cancels out. */
+  reversalOf?: string;
+  /** Set when an administrator changed the row, and who changed it. */
+  editedAt?: Date;
+  editedBy?: string;
 }
 
 export interface WatchlistItem {
