@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { aggregate, type Candle, type Timeframe } from "@/lib/analysis/series";
 import { buildPlotRows, type PlotRow } from "@/lib/analysis/plot";
+import { withGold, type GoldPoint } from "@/lib/gold";
 
 /**
  * The price, drawn as candles or as a line, with the whole technical
@@ -57,12 +58,29 @@ const MAX_BARS = 400;
 const ROW_SCROLL =
   "-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
-type ChartType = "candle" | "line";
+type ChartType = "candle" | "line" | "gold";
 
 const CHART_TYPES: { key: ChartType; label: string }[] = [
   { key: "candle", label: "Лаа" },
   { key: "line", label: "График" },
+  { key: "gold", label: "Алт" },
 ];
+
+/**
+ * Mongolbank's buying price for gold, over the price itself.
+ *
+ * A view rather than an overlay chip, because it is not an indicator derived
+ * from this security — it is a second instrument, and putting it among the
+ * moving averages would say it was one of them. The price line stays under
+ * it: gold on its own is a chart of gold, and what is being asked is how
+ * this listing has moved against it.
+ *
+ * The bank quotes a gram, which is around half a million tögrög; a hundredth
+ * of a gram lands in the range a share price lives in, which is what lets
+ * the two shapes be compared on one axis.
+ */
+const GOLD = "#e0a80d";
+const GOLD_LABEL = "Алт (авах ÷100)";
 
 /**
  * `days` is null for the whole stored history. `timeframe` is where the
@@ -379,6 +397,8 @@ export default function PriceChartPro({
   const [panes, setPanes] = useState<PaneKey[]>(DEFAULT_PANES);
   /** The full stored series, once somebody has asked to see all of it. */
   const [everything, setEverything] = useState<Candle[] | null>(null);
+  /** The gold series, once somebody has asked to see it. */
+  const [gold, setGold] = useState<GoldPoint[] | null>(null);
 
   const range = RANGES[rangeIndex];
 
@@ -403,6 +423,24 @@ export default function PriceChartPro({
       cancelled = true;
     };
   }, [range.days, everything, symbol]);
+
+  // Asked for the first time the gold view is picked, and kept: it is one
+  // series for the whole app and it moves once a working day.
+  useEffect(() => {
+    if (type !== "gold" || gold) return;
+    let cancelled = false;
+    fetch("/api/gold")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.prices)) setGold(data.prices as GoldPoint[]);
+      })
+      // Silently: the price is still drawn, and a chart that shouts about a
+      // third party's website being down helps nobody.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [type, gold]);
 
   const { rows, timeframe } = useMemo(() => {
     // Whichever is longer. The stored series ends at the last close, while
@@ -444,7 +482,7 @@ export default function PriceChartPro({
     return <p className="text-xs text-app-muted">Арилжааны түүх алга.</p>;
   }
 
-  const priceRows = rows;
+  const priceRows = withGold(rows, type === "gold" ? gold : null);
 
   return (
     <div>
@@ -530,6 +568,19 @@ export default function PriceChartPro({
                 dot={false}
                 isAnimationActive={false}
                 name="Хаалтын ханш"
+              />
+            )}
+
+            {type === "gold" && (
+              <Line
+                type="monotone"
+                dataKey="gold"
+                stroke={GOLD}
+                strokeWidth={1.5}
+                dot={false}
+                isAnimationActive={false}
+                connectNulls
+                name={GOLD_LABEL}
               />
             )}
 
