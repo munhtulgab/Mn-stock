@@ -192,7 +192,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
       {!user.founder && (
         <div className="rounded-xl border border-app-negative/40 p-3">
           <p className="text-xs text-app-muted">
-            Устгахад энэ хэрэглэгчийн захиалга, байрлал, хяналтын жагсаалт болон нэвтэрсэн
+            Устгахад энэ хэрэглэгчийн захиалга, хувьцаа, хяналтын жагсаалт болон нэвтэрсэн
             сешн бүгд хамт устана. Буцаах боломжгүй.
           </p>
           {confirmingDelete ? (
