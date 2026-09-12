@@ -849,7 +849,24 @@ function escapeRegExp(text: string): string {
  * company's own affairs are what its name finds; widening a company to a
  * theme would file the whole sector under it.
  */
-const SUBJECT_TERMS: Record<string, MatchTerm[]> = {
+interface Subject {
+  /**
+   * Sent to sources that search their own archive, in this order.
+   *
+   * Separate from the patterns below, and the half that was missing. The
+   * searchable sources are handed the string terms only — a regular
+   * expression is meaningless as a query — so ALTT was being asked about
+   * "ALTT" and its registered name, which is nothing either site has ever
+   * printed, while the archive full of gold stories went unqueried. Only the
+   * first two are used (see MAX_SEARCHES), so a fund's own subject has to
+   * come ahead of the name that finds nothing.
+   */
+  search: string[];
+  /** Matched against everything fetched, however it was found. */
+  match: MatchTerm[];
+}
+
+const SUBJECTS: Record<string, Subject> = {
   // Gold, in the forms Mongolian writes it.
   //
   // Suffixed explicitly rather than matched as a prefix: Mongolian glues its
@@ -862,14 +879,22 @@ const SUBJECT_TERMS: Record<string, MatchTerm[]> = {
   // exemptions came back as gold news because the man interviewed chairs
   // "Монголын Алт" (МАК) ХХК. Only a run of punctuation may sit between, so
   // "алт олборлогч ХХК" — a sentence about the metal — still counts.
-  ALTT: [
-    /(?<![\p{L}\p{N}])алт(?:ны|наас|анд|аар|ыг|ад|тай)?(?![\p{L}\p{N}])(?![^\p{L}\p{N}]{0,12}(?:ХХК|ХК|МАК))/iu,
-    /(?<![\p{L}\p{N}])үнэт\s+метал[\p{L}]*/iu,
-    /(?<![\p{L}\p{N}])gold(?![\p{L}\p{N}])/iu,
-    /(?<![\p{L}\p{N}])XAU(?![\p{L}\p{N}])/iu,
-    // The fund's own short name, which its registered one buries.
-    /(?<![\p{L}\p{N}])Гоулд(?![\p{L}\p{N}])/iu,
-  ],
+  ALTT: {
+    // The two the fund is actually held for, and both measured against the
+    // live archive: "алтны үнэ" returns "Алтны үнэ унц нь $2500 давж, дахин
+    // шинэ дээд түвшинд хүрлээ", and "алтны нөөц" returns "ОХУ-ын Төв банкны
+    // алтны нөөц 2020 оноос хойших доод түвшинд хүрэв". A bare "алт" returns
+    // nineteen hundred, which is the archive rather than an answer.
+    search: ["алтны үнэ", "алтны нөөц"],
+    match: [
+      /(?<![\p{L}\p{N}])алт(?:ны|наас|анд|аар|ыг|ад|тай)?(?![\p{L}\p{N}])(?![^\p{L}\p{N}]{0,12}(?:ХХК|ХК|МАК))/iu,
+      /(?<![\p{L}\p{N}])үнэт\s+метал[\p{L}]*/iu,
+      /(?<![\p{L}\p{N}])gold(?![\p{L}\p{N}])/iu,
+      /(?<![\p{L}\p{N}])XAU(?![\p{L}\p{N}])/iu,
+      // The fund's own short name, which its registered one buries.
+      /(?<![\p{L}\p{N}])Гоулд(?![\p{L}\p{N}])/iu,
+    ],
+  },
 };
 
 export function companyMatchTerms(
@@ -889,7 +914,27 @@ export function companyMatchTerms(
       ),
     );
   }
-  return [...terms, ...(SUBJECT_TERMS[symbol.toUpperCase()] ?? [])];
+  return [...terms, ...(SUBJECTS[symbol.toUpperCase()]?.match ?? [])];
+}
+
+/**
+ * What to ask a source that searches its own archive.
+ *
+ * The subject first, then the name: only the first couple of queries are
+ * used, and for a fund the name is the one that finds nothing. Derived here
+ * rather than at each call site, which used to filter the match terms down
+ * to their strings and so could only ever ask about the name.
+ */
+export function companySearchTerms(
+  symbol: string,
+  name: string,
+  distinctiveWords?: Set<string>,
+): string[] {
+  const subject = SUBJECTS[symbol.toUpperCase()]?.search ?? [];
+  const named = companyMatchTerms(symbol, name, distinctiveWords).filter(
+    (t): t is string => typeof t === "string",
+  );
+  return [...subject, ...named];
 }
 
 /** Headlines that name the company, deduplicated across all sources. */

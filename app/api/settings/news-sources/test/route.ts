@@ -4,6 +4,7 @@ import { getSettings } from "@/lib/settings";
 import { isSettingsRequestAuthorized } from "@/lib/settingsAuth";
 import {
   companyMatchTerms,
+  companySearchTerms,
   distinctiveNameWords,
   fetchNewsSources,
   matchHeadlines,
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
 
   let security: Security | null = null;
   let terms: ReturnType<typeof companyMatchTerms> = [];
+  let searchTerms: string[] = [];
   if (symbol) {
     security = await db.collection<Security>("securities").findOne({ symbol });
     if (security) {
@@ -50,16 +52,14 @@ export async function POST(req: NextRequest) {
         .collection<Security>("securities")
         .find({}, { projection: { _id: 0, name: 1 } })
         .toArray();
-      terms = companyMatchTerms(
-        security.symbol,
-        security.name,
-        distinctiveNameWords(names.map((n) => n.name)),
-      );
+      const distinctive = distinctiveNameWords(names.map((n) => n.name));
+      terms = companyMatchTerms(security.symbol, security.name, distinctive);
+      searchTerms = companySearchTerms(security.symbol, security.name, distinctive);
     }
   }
 
   const results = await fetchNewsSources(urls, {
-    searchTerms: terms.filter((t): t is string => typeof t === "string"),
+    searchTerms,
     apifyToken: settings.apifyToken,
     facebookToken: settings.facebookToken,
     facebookCookie: settings.facebookCookie,

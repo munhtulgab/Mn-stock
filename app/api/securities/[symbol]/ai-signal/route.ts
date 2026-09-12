@@ -3,7 +3,7 @@ import { getDb } from "@/lib/mongodb";
 import { getStockDetailFresh } from "@/lib/data";
 import { fetchCompanyNews } from "@/lib/mse/news";
 import {
-  companyMatchTerms,
+  companySearchTerms,
   fetchNewsSources,
   usableExtracts,
 } from "@/lib/mse/newsSources";
@@ -92,10 +92,10 @@ export async function GET(
       const results = await fetchNewsSources(settings.newsSources, {
         // Sources that can be queried are asked about this company, so the
         // prompt gets its coverage rather than only the day's front page.
-        searchTerms: companyMatchTerms(
+        searchTerms: companySearchTerms(
           detail.security.symbol,
           detail.security.name,
-        ).filter((t): t is string => typeof t === "string"),
+        ),
         apifyToken: settings.apifyToken,
         facebookToken: settings.facebookToken,
         facebookCookie: settings.facebookCookie,

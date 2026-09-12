@@ -92,8 +92,17 @@ const MAX_SEARCHES = 2;
  * Search results carry no date, and an undated item sorts below every dated
  * one — which would file this week's company report under a notice from
  * 2023. The article page states it, so a bounded number are filled in.
+ *
+ * Twelve was too few to find the recent ones. The search answers by
+ * relevance rather than by date and its own order is close to arbitrary —
+ * the first result for "алтны үнэ" is from 2023 — so the twelve that got
+ * dated were whichever twelve came first, and a page filled from them read
+ * as an archive. Measured over a forty-item sample of that same search:
+ * dating twelve reached August 2024, dating forty reached March 2025. These
+ * are one request each, run together, and only ever for items a listing
+ * search returned undated.
  */
-const MAX_DATE_LOOKUPS = 12;
+const MAX_DATE_LOOKUPS = 24;
 
 async function articleDate(url: string): Promise<string> {
   try {

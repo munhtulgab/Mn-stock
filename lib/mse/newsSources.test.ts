@@ -1,6 +1,11 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { companyMatchTerms, matchHeadlines, type NewsSourceResult } from "./newsSources";
+import {
+  companyMatchTerms,
+  companySearchTerms,
+  matchHeadlines,
+  type NewsSourceResult,
+} from "./newsSources";
 
 /** The listing as the exchange publishes it: a fund, named after a trust. */
 const ALTT_NAME = "Гоулд Траст Хамтын биржээр арилжаалагддаг хөрөнгө оруулалтын сан";
@@ -85,4 +90,20 @@ test("a company is still matched on its own name and nothing wider", () => {
     "Алтны үнэ түүхэн дээд хэмжээндээ хүрлээ",
   ]);
   assert.deepEqual([...found], ["АПУ ХК-ийн хувьцаа өслөө"]);
+});
+
+test("a fund is searched for its subject before its name", () => {
+  // The half that was missing. Sources that search their own archive are
+  // handed the string terms only, so ALTT was asked about "ALTT" and its
+  // registered name — neither of which either site has ever printed — while
+  // the archive full of gold stories went unqueried. Only the first couple
+  // of queries are used, so the subject has to come first.
+  const search = companySearchTerms("ALTT", ALTT_NAME);
+  assert.deepEqual(search.slice(0, 2), ["алтны үнэ", "алтны нөөц"]);
+  assert.ok(search.includes("ALTT"), "the name is still asked about, just later");
+});
+
+test("a company is searched for its own name and nothing else", () => {
+  const search = companySearchTerms("APU", "АПУ ХК");
+  assert.deepEqual(search, ["APU", "АПУ", "АПУ ХК"]);
 });

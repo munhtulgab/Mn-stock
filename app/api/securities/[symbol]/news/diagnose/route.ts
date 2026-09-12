@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import {
   companyMatchTerms,
+  companySearchTerms,
   distinctiveNameWords,
   fetchNewsSources,
   matchHeadlines,
@@ -61,7 +62,11 @@ export async function GET(
   );
 
   const results = await fetchNewsSources(settings.newsSources, {
-    searchTerms: terms.filter((t): t is string => typeof t === "string"),
+    searchTerms: companySearchTerms(
+      security.symbol,
+      security.name,
+      distinctiveNameWords(names.map((n) => n.name)),
+    ),
     apifyToken: settings.apifyToken,
     facebookToken: settings.facebookToken,
     facebookCookie: settings.facebookCookie,
