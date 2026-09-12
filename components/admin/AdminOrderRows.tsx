@@ -77,14 +77,16 @@ export default function AdminOrderRows({
 
   if (orders.length === 0) {
     return (
-      <p className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-muted">
+      <p className="px-4 pb-4 text-sm text-app-muted">
         Энэ хэрэглэгч арилжаа хийгээгүй байна.
       </p>
     );
   }
 
+  // No card of its own: the panel around it draws that, and two nested cards
+  // read as a box inside a box.
   return (
-    <div className="overflow-hidden rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider">
+    <div className="divide-y divide-app-divider border-t border-app-divider">
       {orders.map((order) => {
         const open = pending?.id === order.id;
         return (
@@ -384,7 +386,8 @@ function EditForm({
         <button
           type="submit"
           disabled={busy}
-          className="flex-1 rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          style={{ color: "var(--on-brand)" }}
+          className="flex-1 rounded-xl bg-brand px-3 py-2 text-sm font-semibold disabled:opacity-60"
         >
           {busy ? "Хадгалж байна…" : "Хадгалах"}
         </button>

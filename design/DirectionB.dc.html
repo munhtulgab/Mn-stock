@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #00d16c; text-decoration: none; }
+    a:hover { color: #ffffff; }
+
+    .b {
+      --bg: #0d0f14; --card: #171a21; --elev: #1e222b;
+      --border: #3a404e; --divider: #252932;
+      --text: #ffffff; --muted: #8b90a0;
+      --pos: #00d16c; --pos-bg: #0e2a1d;
+      --neg: #ff5a5f; --neg-bg: #2c1518;
+      width: 100%; min-height: 960px;
+      background: var(--bg); color: var(--text);
+      font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      font-size: 13px; line-height: 1.4;
+      display: flex; flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: "Geist Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+    /* Everything within reach of one bar: no rail, no page scroll to a nav. */
+    .top {
+      display: flex; align-items: center; gap: 18px;
+      height: 46px; padding: 0 16px;
+      border-bottom: 1px solid var(--border); background: var(--card);
+    }
+    .wordmark { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; color: var(--pos); }
+    .tabs { display: flex; gap: 2px; }
+    .tab {
+      padding: 5px 10px; border-radius: 6px; color: var(--muted);
+      font-size: 12px; font-weight: 600;
+    }
+    .tab.on { background: var(--elev); color: var(--text); }
+    .cmd {
+      margin-left: auto; display: flex; align-items: center; gap: 8px;
+      padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); font-size: 12px; width: 220px;
+    }
+
+    /* A metric strip, not cards: the same four numbers in a quarter of the height. */
+    .strip { display: flex; border-bottom: 1px solid var(--border); background: var(--card); }
+    .metric { flex: 1 1 0; padding: 11px 16px; border-right: 1px solid var(--divider); }
+    .metric:last-child { border-right: 0; }
+    .metric-label { font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    .metric-line { display: flex; align-items: baseline; gap: 7px; margin-top: 3px; }
+    .metric-value { font-size: 19px; font-weight: 650; letter-spacing: -0.02em; }
+    .metric-delta { font-size: 11px; font-weight: 600; color: var(--pos); }
+
+    .work { flex: 1 1 auto; display: grid; grid-template-columns: minmax(0, 1fr) 296px; }
+    .main { min-width: 0; border-right: 1px solid var(--border); }
+
+    .filters {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-bottom: 1px solid var(--divider);
+    }
+    .chip {
+      padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border);
+      font-size: 11px; font-weight: 600; color: var(--muted);
+    }
+    .chip.on { background: var(--elev); color: var(--text); border-color: transparent; }
+    .count { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--muted); font-weight: 600; padding: 7px 16px;
+      border-bottom: 1px solid var(--divider); background: var(--card);
+    }
+    td { padding: 6px 16px; border-bottom: 1px solid var(--divider); }
+    tr:nth-child(even) td { background: rgba(255,255,255,0.012); }
+    .r { text-align: right; }
+
+    .tag {
+      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+    }
+    .tag.buy { background: var(--pos-bg); color: var(--pos); }
+    .tag.sell { background: var(--neg-bg); color: var(--neg); }
+
+    .side { padding: 12px 14px; display: flex; flex-direction: column; gap: 16px; }
+    .side-title { font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    .kv { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+    .kv span:first-child { color: var(--muted); }
+    .ok { color: var(--pos); }
+    .off { color: var(--muted); }
+    .btn {
+      padding: 7px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--elev); color: var(--text);
+      font-size: 12px; font-weight: 600; text-align: center;
+    }
+    .btn.go { background: var(--pos); border-color: transparent; color: #05140c; }
+  </style>
+</helmet>
+
+<div class="b">
+  <div class="top">
+    <span class="wordmark">MSE ADMIN</span>
+    <div class="tabs">
+      <span class="tab on">Самбар</span>
+      <span class="tab">Хэрэглэгч</span>
+      <span class="tab">Захиалга</span>
+      <span class="tab">Систем</span>
+    </div>
+    <div class="cmd">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
+      </svg>
+      Хайх
+      <span class="mono" style="margin-left: auto; font-size: 10px">⌘K</span>
+    </div>
+  </div>
+
+  <div class="strip">
+    <div class="metric">
+      <div class="metric-label">Хэрэглэгч</div>
+      <div class="metric-line"><span class="metric-value mono">128</span><span class="metric-delta">+6</span></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Нэвтэрсэн сешн</div>
+      <div class="metric-line"><span class="metric-value mono">41</span><span class="metric-delta" style="color: var(--muted)">яг одоо</span></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Захиалга</div>
+      <div class="metric-line"><span class="metric-value mono">1 904</span><span class="metric-delta">+38</span></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Эргэлт</div>
+      <div class="metric-line"><span class="metric-value mono">184.2 сая₮</span><span class="metric-delta">+4.1%</span></div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Мэдэгдэл</div>
+      <div class="metric-line"><span class="metric-value mono">96</span><span class="metric-delta">+12</span></div>
+    </div>
+  </div>
+
+  <div class="work">
+    <div class="main">
+      <div class="filters">
+        <span class="chip on">Бүгд</span>
+        <span class="chip">Авсан</span>
+        <span class="chip">Зарсан</span>
+        <span class="chip">Зассан</span>
+        <span class="chip">Буцаасан</span>
+        <span class="count">1 904-с 18 харагдаж байна</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 92px">Цаг</th>
+            <th>Хэрэглэгч</th>
+            <th style="width: 78px">Хувьцаа</th>
+            <th style="width: 74px">Төрөл</th>
+            <th class="r" style="width: 70px">Тоо</th>
+            <th class="r" style="width: 92px">Үнэ</th>
+            <th class="r" style="width: 104px">Дүн</th>
+          </tr>
+        </thead>
+        <tbody>
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="18">
+            <tr>
+              <td class="mono" style="color: var(--muted)">{{ r.t }}</td>
+              <td>{{ r.who }}</td>
+              <td style="font-weight: 600">{{ r.sym }}</td>
+              <td><span class="tag {{ r.cls }}">{{ r.side }}</span></td>
+              <td class="r mono">{{ r.qty }}</td>
+              <td class="r mono">{{ r.price }}</td>
+              <td class="r mono" style="font-weight: 600">{{ r.total }}</td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="side">
+      <div>
+        <div class="side-title" style="margin-bottom: 6px">Систем</div>
+        <div class="kv"><span>Сүүлийн синк</span><span class="mono">12 мин</span></div>
+        <div class="kv"><span>Эх сурвалж</span><span class="mono">9</span></div>
+        <div class="kv"><span>AI түлхүүр</span><span class="mono">5 / 7</span></div>
+        <div class="kv"><span>Push</span><span class="ok">Идэвхтэй</span></div>
+        <div class="kv"><span>SMS</span><span class="off">Унтраалттай</span></div>
+        <div class="kv"><span>Алдаа</span><span class="ok mono">0</span></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="btn go">Одоо синк хийх</div>
+        <div class="btn">Тохиргоо</div>
+      </div>
+      <div>
+        <div class="side-title" style="margin-bottom: 6px">Шинэ бүртгэл</div>
+        <div class="kv"><span>@bilguun</span><span class="mono">2 цаг</span></div>
+        <div class="kv"><span>@saraa</span><span class="mono">1 хоног</span></div>
+        <div class="kv"><span>@temka</span><span class="mono">3 хоног</span></div>
+        <div class="kv"><span>@oyunaa</span><span class="mono">5 хоног</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{ "$preview": { "width": 1440, "height": 960 } }'>
+class Component extends DCLogic {
+  renderVals() {
+    const raw = [
+      ['11:04', '@reader', 'QPAY', 'АВСАН', '100', '600.00', '60 000'],
+      ['10:47', '@bataa', 'GOV', 'ЗАРСАН', '250', '850.00', '212 500'],
+      ['10:12', '@oyunaa', 'ALTT', 'АВСАН', '40', '3 700.00', '148 000'],
+      ['09:58', '@temka', 'APU', 'АВСАН', '600', '900.00', '540 000'],
+      ['09:31', '@saraa', 'TCK', 'ЗАРСАН', '75', '1 250.00', '93 750'],
+      ['09:04', '@bilguun', 'QPAY', 'АВСАН', '150', '600.00', '90 000'],
+      ['08:52', '@munkhtulga', 'LEND', 'АВСАН', '1 200', '148.00', '177 600'],
+      ['08:41', '@bataa', 'MNDL', 'ЗАРСАН', '90', '2 100.00', '189 000'],
+      ['08:20', '@reader', 'QPAY', 'ЗАРСАН', '100', '500.00', '50 000'],
+      ['08:03', '@oyunaa', 'SUU', 'АВСАН', '300', '412.00', '123 600'],
+      ['07:55', '@temka', 'GOV', 'АВСАН', '120', '848.00', '101 760'],
+      ['07:41', '@munkhtulga', 'ALTT', 'ЗАРСАН', '25', '3 690.00', '92 250'],
+      ['07:22', '@saraa', 'APU', 'АВСАН', '450', '898.00', '404 100'],
+      ['07:10', '@bilguun', 'TCK', 'АВСАН', '60', '1 244.00', '74 640'],
+      ['06:58', '@bataa', 'SUU', 'ЗАРСАН', '210', '410.00', '86 100'],
+      ['06:44', '@reader', 'LEND', 'АВСАН', '800', '147.50', '118 000'],
+      ['06:31', '@oyunaa', 'MNDL', 'АВСАН', '35', '2 095.00', '73 325'],
+      ['06:12', '@temka', 'QPAY', 'ЗАРСАН', '200', '598.00', '119 600'],
+    ];
+    return {
+      rows: raw.map(([t, who, sym, side, qty, price, total]) => ({
+        t, who, sym, side, qty, price, total,
+        cls: side === 'АВСАН' ? 'buy' : 'sell',
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

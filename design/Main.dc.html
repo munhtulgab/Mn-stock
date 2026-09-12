@@ -1,0 +1,1074 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--text); }
+
+    /* The app's own tokens, lifted from app/globals.css unchanged. */
+    .shell {
+      --bg: #0d0f14;
+      --card: #171a21;
+      --elev: #1e222b;
+      --border: #3a404e;
+      --divider: #252932;
+      --text: #ffffff;
+      --muted: #8b90a0;
+      --pos: #00d16c;
+      --pos-bg: #0e2a1d;
+      --neg: #ff5a5f;
+      --neg-bg: #2c1518;
+      --warn: #ffb020;
+      --warn-bg: #2b2110;
+      --lift: rgba(255,255,255,0.045);
+      --row-hover: rgba(255,255,255,0.028);
+      --scrim: rgba(3,5,9,0.72);
+    }
+    .shell.t-light {
+      --bg: #f4f5f8;
+      --card: #ffffff;
+      --elev: #eef0f4;
+      --border: #dde1e9;
+      --divider: #edeff4;
+      --text: #10131a;
+      --muted: #667085;
+      --pos: #00a857;
+      --pos-bg: #e4f7ed;
+      --neg: #d92d33;
+      --neg-bg: #fdeaea;
+      --warn: #b26a00;
+      --warn-bg: #fdf2df;
+      --lift: rgba(16,19,26,0.03);
+      --row-hover: rgba(16,19,26,0.025);
+      --scrim: rgba(16,19,26,0.36);
+    }
+
+    .shell {
+      display: flex;
+      width: 100%;
+      min-height: 960px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---- rail ---- */
+    .rail {
+      width: 236px;
+      flex: 0 0 236px;
+      border-right: 1px solid var(--border);
+      background: var(--card);
+      display: flex;
+      flex-direction: column;
+      padding: 18px 14px 16px;
+      gap: 22px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 0 6px; }
+    .brand-mark {
+      width: 30px; height: 30px; border-radius: 9px;
+      background: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      color: #05140c; flex: 0 0 auto;
+    }
+    .brand-name { font-weight: 600; letter-spacing: -0.01em; }
+    .brand-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+
+    .rail-group { display: flex; flex-direction: column; gap: 2px; }
+    .rail-eyebrow {
+      font-size: 10px; letter-spacing: 0.11em; text-transform: uppercase;
+      color: var(--muted); padding: 0 8px 8px; font-weight: 600;
+    }
+    .rail-item {
+      position: relative;
+      display: flex; align-items: center; gap: 11px;
+      padding: 9px 10px; border-radius: 10px;
+      color: var(--muted); font-weight: 500;
+      border: 0; background: none; width: 100%;
+      font: inherit; text-align: left; cursor: pointer;
+    }
+    .rail-item:hover { background: var(--row-hover); color: var(--text); }
+    .rail-item.on { background: var(--elev); color: var(--text); font-weight: 600; }
+    .rail-item.on::before {
+      content: ""; position: absolute; left: -14px; top: 50%;
+      transform: translateY(-50%);
+      width: 3px; height: 20px; border-radius: 0 3px 3px 0;
+      background: var(--accent);
+    }
+    .rail-count {
+      margin-left: auto; font-size: 11px; font-weight: 600;
+      color: var(--muted); font-variant-numeric: tabular-nums;
+    }
+    .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+    .rail-user {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; border-radius: 10px; background: var(--elev);
+    }
+    .avatar {
+      width: 28px; height: 28px; border-radius: 999px; flex: 0 0 auto;
+      background: var(--accent); color: #05140c;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+    }
+    .rail-user-name { font-size: 13px; font-weight: 600; }
+    .rail-user-role { font-size: 11px; color: var(--muted); }
+    .rail-signout {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 9px; border-radius: 10px;
+      border: 1px solid var(--border); background: none;
+      color: var(--neg); font: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer;
+    }
+    .rail-signout:hover { background: var(--neg-bg); }
+
+    /* ---- topbar ---- */
+    .body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+    .topbar {
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .crumb { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+    .crumb-title { font-size: 19px; font-weight: 600; letter-spacing: -0.015em; }
+    .crumb-sub { font-size: 13px; color: var(--muted); }
+    .search {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 9px;
+      width: 292px; padding: 8px 10px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--card); color: var(--muted);
+    }
+    .search-hint {
+      margin-left: auto; font-family: "Geist Mono", ui-monospace, monospace;
+      font-size: 11px; padding: 2px 6px; border-radius: 5px;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--card);
+      color: var(--muted); display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .icon-btn:hover { color: var(--text); }
+
+    /* ---- content ---- */
+    .content { padding: 24px 28px 40px; display: flex; flex-direction: column; gap: 22px; }
+    .d-compact .content { padding: 16px 20px 28px; gap: 14px; }
+
+    .section-head { display: flex; align-items: baseline; gap: 10px; }
+    .eyebrow {
+      font-size: 10px; letter-spacing: 0.11em; text-transform: uppercase;
+      color: var(--muted); font-weight: 600;
+    }
+    .section-title { font-size: 15px; font-weight: 600; }
+    .section-note { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--card);
+      box-shadow: inset 0 1px 0 var(--lift);
+    }
+    .card-pad { padding: 18px; }
+    .d-compact .card-pad { padding: 13px; }
+
+    /* ---- stats ---- */
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .stat { display: flex; flex-direction: column; gap: 12px; }
+    .stat-top { display: flex; align-items: center; gap: 10px; }
+    .stat-tile {
+      width: 30px; height: 30px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--elev); color: var(--muted); flex: 0 0 auto;
+    }
+    .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+    .stat-value {
+      font-size: 30px; font-weight: 650; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .d-compact .stat-value { font-size: 24px; }
+    .stat-foot { display: flex; align-items: center; gap: 8px; }
+    .delta {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px;
+      background: var(--pos-bg); color: var(--pos);
+    }
+    .delta.flat { background: var(--elev); color: var(--muted); }
+    .stat-hint { font-size: 11px; color: var(--muted); }
+
+    /* ---- split ---- */
+    .split { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+
+    /* ---- table ---- */
+    .tbl { width: 100%; border-collapse: collapse; }
+    .tbl th {
+      text-align: left; font-size: 10px; font-weight: 600;
+      letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+      padding: 0 14px 10px; border-bottom: 1px solid var(--divider);
+    }
+    .tbl td { padding: 11px 14px; border-bottom: 1px solid var(--divider); vertical-align: middle; }
+    .d-compact .tbl td { padding: 7px 12px; }
+    .tbl tr:last-child td { border-bottom: 0; }
+    .tbl tbody tr { cursor: pointer; }
+    .tbl tbody tr:hover td { background: var(--row-hover); }
+    .num { font-variant-numeric: tabular-nums; text-align: right; }
+
+    .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .who-name { font-weight: 600; font-size: 13px; }
+    .who-sub { font-size: 11px; color: var(--muted); }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
+      background: var(--elev); color: var(--muted);
+    }
+    .pill.buy { background: var(--pos-bg); color: var(--pos); }
+    .pill.sell { background: var(--neg-bg); color: var(--neg); }
+    .pill.admin { background: var(--elev); color: var(--accent); }
+    .dot { width: 5px; height: 5px; border-radius: 999px; background: currentColor; }
+
+    /* ---- buttons ---- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 9px 14px; border-radius: 10px;
+      font: inherit; font-size: 13px; font-weight: 600;
+      border: 1px solid var(--border); background: var(--card); color: var(--text);
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--elev); }
+    .btn.primary { background: var(--accent); border-color: transparent; color: #05140c; }
+    .btn.primary:hover { filter: brightness(1.07); }
+    .btn.danger { color: var(--neg); }
+    .btn.danger:hover { background: var(--neg-bg); }
+    .btn.wide { flex: 1 1 0; }
+    .btn.sm { padding: 7px 11px; font-size: 12px; }
+
+    /* ---- health list ---- */
+    .kv { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; }
+    .kv + .kv { border-top: 1px solid var(--divider); }
+    .kv-key { font-size: 13px; color: var(--muted); }
+    .kv-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .meter { height: 4px; border-radius: 999px; background: var(--elev); overflow: hidden; }
+    .meter > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+
+    /* ---- detail ---- */
+    .back {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: 13px; color: var(--muted); background: none; border: 0;
+      font: inherit; cursor: pointer; padding: 0;
+    }
+    .back:hover { color: var(--text); }
+    .id-head { display: flex; align-items: center; gap: 14px; }
+    .avatar-lg {
+      width: 52px; height: 52px; border-radius: 999px; flex: 0 0 auto;
+      background: var(--accent); color: #05140c;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700;
+    }
+    .id-name { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; display: flex; align-items: center; gap: 9px; }
+    .id-sub { font-size: 13px; color: var(--muted); }
+
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field-label { font-size: 11px; color: var(--muted); font-weight: 500; }
+    .input {
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--bg); color: var(--text);
+      padding: 9px 11px; font: inherit; font-size: 13px;
+    }
+    .input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+
+    .order-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+    .order-row + .order-row { border-top: 1px solid var(--divider); }
+    .sym {
+      width: 34px; height: 34px; border-radius: 999px; flex: 0 0 auto;
+      background: var(--elev); color: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+    }
+    .order-acts { display: flex; gap: 8px; margin-left: 14px; }
+
+    /* ---- dialog ---- */
+    .scrim {
+      position: absolute; inset: 0; z-index: 20;
+      background: var(--scrim);
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+      backdrop-filter: blur(2px);
+    }
+    .dialog {
+      width: 100%; max-width: 400px;
+      border: 1px solid var(--border); border-radius: 18px;
+      background: var(--card);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.45), inset 0 1px 0 var(--lift);
+      padding: 20px; display: flex; flex-direction: column; gap: 16px;
+    }
+    .dialog-head { display: flex; gap: 12px; }
+    .dialog-icon {
+      width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--neg-bg); color: var(--neg);
+    }
+    .dialog-title { font-size: 15px; font-weight: 650; }
+    .dialog-body { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .dialog-detail {
+      border-radius: 12px; background: var(--bg); padding: 12px 14px;
+      font-size: 13px; display: flex; flex-direction: column; gap: 7px;
+    }
+    .strike { color: var(--muted); text-decoration: line-through; }
+
+    .empty {
+      border: 1px dashed var(--border); border-radius: 14px;
+      padding: 28px; text-align: center; color: var(--muted); font-size: 13px;
+    }
+  </style>
+</helmet>
+
+<div class="shell {{themeClass}} {{densityClass}}" style="--accent: {{accent}}">
+
+  <aside class="rail">
+    <div class="brand">
+      <span class="brand-mark">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19V6.5"></path><path d="M4 19h16"></path>
+          <path d="M8 19v-6"></path><path d="M13 19V9"></path><path d="M18 19v-9.5"></path>
+        </svg>
+      </span>
+      <span>
+        <span class="brand-name">MSE Invest</span>
+        <span class="brand-sub">Удирдлага</span>
+      </span>
+    </div>
+
+    <div class="rail-group">
+      <span class="rail-eyebrow">Хяналт</span>
+      <button class="rail-item {{navOverview}}" onClick="{{ goOverview }}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3.5" y="3.5" width="7" height="7" rx="1.6"></rect>
+          <rect x="13.5" y="3.5" width="7" height="7" rx="1.6"></rect>
+          <rect x="3.5" y="13.5" width="7" height="7" rx="1.6"></rect>
+          <rect x="13.5" y="13.5" width="7" height="7" rx="1.6"></rect>
+        </svg>
+        Самбар
+      </button>
+      <button class="rail-item {{navUsers}}" onClick="{{ goUsers }}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9.5" cy="8" r="3.3"></circle>
+          <path d="M3.5 19.5c1-3.4 3.4-5 6-5s5 1.6 6 5"></path>
+          <path d="M16.5 5.4a3.2 3.2 0 0 1 0 5.2"></path>
+          <path d="M18 14.9c1.4.7 2.4 2.1 2.9 4.6"></path>
+        </svg>
+        Хэрэглэгч
+        <span class="rail-count">128</span>
+      </button>
+      <button class="rail-item {{navOrders}}" onClick="{{ goOrders }}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 4.5h14v15l-3.5-2-3.5 2-3.5-2L5 19.5z"></path>
+          <path d="M8.5 9h7M8.5 13h4"></path>
+        </svg>
+        Захиалга
+        <span class="rail-count">1,904</span>
+      </button>
+    </div>
+
+    <div class="rail-group">
+      <span class="rail-eyebrow">Систем</span>
+      <button class="rail-item {{navSystem}}" onClick="{{ goSystem }}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.1"></circle>
+          <path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6"></path>
+        </svg>
+        Тохиргоо
+      </button>
+      <button class="rail-item" onClick="{{ goSystem }}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7.5c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z"></path>
+          <path d="M4 7.5v9c0 1.7 3.6 3 8 3s8-1.3 8-3v-9"></path>
+          <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"></path>
+        </svg>
+        Синк
+      </button>
+    </div>
+
+    <div class="rail-foot">
+      <div class="rail-user">
+        <span class="avatar">АД</span>
+        <span>
+          <span class="rail-user-name">@Admin</span>
+          <span class="rail-user-role">Системийн админ</span>
+        </span>
+      </div>
+      <button class="rail-signout">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 5.5H6.5v13H14"></path><path d="M17 12H10"></path><path d="m14.5 9 3 3-3 3"></path>
+        </svg>
+        Гарах
+      </button>
+    </div>
+  </aside>
+
+  <div class="body">
+    <header class="topbar">
+      <div class="crumb">
+        <span class="crumb-title">{{ pageTitle }}</span>
+        <span class="crumb-sub">{{ pageSub }}</span>
+      </div>
+      <div class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
+        </svg>
+        Хэрэглэгч, захиалга хайх
+        <span class="search-hint">⌘K</span>
+      </div>
+      <button class="icon-btn" title="Шинэчлэх">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 12a8 8 0 1 1-2.6-5.9"></path><path d="M20 4.5V10h-5.5"></path>
+        </svg>
+      </button>
+    </header>
+
+    <main class="content">
+
+      <!-- ============ САМБАР ============ -->
+      <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+        <div class="stats">
+          <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+            <div class="card card-pad stat">
+              <div class="stat-top">
+                <span class="stat-tile">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="{{ s.icon }}"></path>
+                  </svg>
+                </span>
+                <span class="stat-label">{{ s.label }}</span>
+              </div>
+              <span class="stat-value">{{ s.value }}</span>
+              <div class="stat-foot">
+                <span class="delta {{ s.tone }}">{{ s.delta }}</span>
+                <span class="stat-hint">{{ s.hint }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div class="split">
+          <div class="card">
+            <div class="card-pad" style="padding-bottom: 12px">
+              <div class="section-head">
+                <span class="section-title">Сүүлийн захиалгууд</span>
+                <span class="section-note">Сүүлийн 24 цаг</span>
+              </div>
+            </div>
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Хэрэглэгч</th>
+                  <th>Хувьцаа</th>
+                  <th>Төрөл</th>
+                  <th class="num">Тоо</th>
+                  <th class="num">Дүн</th>
+                  <th class="num">Цаг</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ recent }}" as="r" hint-placeholder-count="6">
+                  <tr onClick="{{ r.open }}">
+                    <td>
+                      <span class="who">
+                        <span class="avatar" style="background: {{ r.tint }}">{{ r.initials }}</span>
+                        <span>
+                          <span class="who-name">{{ r.name }}</span>
+                          <span class="who-sub">{{ r.handle }}</span>
+                        </span>
+                      </span>
+                    </td>
+                    <td style="font-weight: 600">{{ r.symbol }}</td>
+                    <td><span class="pill {{ r.sideClass }}"><span class="dot"></span>{{ r.side }}</span></td>
+                    <td class="num">{{ r.qty }}</td>
+                    <td class="num" style="font-weight: 600">{{ r.total }}</td>
+                    <td class="num" style="color: var(--muted)">{{ r.when }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 14px">
+            <div class="card card-pad">
+              <div class="section-head" style="margin-bottom: 6px">
+                <span class="section-title">Системийн байдал</span>
+              </div>
+              <sc-for list="{{ health }}" as="h" hint-placeholder-count="5">
+                <div class="kv">
+                  <span class="kv-key">{{ h.key }}</span>
+                  <span class="kv-val" style="color: {{ h.color }}">{{ h.value }}</span>
+                </div>
+              </sc-for>
+              <div style="margin-top: 14px; display: flex; flex-direction: column; gap: 7px">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--muted)">
+                  <span>AI түлхүүр</span><span>5 / 7</span>
+                </div>
+                <div class="meter"><span style="width: 71%"></span></div>
+              </div>
+              <div style="margin-top: 14px; display: flex; gap: 8px">
+                <button class="btn wide primary sm">Одоо синк хийх</button>
+                <button class="btn sm" onClick="{{ goSystem }}">Тохиргоо</button>
+              </div>
+            </div>
+
+            <div class="card card-pad">
+              <div class="section-head" style="margin-bottom: 8px">
+                <span class="section-title">Шинэ бүртгэл</span>
+              </div>
+              <sc-for list="{{ signups }}" as="u" hint-placeholder-count="3">
+                <div class="kv" style="cursor: pointer" onClick="{{ u.open }}">
+                  <span class="who">
+                    <span class="avatar" style="background: {{ u.tint }}">{{ u.initials }}</span>
+                    <span>
+                      <span class="who-name">{{ u.handle }}</span>
+                      <span class="who-sub">{{ u.name }}</span>
+                    </span>
+                  </span>
+                  <span class="who-sub">{{ u.when }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ ХЭРЭГЛЭГЧ ============ -->
+      <sc-if value="{{ isUsers }}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <div class="search" style="margin-left: 0; width: 320px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
+            </svg>
+            Нэр, утас, и-мэйлээр шүүх
+          </div>
+          <button class="btn sm">Бүгд <span style="color: var(--muted)">128</span></button>
+          <button class="btn sm">Админ <span style="color: var(--muted)">2</span></button>
+          <button class="btn sm">Идэвхтэй <span style="color: var(--muted)">41</span></button>
+          <button class="btn primary sm" style="margin-left: auto">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <path d="M12 5.5v13M5.5 12h13"></path>
+            </svg>
+            Хэрэглэгч нэмэх
+          </button>
+        </div>
+
+        <div class="card">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th style="padding-top: 14px">Хэрэглэгч</th>
+                <th style="padding-top: 14px">Эрх</th>
+                <th style="padding-top: 14px" class="num">Захиалга</th>
+                <th style="padding-top: 14px" class="num">Хувьцаа</th>
+                <th style="padding-top: 14px" class="num">Үлдэгдэл</th>
+                <th style="padding-top: 14px" class="num">Бүртгүүлсэн</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ users }}" as="u" hint-placeholder-count="7">
+                <tr onClick="{{ u.open }}">
+                  <td>
+                    <span class="who">
+                      <span class="avatar" style="background: {{ u.tint }}">{{ u.initials }}</span>
+                      <span>
+                        <span class="who-name">{{ u.handle }}</span>
+                        <span class="who-sub">{{ u.name }}</span>
+                      </span>
+                    </span>
+                  </td>
+                  <td><span class="pill {{ u.roleClass }}"><span class="dot"></span>{{ u.role }}</span></td>
+                  <td class="num">{{ u.orders }}</td>
+                  <td class="num">{{ u.holdings }}</td>
+                  <td class="num" style="font-weight: 600">{{ u.cash }}</td>
+                  <td class="num" style="color: var(--muted)">{{ u.joined }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </sc-if>
+
+      <!-- ============ НЭГ ХЭРЭГЛЭГЧ ============ -->
+      <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ true }}">
+        <button class="back" onClick="{{ goUsers }}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 6l-6 6 6 6"></path>
+          </svg>
+          Хэрэглэгчид
+        </button>
+
+        <div class="id-head">
+          <span class="avatar-lg">УД</span>
+          <span style="flex: 1 1 auto; min-width: 0">
+            <span class="id-name">@reader <span class="pill"><span class="dot"></span>Хэрэглэгч</span></span>
+            <span class="id-sub">Уншигч Дорж · бүртгүүлсэн 2026-05-05 · 1 нэвтэрсэн сешн</span>
+          </span>
+          <button class="btn danger" onClick="{{ askDeleteUser }}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.5 6.5h15M9.5 6.5V4.6h5v1.9"></path>
+              <path d="M6.5 6.5 7.4 20h9.2l.9-13.5"></path>
+            </svg>
+            Хэрэглэгчийг устгах
+          </button>
+        </div>
+
+        <div class="split">
+          <div style="display: flex; flex-direction: column; gap: 14px">
+            <div class="card card-pad">
+              <div class="section-head" style="margin-bottom: 14px">
+                <span class="eyebrow">Бүртгэл</span>
+                <span class="section-title">Мэдээлэл</span>
+              </div>
+              <div class="grid2">
+                <label class="field">
+                  <span class="field-label">Хэрэглэгчийн нэр</span>
+                  <input class="input" value="reader">
+                </label>
+                <label class="field">
+                  <span class="field-label">Овог нэр</span>
+                  <input class="input" value="Уншигч Дорж">
+                </label>
+                <label class="field">
+                  <span class="field-label">И-мэйл</span>
+                  <input class="input" value="dorj@example.mn">
+                </label>
+                <label class="field">
+                  <span class="field-label">Утас</span>
+                  <input class="input" value="9911 2233">
+                </label>
+                <label class="field">
+                  <span class="field-label">Мөнгөн үлдэгдэл (₮)</span>
+                  <input class="input" value="7 520 000">
+                </label>
+                <label class="field">
+                  <span class="field-label">Шинэ нууц үг</span>
+                  <input class="input" type="password" value="········">
+                </label>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; margin-top: 16px">
+                <span style="font-size: 13px; color: var(--muted)">Админ эрхтэй</span>
+                <span style="width: 36px; height: 20px; border-radius: 999px; background: var(--elev); border: 1px solid var(--border); position: relative">
+                  <span style="position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 999px; background: var(--muted)"></span>
+                </span>
+                <button class="btn primary" style="margin-left: auto" onClick="{{ askSave }}">Хадгалах</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-pad" style="padding-bottom: 4px">
+                <div class="section-head">
+                  <span class="eyebrow">Түүх</span>
+                  <span class="section-title">Захиалга</span>
+                  <span class="section-note">3 бичлэг</span>
+                </div>
+              </div>
+              <div class="card-pad" style="padding-top: 6px">
+                <sc-for list="{{ orders }}" as="o" hint-placeholder-count="3">
+                  <div class="order-row">
+                    <span class="sym">{{ o.symbol }}</span>
+                    <span style="flex: 1 1 auto; min-width: 0">
+                      <span style="display: flex; align-items: center; gap: 7px">
+                        <span class="who-name">{{ o.symbol }}</span>
+                        <span class="pill {{ o.sideClass }}"><span class="dot"></span>{{ o.side }}</span>
+                        <span class="pill">{{ o.tag }}</span>
+                      </span>
+                      <span class="who-sub">{{ o.when }}</span>
+                    </span>
+                    <span style="text-align: right">
+                      <span style="display: block; font-variant-numeric: tabular-nums">{{ o.line }}</span>
+                      <span class="who-sub" style="font-variant-numeric: tabular-nums">{{ o.total }}</span>
+                    </span>
+                    <span class="order-acts">
+                      <button class="btn sm" onClick="{{ o.askEdit }}">Засах</button>
+                      <button class="btn sm" onClick="{{ o.askReverse }}">Буцаах</button>
+                      <button class="btn sm danger" onClick="{{ o.askDelete }}">Устгах</button>
+                    </span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 14px">
+            <div class="card card-pad">
+              <div class="section-head" style="margin-bottom: 10px">
+                <span class="eyebrow">Данс</span>
+                <span class="section-title">Хувьцаа</span>
+              </div>
+              <div class="order-row" style="padding-top: 4px">
+                <span class="sym">QP</span>
+                <span style="flex: 1 1 auto">
+                  <span class="who-name">QPAY</span>
+                  <span class="who-sub">дундаж өртөг 450.00₮</span>
+                </span>
+                <span style="font-weight: 600; font-variant-numeric: tabular-nums">200 ш</span>
+              </div>
+            </div>
+
+            <div class="card card-pad">
+              <div class="section-head" style="margin-bottom: 4px">
+                <span class="eyebrow">Хураангуй</span>
+                <span class="section-title">Данс</span>
+              </div>
+              <sc-for list="{{ summary }}" as="s" hint-placeholder-count="4">
+                <div class="kv">
+                  <span class="kv-key">{{ s.key }}</span>
+                  <span class="kv-val">{{ s.value }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ ТОХИРГОО ============ -->
+      <sc-if value="{{ isSystem }}" hint-placeholder-val="{{ true }}">
+        <div class="split">
+          <div style="display: flex; flex-direction: column; gap: 14px">
+            <sc-for list="{{ settings }}" as="g" hint-placeholder-count="2">
+              <div class="card card-pad">
+                <div class="section-head" style="margin-bottom: 12px">
+                  <span class="eyebrow">{{ g.eyebrow }}</span>
+                  <span class="section-title">{{ g.title }}</span>
+                  <span class="section-note">{{ g.note }}</span>
+                </div>
+                <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
+                  <div class="kv">
+                    <span class="kv-key">{{ r.key }}</span>
+                    <span class="pill {{ r.tone }}"><span class="dot"></span>{{ r.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+          <div class="card card-pad">
+            <div class="section-head" style="margin-bottom: 10px">
+              <span class="eyebrow">Ажиллагаа</span>
+              <span class="section-title">Синк</span>
+            </div>
+            <p style="font-size: 13px; color: var(--muted); margin: 0 0 14px">
+              Хуваарийн дагуу цаг тутам ажиллана. Сүүлийн ажиллагаа 12 минутын өмнө,
+              308 компанийн ханш шинэчлэгдсэн.
+            </p>
+            <button class="btn primary" style="width: 100%">Одоо синк хийх</button>
+          </div>
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <!-- ============ БАТАЛГААЖУУЛАХ ============ -->
+  <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="scrim">
+      <div class="dialog">
+        <div class="dialog-head">
+          <span class="dialog-icon" style="background: {{ dialog.iconBg }}; color: {{ dialog.iconFg }}">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="8.6"></circle><path d="M12 7.8v4.7"></path><path d="M12 15.9h.01"></path>
+            </svg>
+          </span>
+          <span>
+            <span class="dialog-title">{{ dialog.title }}</span>
+            <span class="dialog-body">{{ dialog.body }}</span>
+          </span>
+        </div>
+
+        <sc-if value="{{ dialog.hasDetail }}" hint-placeholder-val="{{ true }}">
+          <div class="dialog-detail">
+            <sc-for list="{{ dialog.lines }}" as="l" hint-placeholder-count="3">
+              <span style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+                <span style="color: var(--muted)">{{ l.key }}</span>
+                <span>
+                  <sc-if value="{{ l.changed }}" hint-placeholder-val="{{ true }}">
+                    <span class="strike">{{ l.was }}</span>
+                  </sc-if>
+                  <span style="font-weight: 600">{{ l.now }}</span>
+                </span>
+              </span>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <div style="display: flex; gap: 9px">
+          <button class="btn wide" onClick="{{ closeDialog }}">Болих</button>
+          <button class="btn wide primary" style="background: {{ dialog.confirmBg }}; color: {{ dialog.confirmFg }}" onClick="{{ closeDialog }}">
+            {{ dialog.confirm }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "$preview": { "width": 1440, "height": 960 },
+  "accent": { "editor": "color", "default": "#00d16c", "options": ["#00d16c", "#5b8cff", "#ff9f45", "#c084fc"], "section": "Загвар" },
+  "theme": { "editor": "enum", "default": "dark", "options": ["dark", "light"], "section": "Загвар" },
+  "density": { "editor": "enum", "default": "comfortable", "options": ["comfortable", "compact"], "section": "Загвар" },
+  "screen": { "editor": "enum", "default": "overview", "options": ["overview", "users", "detail", "system"], "section": "Дэлгэц" }
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: null, dialog: null };
+  }
+
+  /* The tweak sets the opening screen; clicking takes over from there. */
+  screen() {
+    return this.state.tab ?? this.props.screen ?? 'overview';
+  }
+
+  go(tab) {
+    return () => this.setState({ tab, dialog: null });
+  }
+
+  ask(dialog) {
+    return () => this.setState({ dialog });
+  }
+
+  renderVals() {
+    const screen = this.screen();
+    const accent = this.props.accent ?? '#00d16c';
+    const openDetail = this.go('detail');
+
+    const titles = {
+      overview: ['Хяналтын самбар', 'Сүүлийн 24 цагийн байдал'],
+      users: ['Хэрэглэгчид', '128 бүртгэл'],
+      detail: ['Хэрэглэгчид', '@reader'],
+      system: ['Системийн тохиргоо', 'AI, мэдээ, мэдэгдэл, SMS'],
+    };
+    const [pageTitle, pageSub] = titles[screen] ?? titles.overview;
+
+    const person = (handle, name, tint) => ({
+      handle: '@' + handle,
+      name,
+      initials: name.slice(0, 2).toUpperCase(),
+      tint,
+      open: openDetail,
+    });
+
+    const dialogs = {
+      deleteUser: {
+        title: '@reader-ийг бүрмөсөн устгах уу?',
+        body: 'Бүртгэл болон түүнд харьяалагдах бүх өгөгдөл устана. Буцаах боломжгүй.',
+        confirm: 'Устгах',
+        confirmBg: '#ff5a5f',
+        confirmFg: '#ffffff',
+        iconBg: 'rgba(255,90,95,0.14)',
+        iconFg: '#ff5a5f',
+        hasDetail: true,
+        lines: [
+          { key: 'Захиалга', now: '3', changed: false, was: '' },
+          { key: 'Хувьцаа', now: '1', changed: false, was: '' },
+          { key: 'Үлдэгдэл', now: '7 520 000₮', changed: false, was: '' },
+          { key: 'Нэвтэрсэн сешн', now: '1', changed: false, was: '' },
+        ],
+      },
+      editOrder: {
+        title: 'Захиалгыг засах уу?',
+        body: 'Мөнгө болон хувьцааны үлдэгдэл хуучин болон шинэ дүнгийн зөрүүгээр хөдөлнө.',
+        confirm: 'Засах',
+        confirmBg: accent,
+        confirmFg: '#05140c',
+        iconBg: 'rgba(255,176,32,0.14)',
+        iconFg: '#ffb020',
+        hasDetail: true,
+        lines: [
+          { key: 'Тоо ширхэг', was: '100 ш', now: '60 ш', changed: true },
+          { key: 'Үнэ', was: '', now: '500.00₮', changed: false },
+          { key: 'Нийт', was: '50 000.00₮', now: '30 000.00₮', changed: true },
+        ],
+      },
+      reverseOrder: {
+        title: 'Захиалгыг буцаах уу?',
+        body: 'Эсрэг захиалга нэмэгдэж, түүх хоёуланг нь харуулна. Үлдэгдэл өмнөх байдалдаа эргэнэ.',
+        confirm: 'Буцаах',
+        confirmBg: accent,
+        confirmFg: '#05140c',
+        iconBg: 'rgba(255,176,32,0.14)',
+        iconFg: '#ffb020',
+        hasDetail: false,
+        lines: [],
+      },
+      deleteOrder: {
+        title: 'Захиалгыг бүрмөсөн устгах уу?',
+        body: 'Мөр түүхээс арилж, мөнгө болон хувьцааны үлдэгдэл сэргэнэ. Буцаах боломжгүй.',
+        confirm: 'Устгах',
+        confirmBg: '#ff5a5f',
+        confirmFg: '#ffffff',
+        iconBg: 'rgba(255,90,95,0.14)',
+        iconFg: '#ff5a5f',
+        hasDetail: true,
+        lines: [
+          { key: 'QPAY АВСАН', now: '100 ш × 400.00₮', changed: false, was: '' },
+          { key: 'Огноо', now: '2026-09-01 11:00', changed: false, was: '' },
+        ],
+      },
+      save: {
+        title: 'Өөрчлөлтийг хадгалах уу?',
+        body: 'Энэ бүртгэлд дараах өөрчлөлт орно. Хэрэглэгчид мэдэгдэхгүй.',
+        confirm: 'Хадгалах',
+        confirmBg: accent,
+        confirmFg: '#05140c',
+        iconBg: 'rgba(255,176,32,0.14)',
+        iconFg: '#ffb020',
+        hasDetail: true,
+        lines: [
+          { key: 'Үлдэгдэл', was: '7 520 000₮', now: '1 234 567₮', changed: true },
+          { key: 'Нууц үг', now: 'солигдоно', changed: false, was: '' },
+        ],
+      },
+    };
+
+    const order = (symbol, side, tag, when, line, total) => ({
+      symbol,
+      side,
+      sideClass: side === 'АВСАН' ? 'buy' : 'sell',
+      tag,
+      when,
+      line,
+      total,
+      askEdit: this.ask('editOrder'),
+      askReverse: this.ask('reverseOrder'),
+      askDelete: this.ask('deleteOrder'),
+    });
+
+    return {
+      accent,
+      themeClass: this.props.theme === 'light' ? 't-light' : 't-dark',
+      densityClass: this.props.density === 'compact' ? 'd-compact' : 'd-roomy',
+
+      isOverview: screen === 'overview',
+      isUsers: screen === 'users',
+      isDetail: screen === 'detail',
+      isSystem: screen === 'system',
+      navOverview: screen === 'overview' ? 'on' : '',
+      navUsers: screen === 'users' || screen === 'detail' ? 'on' : '',
+      navOrders: '',
+      navSystem: screen === 'system' ? 'on' : '',
+      pageTitle,
+      pageSub,
+
+      goOverview: this.go('overview'),
+      goUsers: this.go('users'),
+      goOrders: this.go('overview'),
+      goSystem: this.go('system'),
+      askDeleteUser: this.ask('deleteUser'),
+      askSave: this.ask('save'),
+      closeDialog: () => this.setState({ dialog: null }),
+
+      dialogOpen: this.state.dialog !== null,
+      dialog: dialogs[this.state.dialog] ?? dialogs.deleteUser,
+
+      stats: [
+        {
+          label: 'Хэрэглэгч', value: '128', delta: '+6', tone: '', hint: '7 хоногт',
+          icon: 'M9.5 11.3a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6M3.5 19.5c1-3.4 3.4-5 6-5s5 1.6 6 5',
+        },
+        {
+          label: 'Нэвтэрсэн сешн', value: '41', delta: 'Идэвхтэй', tone: 'flat', hint: 'яг одоо',
+          icon: 'M12 3.5v8.7M7.5 6.4a7.5 7.5 0 1 0 9 0',
+        },
+        {
+          label: 'Захиалга', value: '1 904', delta: '+38', tone: '', hint: 'өнөөдөр',
+          icon: 'M5 4.5h14v15l-3.5-2-3.5 2-3.5-2L5 19.5z',
+        },
+        {
+          label: 'Мэдэгдэл', value: '96', delta: '+12', tone: '', hint: '7 хоногт',
+          icon: 'M18 9a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7',
+        },
+      ],
+
+      recent: [
+        { ...person('reader', 'Уншигч Дорж', '#00d16c'), symbol: 'QPAY', side: 'АВСАН', sideClass: 'buy', qty: '100', total: '60 000₮', when: '11:04' },
+        { ...person('bataa', 'Батаа Ц', '#5b8cff'), symbol: 'GOV', side: 'ЗАРСАН', sideClass: 'sell', qty: '250', total: '212 500₮', when: '10:47' },
+        { ...person('oyunaa', 'Оюунаа Б', '#ff9f45'), symbol: 'ALTT', side: 'АВСАН', sideClass: 'buy', qty: '40', total: '148 000₮', when: '10:12' },
+        { ...person('temka', 'Тэмүүлэн Г', '#c084fc'), symbol: 'APU', side: 'АВСАН', sideClass: 'buy', qty: '600', total: '540 000₮', when: '09:58' },
+        { ...person('saraa', 'Сараа Д', '#00d16c'), symbol: 'TCK', side: 'ЗАРСАН', sideClass: 'sell', qty: '75', total: '93 750₮', when: '09:31' },
+        { ...person('bilguun', 'Билгүүн Н', '#5b8cff'), symbol: 'QPAY', side: 'АВСАН', sideClass: 'buy', qty: '150', total: '90 000₮', when: '09:04' },
+      ],
+
+      health: [
+        { key: 'Сүүлийн синк', value: '12 мин өмнө', color: 'var(--text)' },
+        { key: 'Мэдээллийн эх сурвалж', value: '9 идэвхтэй', color: 'var(--text)' },
+        { key: 'Push мэдэгдэл', value: 'Идэвхтэй', color: 'var(--pos)' },
+        { key: 'SMS', value: 'Унтраалттай', color: 'var(--muted)' },
+        { key: 'Хүлээгдэж буй алдаа', value: '0', color: 'var(--pos)' },
+      ],
+
+      signups: [
+        { ...person('bilguun', 'Билгүүн Н', '#5b8cff'), when: '2 цаг' },
+        { ...person('saraa', 'Сараа Д', '#00d16c'), when: 'Өчигдөр' },
+        { ...person('temka', 'Тэмүүлэн Г', '#c084fc'), when: '3 хоног' },
+      ],
+
+      users: [
+        { ...person('Admin', 'Админ', accent), role: 'Системийн админ', roleClass: 'admin', orders: '0', holdings: '0', cash: '10 000 000₮', joined: '2026-09-12' },
+        { ...person('munkhtulga', 'Мөнхтулга Б', '#5b8cff'), role: 'Хэрэглэгч', roleClass: '', orders: '214', holdings: '11', cash: '9 000 000₮', joined: '2026-01-01' },
+        { ...person('reader', 'Уншигч Дорж', '#00d16c'), role: 'Хэрэглэгч', roleClass: '', orders: '3', holdings: '1', cash: '7 520 000₮', joined: '2026-05-05' },
+        { ...person('bataa', 'Батаа Ц', '#ff9f45'), role: 'Хэрэглэгч', roleClass: '', orders: '87', holdings: '6', cash: '3 410 200₮', joined: '2026-05-18' },
+        { ...person('oyunaa', 'Оюунаа Б', '#c084fc'), role: 'Хэрэглэгч', roleClass: '', orders: '52', holdings: '4', cash: '1 875 000₮', joined: '2026-06-02' },
+        { ...person('temka', 'Тэмүүлэн Г', '#00d16c'), role: 'Хэрэглэгч', roleClass: '', orders: '19', holdings: '2', cash: '640 500₮', joined: '2026-07-21' },
+        { ...person('saraa', 'Сараа Д', '#5b8cff'), role: 'Хэрэглэгч', roleClass: '', orders: '6', holdings: '1', cash: '9 812 000₮', joined: '2026-08-30' },
+      ],
+
+      orders: [
+        order('QPAY', 'ЗАРСАН', 'БУЦААЛТ', '2026-09-12 11:36', '100 ш × 500.00₮', '50 000.00₮'),
+        order('QPAY', 'АВСАН', 'БУЦААГДСАН', '2026-09-05 11:00', '100 ш × 500.00₮', '50 000.00₮'),
+        order('QPAY', 'АВСАН', 'ЗАССАН', '2026-09-01 11:00', '60 ш × 400.00₮', '24 000.00₮'),
+      ],
+
+      summary: [
+        { key: 'Мөнгөн үлдэгдэл', value: '7 520 000₮' },
+        { key: 'Хувьцааны өртөг', value: '90 000₮' },
+        { key: 'Захиалга', value: '3' },
+        { key: 'Нэвтэрсэн сешн', value: '1' },
+      ],
+
+      settings: [
+        {
+          eyebrow: 'Гадаад үйлчилгээ', title: 'AI шинжилгээ', note: '5 / 7 тохируулсан',
+          rows: [
+            { key: 'Gemini', value: 'Холбогдсон', tone: 'buy' },
+            { key: 'Groq', value: 'Холбогдсон', tone: 'buy' },
+            { key: 'OpenRouter', value: 'Холбогдсон', tone: 'buy' },
+            { key: 'Mistral', value: 'Холбогдсон', tone: 'buy' },
+            { key: 'Cerebras', value: 'Холбогдсон', tone: 'buy' },
+            { key: 'Cloudflare', value: 'Тохируулаагүй', tone: '' },
+            { key: 'Anthropic', value: 'Тохируулаагүй', tone: '' },
+          ],
+        },
+        {
+          eyebrow: 'Мэдэгдэл', title: 'Суваг', note: '',
+          rows: [
+            { key: 'Push мэдэгдэл', value: 'Идэвхтэй', tone: 'buy' },
+            { key: 'Дохионы төрөл', value: 'АВАХ, ЗАРАХ', tone: '' },
+            { key: 'CallPro SMS', value: 'Унтраалттай', tone: '' },
+            { key: 'Мэдээллийн эх сурвалж', value: '9 сайт', tone: '' },
+          ],
+        },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
