@@ -412,20 +412,34 @@ function Pane({
 export default function PriceChartPro({
   candles,
   symbol,
+  goldOnly = false,
 }: {
   candles: Candle[];
   /** Needed only to fetch the rest of the history for the whole-life range. */
   symbol: string;
+  /**
+   * For a listing that is the metal: the gold chart is the only chart.
+   *
+   * A gold tracker three months old has a candle chart of seventy-seven bars
+   * and a line chart of the same, and neither is what the page is opened to
+   * see. Offering all three and defaulting to the shortest made the reader
+   * pick the right one before the page said anything — so on those listings
+   * there is one view, it is the metal, and it opens on the whole of it.
+   */
+  goldOnly?: boolean;
 }) {
-  // Opens on the line and on five years, as asked.
-  const [type, setType] = useState<ChartType>("line");
-  const [rangeIndex, setRangeIndex] = useState(DEFAULT_RANGE);
+  // Opens on the line and on five years, as asked — or on the metal and all
+  // of it, where the listing is the metal.
+  const [type, setType] = useState<ChartType>(goldOnly ? "gold" : "line");
+  const [rangeIndex, setRangeIndex] = useState(goldOnly ? WHOLE_HISTORY : DEFAULT_RANGE);
   const [overlays, setOverlays] = useState<string[]>(DEFAULT_OVERLAYS);
   const [panes, setPanes] = useState<PaneKey[]>(DEFAULT_PANES);
   /** The full stored series, once somebody has asked to see all of it. */
   const [everything, setEverything] = useState<Candle[] | null>(null);
   /** The gold series, once somebody has asked to see it. */
   const [gold, setGold] = useState<GoldPoint[] | null>(null);
+  /** True once the metal has been asked for and did not answer. */
+  const [goldFailed, setGoldFailed] = useState(false);
 
   const range = RANGES[rangeIndex];
 
@@ -481,11 +495,19 @@ export default function PriceChartPro({
     fetch("/api/gold")
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((data) => {
-        if (!cancelled && Array.isArray(data.prices)) setGold(data.prices as GoldPoint[]);
+        if (cancelled) return;
+        if (Array.isArray(data.prices) && data.prices.length > 0) {
+          setGold(data.prices as GoldPoint[]);
+        } else {
+          setGoldFailed(true);
+        }
       })
-      // Silently: the price is still drawn, and a chart that shouts about a
-      // third party's website being down helps nobody.
-      .catch(() => undefined);
+      // Quietly on a chart that has a price of its own to fall back on; on a
+      // listing where the metal is the whole chart the reader is told, because
+      // there the fallback is a stub of a series and looks like the answer.
+      .catch(() => {
+        if (!cancelled) setGoldFailed(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -560,6 +582,19 @@ export default function PriceChartPro({
     return <p className="text-xs text-app-muted">Арилжааны түүх алга.</p>;
   }
 
+  // On a metal listing, wait for the metal rather than flashing up the
+  // listing's own three months and redrawing a second later.
+  if (goldOnly && gold === null && !goldFailed) {
+    return (
+      <div>
+        <h2 className="mb-2 truncate text-sm font-semibold text-app-text">График</h2>
+        <div className="flex h-72 w-full items-center justify-center rounded-xl border border-dashed border-app-border">
+          <span className="text-xs text-app-muted">Алтны ханш ачаалж байна…</span>
+        </div>
+      </div>
+    );
+  }
+
   const priceRows = rows;
 
   return (
@@ -568,7 +603,7 @@ export default function PriceChartPro({
       <div className="flex items-center justify-between gap-2 mb-2">
         <h2 className="text-sm font-semibold text-app-text truncate">График</h2>
         <div className="flex items-center gap-1 shrink-0">
-          {CHART_TYPES.map((option) => (
+          {(goldOnly ? CHART_TYPES.filter((t) => t.key === "gold") : CHART_TYPES).map((option) => (
             <Chip
               key={option.key}
               active={option.key === type}
@@ -687,6 +722,12 @@ export default function PriceChartPro({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+
+      {goldOnly && goldFailed && (
+        <p className="mb-2 text-[10px] text-app-negative">
+          Алтны ханш татагдсангүй. Доорх нь сангийн өөрийн арилжааны түүх.
+        </p>
+      )}
 
       {/* What the lines are.
           
