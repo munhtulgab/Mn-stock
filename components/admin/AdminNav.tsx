@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Avatar from "@/components/Avatar";
 
 /**
  * One bar across the top of the sheet: the mark, the sections, and who is
@@ -27,11 +28,16 @@ const SECTIONS = [
 
 export default function AdminNav({
   username,
+  email,
+  avatar,
   serviceAdmin,
   accountHref,
   counts,
 }: {
   username: string;
+  /** Under the name, where a product puts the account's address. */
+  email?: string;
+  avatar?: string;
   /** True for the administration-only account, which has no app side to go to. */
   serviceAdmin?: boolean;
   /** This administrator's own row, where they change their own password. */
@@ -109,6 +115,19 @@ export default function AdminNav({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
+        {/* Two round buttons and then who you are, which is where every
+            application of this shape puts them. Both go somewhere real —
+            there is no bell here, because this side of the app has nothing
+            to notify an administrator about. */}
+        <CircleLink href="/admin/settings" label="Тохиргоо">
+          {/* A cog with a body, not the app's ring-and-eight-spokes: at 17px
+              inside a circle that one reads as a small sun. */}
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12.9 2.4h-1.8a1.6 1.6 0 0 0-1.6 1.6v.3a1.6 1.6 0 0 1-.8 1.4l-.6.35a1.6 1.6 0 0 1-1.6 0l-.26-.15a1.6 1.6 0 0 0-2.19.59l-.9 1.56a1.6 1.6 0 0 0 .59 2.19l.26.15a1.6 1.6 0 0 1 .8 1.38v.7a1.6 1.6 0 0 1-.8 1.39l-.26.15a1.6 1.6 0 0 0-.59 2.19l.9 1.56a1.6 1.6 0 0 0 2.19.58l.26-.15a1.6 1.6 0 0 1 1.6 0l.6.35a1.6 1.6 0 0 1 .8 1.39V20a1.6 1.6 0 0 0 1.6 1.6h1.8a1.6 1.6 0 0 0 1.6-1.6v-.3a1.6 1.6 0 0 1 .8-1.39l.6-.35a1.6 1.6 0 0 1 1.6 0l.26.15a1.6 1.6 0 0 0 2.19-.58l.9-1.56a1.6 1.6 0 0 0-.59-2.19l-.26-.15a1.6 1.6 0 0 1-.8-1.39v-.7a1.6 1.6 0 0 1 .8-1.38l.26-.15a1.6 1.6 0 0 0 .59-2.19l-.9-1.56a1.6 1.6 0 0 0-2.19-.59l-.26.15a1.6 1.6 0 0 1-1.6 0l-.6-.35a1.6 1.6 0 0 1-.8-1.4V4a1.6 1.6 0 0 0-1.6-1.6Z" />
+            <circle cx="12" cy="12" r="2.7" />
+          </svg>
+        </CircleLink>
+
         {serviceAdmin ? (
           // The administration-only account has nowhere to go but out: the
           // app side turns it away, so a link to it would be a round trip.
@@ -124,21 +143,18 @@ export default function AdminNav({
             </svg>
           </button>
         ) : (
-          <Link
-            href="/"
-            aria-label="Апп руу"
-            title="Апп руу"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-app-border text-app-muted hover:text-app-text"
-          >
+          <CircleLink href="/" label="Апп руу">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4.5 11 12 4.5l7.5 6.5" />
               <path d="M6.5 10v9h11v-9" />
             </svg>
-          </Link>
+          </CircleLink>
         )}
 
         <Identity
           username={username}
+          email={email}
+          avatar={avatar}
           serviceAdmin={serviceAdmin}
           accountHref={accountHref}
         />
@@ -147,36 +163,60 @@ export default function AdminNav({
   );
 }
 
+function CircleLink({
+  href,
+  label,
+  children,
+}: {
+  href: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      title={label}
+      className="flex h-10 w-10 items-center justify-center rounded-full border border-app-border text-app-muted hover:bg-app-elevated hover:text-app-text"
+    >
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * Who is signed in: the picture, the name, and under it the address — the
+ * second line an application of this shape always carries. The role stands in
+ * when no address is on the account, because a line saying nothing is worse
+ * than a line saying which kind of account this is.
+ */
 function Identity({
   username,
+  email,
+  avatar,
   serviceAdmin,
   accountHref,
 }: {
   username: string;
+  email?: string;
+  avatar?: string;
   serviceAdmin?: boolean;
   accountHref?: string;
 }) {
   const inner = (
     <>
-      <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
-        style={{
-          background: "linear-gradient(150deg, var(--admin-fill-from), var(--admin-fill-to))",
-        }}
-      >
-        {username.slice(0, 2).toUpperCase()}
-      </span>
+      <Avatar src={avatar ?? ""} name={username} size={38} />
       <span className="hidden min-w-0 sm:block">
         <span className="block truncate text-[13px] font-semibold text-app-text">
           @{username}
         </span>
-        <span className="block truncate text-[11px] text-app-muted">
-          {serviceAdmin ? "Системийн админ" : "Админ"}
+        <span className="block truncate text-[12px] text-app-muted">
+          {email || (serviceAdmin ? "Системийн админ" : "Админ")}
         </span>
       </span>
     </>
   );
-  const shell = "flex items-center gap-2.5 rounded-full py-1 pr-1 pl-1 sm:pr-3.5";
+  const shell = "flex items-center gap-2.5 rounded-full p-1 sm:pr-3.5";
   return accountHref ? (
     <Link href={accountHref} className={`${shell} hover:bg-app-elevated`}>
       {inner}

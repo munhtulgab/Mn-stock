@@ -31,6 +31,8 @@ export interface DailyOrders {
 }
 
 export interface AdminOverview {
+  /** The window the `recent` figures were counted over. */
+  windowDays: number;
   users: { total: number; admins: number; recent: number; sessions: number };
   orders: { total: number; recent: number; buys: number; sells: number; turnover: number };
   alerts: { total: number; recent: number; lastAt: Date | null };
@@ -48,12 +50,17 @@ export interface AdminOverview {
   latestUsers: { id: string; username: string; fullName: string | null; createdAt: Date | null }[];
 }
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const FORTNIGHT_DAYS = 14;
-const FORTNIGHT_MS = FORTNIGHT_DAYS * 24 * 60 * 60 * 1000;
+const FORTNIGHT_MS = FORTNIGHT_DAYS * DAY_MS;
 
-export async function getAdminOverview(db: Db): Promise<AdminOverview> {
-  const since = new Date(Date.now() - WEEK_MS);
+/**
+ * @param windowDays how far back "recent" reaches, which the period control
+ *   on the page chooses. The counts themselves are totals and do not move
+ *   with it; only the change beside each one does.
+ */
+export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOverview> {
+  const since = new Date(Date.now() - windowDays * DAY_MS);
 
   const [
     users,
@@ -150,6 +157,7 @@ export async function getAdminOverview(db: Db): Promise<AdminOverview> {
   const apiKeys = Object.values(settings.apiKeys).filter(Boolean).length;
 
   return {
+    windowDays,
     users: { total: users, admins, recent: recentUsers, sessions },
     orders: {
       total: (buys?.n ?? 0) + (sells?.n ?? 0),
