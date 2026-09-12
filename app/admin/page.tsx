@@ -11,14 +11,6 @@ import Panel from "@/components/admin/Panel";
 
 export const dynamic = "force-dynamic";
 
-const STROKE = {
-  stroke: "currentColor",
-  strokeWidth: 1.8,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-  fill: "none",
-};
-
 /**
  * What the installation looks like from the inside: how many people use it,
  * what they have traded, and whether the machinery behind it is configured.
@@ -40,57 +32,40 @@ export default async function AdminOverviewPage() {
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
+          tone="emerald"
+          icon="users"
           label="Хэрэглэгч"
           value={o.users.total.toLocaleString("mn-MN")}
           delta={o.users.recent > 0 ? `+${o.users.recent}` : undefined}
-          hint={o.users.recent > 0 ? "сүүлийн 7 хоногт" : "шинэ бүртгэл алга"}
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24">
-              <circle cx="9.5" cy="8" r="3.3" {...STROKE} />
-              <path d="M3.5 19.5c1-3.4 3.4-5 6-5s5 1.6 6 5" {...STROKE} />
-              <path d="M16.5 5.4a3.2 3.2 0 0 1 0 5.2" {...STROKE} />
-            </svg>
-          }
+          compare={o.users.recent > 0 ? "(7 хоногт)" : "шинэ бүртгэл алга"}
         />
         <StatCard
+          tone="amber"
+          icon="sessions"
           label="Нэвтэрсэн сешн"
           value={o.users.sessions.toLocaleString("mn-MN")}
           delta="Идэвхтэй"
-          deltaTone="flat"
-          hint="хугацаа дуусаагүй"
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24">
-              <path d="M12 3.5v8.7" {...STROKE} />
-              <path d="M7.5 6.4a7.5 7.5 0 1 0 9 0" {...STROKE} />
-            </svg>
-          }
+          direction="flat"
+          compare="(хугацаа дуусаагүй)"
         />
         <StatCard
+          tone="blue"
+          icon="orders"
           label="Захиалга"
           value={o.orders.total.toLocaleString("mn-MN")}
           delta={o.orders.recent > 0 ? `+${o.orders.recent}` : undefined}
-          hint={`${o.orders.buys} авсан · ${o.orders.sells} зарсан`}
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24">
-              <path d="M5 4.5h14v15l-3.5-2-3.5 2-3.5-2L5 19.5z" {...STROKE} />
-              <path d="M8.5 9h7M8.5 13h4" {...STROKE} />
-            </svg>
-          }
+          compare={`(${o.orders.buys} авсан · ${o.orders.sells} зарсан)`}
         />
         <StatCard
+          tone="violet"
+          icon="alerts"
           label="Мэдэгдэл"
           value={o.alerts.total.toLocaleString("mn-MN")}
-          delta={o.alerts.recent > 0 ? `+${o.alerts.recent} · 7 хоногт` : undefined}
-          hint={
+          delta={o.alerts.recent > 0 ? `+${o.alerts.recent}` : undefined}
+          compare={
             o.alerts.lastAt
-              ? `сүүлийнх ${ulaanbaatarDateTime(o.alerts.lastAt)}`
+              ? `(сүүлийнх ${ulaanbaatarDateTime(o.alerts.lastAt)})`
               : "хараахан алга"
-          }
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24">
-              <path d="M18 9a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7Z" {...STROKE} />
-              <path d="M13.7 19.5a2 2 0 0 1-3.4 0" {...STROKE} />
-            </svg>
           }
         />
       </section>
