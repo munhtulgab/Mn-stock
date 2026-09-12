@@ -331,3 +331,65 @@ body {
 .pane-scroll::-webkit-scrollbar {
   display: none;
 }
+
+/*
+ * The admin area is light, in both themes.
+ *
+ * Not a preference the reader forgot to set — a deliberate mark that this is
+ * a different place. The app is a dark trading screen someone watches; the
+ * admin area is a workbench where accounts are read, compared and corrected,
+ * and the two should not be mistaken for each other at a glance. Whichever
+ * theme the app is in, stepping into /admin should feel like stepping into a
+ * different room, and stepping back out should feel like coming home.
+ *
+ * Scoped rather than set on <html>, which is what makes it free: every
+ * `bg-app-card`, `text-app-muted` and `border-app-border` in the section
+ * already reads its colour from a custom property, so restating the
+ * properties here re-skins the whole area without touching one component. The
+ * confirmation dialog carries the class itself — it renders through a portal
+ * into <body>, outside this element, and would otherwise come out dark.
+ *
+ * The palette is the app's own daylight set, opened up: the surfaces a little
+ * cooler and further apart than the phone's, because this is a wide screen
+ * read at a desk rather than a small one read in the hand.
+ */
+.admin-surface {
+  color-scheme: light;
+
+  --app-bg: #f6f7f9;
+  --app-card: #ffffff;
+  --app-elevated: #f1f3f7;
+  /* Quieter than the app's outline: at this size the cards are large and a
+     heavy border draws boxes rather than separating them. */
+  --app-border: #e4e7ee;
+  --app-divider: #eef0f5;
+  --app-text: #0f1319;
+  --app-muted: #6b7280;
+
+  --brand: #00a857;
+  --brand-dark: #00874a;
+  --brand-light: #e4f7ed;
+  --app-positive: #00a857;
+  --app-positive-bg: #e4f7ed;
+  --app-negative: #d92d33;
+  --app-negative-bg: #fdeaea;
+  --app-warn: #b26a00;
+  --app-warn-bg: #fdf2df;
+
+  /* The ink that goes on top of the brand colour. White on #00a857 is 3:1,
+     which is a button people have to squint at; this is nearer 7:1. */
+  --on-brand: #04160d;
+}
+
+/* One pixel of light along the top edge, the same trick the app's tab bar
+   uses to look raised rather than drawn. Barely visible and doing all the
+   work: without it a white card on a near-white page has no edge at all. */
+.admin-surface .lift {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(15, 19, 25, 0.04);
+}
+
+/* A row that answers the pointer. Sized in the row rather than the cell so a
+   table row lights up whole. */
+.admin-surface .rowlink:hover {
+  background-color: rgba(15, 19, 25, 0.022);
+}

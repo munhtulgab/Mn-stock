@@ -2,6 +2,7 @@ import { getDb } from "@/lib/mongodb";
 import { requireAdminPage } from "@/lib/roles";
 import { getSettings, maskSettings } from "@/lib/settings";
 import SettingsForm from "@/components/SettingsForm";
+import PageHead from "@/components/admin/PageHead";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +22,11 @@ export default async function AdminSettingsPage() {
   const masked = maskSettings(await getSettings(db));
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-app-text">Системийн тохиргоо</h1>
-        <p className="text-sm text-app-muted">
-          AI үйлчилгээ, мэдээллийн эх сурвалж, мэдэгдэл болон SMS
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHead
+        title="Системийн тохиргоо"
+        sub="AI үйлчилгээ, мэдээллийн эх сурвалж, мэдэгдэл болон SMS"
+      />
       <SettingsForm initial={masked} />
     </div>
   );

@@ -60,7 +60,8 @@ export default function NewUserForm() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-white"
+        style={{ color: "var(--on-brand)" }}
+        className="flex items-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-sm font-semibold"
       >
         <PlusIcon size={15} /> Хэрэглэгч нэмэх
       </button>
@@ -70,7 +71,7 @@ export default function NewUserForm() {
   return (
     <form
       onSubmit={submit}
-      className="w-full rounded-2xl border border-app-border bg-app-card p-4 space-y-3"
+      className="lift w-full rounded-2xl border border-app-border bg-app-card p-4 space-y-3"
     >
       <h2 className="text-sm font-semibold text-app-text">Шинэ хэрэглэгч</h2>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -112,7 +113,8 @@ export default function NewUserForm() {
         <button
           type="submit"
           disabled={saving}
-          className="flex-1 rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          style={{ color: "var(--on-brand)" }}
+          className="flex-1 rounded-xl bg-brand px-3 py-2 text-sm font-semibold disabled:opacity-60"
         >
           {saving ? "Үүсгэж байна…" : "Үүсгэх"}
         </button>

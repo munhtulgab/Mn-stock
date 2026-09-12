@@ -145,3 +145,17 @@ export async function getAdminOverview(db: Db): Promise<AdminOverview> {
     })),
   };
 }
+
+/**
+ * The figure the rail shows beside Хэрэглэгч.
+ *
+ * One count, read on every admin page because the rail is on every admin
+ * page — the price of a number that saves an administrator from clicking
+ * through to find out whether anyone new has arrived. Only that one: a tally
+ * beside Хяналт would be a tally of nothing in particular, and beside Систем
+ * there is nothing to count.
+ */
+export async function countSections(db: Db): Promise<Record<string, number>> {
+  const users = await db.collection<User>("users").countDocuments({});
+  return { "/admin/users": users };
+}

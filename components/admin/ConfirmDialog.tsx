@@ -70,7 +70,10 @@ export default function ConfirmDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      /* `admin-surface` again, because a portal renders into <body> — outside
+         the element that makes this section light. Without it the dialog
+         comes out in the app's dark palette on top of a light page. */
+      className="admin-surface fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
       // Only a click that both starts and ends on the backdrop dismisses —
       // otherwise a drag that begins inside the card and releases outside it
       // closes the dialog on someone who was selecting text in it.
@@ -82,7 +85,7 @@ export default function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
-        className="w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl border border-app-border bg-app-card p-5 space-y-4"
+        className="w-full max-w-[400px] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[18px] border border-app-border bg-app-card p-5 space-y-4 shadow-[0_24px_60px_rgba(15,19,25,0.18)]"
       >
         <div className="flex items-start gap-3">
           <span
@@ -115,8 +118,11 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-60 ${
-              danger ? "bg-app-negative" : "bg-brand"
+            // White on the daylight green is barely 3:1. The ink token is the
+            // one this section defines for text that sits on the brand.
+            style={danger ? undefined : { color: "var(--on-brand)" }}
+            className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold disabled:opacity-60 ${
+              danger ? "bg-app-negative text-white" : "bg-brand"
             }`}
           >
             {busy ? "…" : confirmLabel}

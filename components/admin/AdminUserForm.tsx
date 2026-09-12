@@ -124,7 +124,16 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-2xl border border-app-border bg-app-card p-4">
+    <form
+      onSubmit={submit}
+      className="lift space-y-4 rounded-2xl border border-app-border bg-app-card p-4"
+    >
+      <div className="flex items-baseline gap-2.5">
+        <span className="text-[10px] font-semibold tracking-[0.11em] text-app-muted uppercase">
+          Бүртгэл
+        </span>
+        <h2 className="text-[15px] font-semibold text-app-text">Мэдээлэл</h2>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-xs text-app-muted">
           Хэрэглэгчийн нэр
@@ -209,7 +218,8 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
       <button
         type="submit"
         disabled={saving}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+        style={{ color: "var(--on-brand)" }}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
       >
         <SaveIcon size={15} />
         {saving ? "Хадгалж байна…" : "Хадгалах"}

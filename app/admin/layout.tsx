@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getDb } from "@/lib/mongodb";
 import { isServiceAdmin, requireAdminPage } from "@/lib/roles";
+import { countSections } from "@/lib/adminOverview";
 import AdminNav from "@/components/admin/AdminNav";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,10 @@ export const metadata: Metadata = {
  * the alert bell. None of those belong on a page about accounts, and the
  * ticker in particular is a poll this side of the app has no use for.
  *
+ * `admin-surface` is what makes this room light in both themes — see the
+ * block of the same name in globals.css. It is one class on one element
+ * because every colour under it is already a custom property.
+ *
  * The check here is for the shell it draws. Each page checks again — a layout
  * is not re-rendered when the reader moves between two routes it covers, so a
  * check made only here is made once per visit and trusted thereafter.
@@ -30,15 +35,19 @@ export default async function AdminLayout({
 }) {
   const db = await getDb();
   const admin = await requireAdminPage(db);
+  const counts = await countSections(db);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-app-bg">
+    <div className="admin-surface flex min-h-dvh flex-col bg-app-bg text-app-text md:flex-row">
       <AdminNav
         username={admin.username}
         serviceAdmin={isServiceAdmin(admin)}
         accountHref={`/admin/users/${admin._id}`}
+        counts={counts}
       />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-5 pb-16">{children}</main>
+      <main className="min-w-0 flex-1 px-4 pt-5 pb-16 md:px-7 md:pt-6">
+        <div className="mx-auto w-full max-w-[1180px]">{children}</div>
+      </main>
     </div>
   );
 }
