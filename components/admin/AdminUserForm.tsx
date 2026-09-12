@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import { EyeIcon, SaveIcon, TrashIcon } from "@/components/icons";
+import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import type { AdminUserDetail } from "@/lib/adminUsers";
 
 const FIELD =
@@ -34,6 +35,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmingSave, setConfirmingSave] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const router = useRouter();
   const toast = useToast();
@@ -41,8 +43,31 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: event.target.value }));
 
-  async function save(event: React.FormEvent) {
+  /**
+   * The changes that are not just a corrected spelling: a password nobody but
+   * this administrator will know, a balance rewritten by hand, the run of the
+   * whole installation handed over or taken back. Each is asked about; a
+   * changed phone number is not, because a form that asks every time is a
+   * form whose question stops being read.
+   */
+  const weighty = [
+    newPassword !== "" && "нууц үг солих (бүх сешн хаагдана)",
+    form.role !== user.role &&
+      (form.role === "admin" ? "админ эрх олгох" : "админ эрхийг хасах"),
+    Number(form.cashBalance) !== user.cash &&
+      `үлдэгдлийг ${money(user.cash)} → ${money(Number(form.cashBalance))} болгох`,
+  ].filter((line): line is string => typeof line === "string");
+
+  function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (weighty.length > 0) {
+      setConfirmingSave(true);
+      return;
+    }
+    void save();
+  }
+
+  async function save() {
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, {
@@ -66,6 +91,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
         variant: "success",
       });
       setNewPassword("");
+      setConfirmingSave(false);
       router.refresh();
     } catch (err) {
       toast({
@@ -98,7 +124,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
   }
 
   return (
-    <form onSubmit={save} className="space-y-4 rounded-2xl border border-app-border bg-app-card p-4">
+    <form onSubmit={submit} className="space-y-4 rounded-2xl border border-app-border bg-app-card p-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-xs text-app-muted">
           Хэрэглэгчийн нэр
@@ -195,35 +221,65 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
             Устгахад энэ хэрэглэгчийн захиалга, хувьцаа, хяналтын жагсаалт болон нэвтэрсэн
             сешн бүгд хамт устана. Буцаах боломжгүй.
           </p>
-          {confirmingDelete ? (
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={remove}
-                disabled={saving}
-                className="flex-1 rounded-xl bg-app-negative px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                Бүрмөсөн устгах
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmingDelete(false)}
-                className="flex-1 rounded-xl border border-app-border px-3 py-2 text-sm font-semibold text-app-text"
-              >
-                Болих
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(true)}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-app-border px-3 py-2 text-sm font-semibold text-app-negative"
-            >
-              <TrashIcon size={15} /> Хэрэглэгчийг устгах
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-app-border px-3 py-2 text-sm font-semibold text-app-negative"
+          >
+            <TrashIcon size={15} /> Хэрэглэгчийг устгах
+          </button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmingSave}
+        title="Өөрчлөлтийг хадгалах уу?"
+        body={
+          <>
+            Энэ бүртгэлд дараах өөрчлөлт орно. Хэрэглэгчид мэдэгдэхгүй.
+          </>
+        }
+        detail={
+          <ul className="space-y-1">
+            {weighty.map((line) => (
+              <li key={line} className="flex gap-2">
+                <span className="text-app-muted">•</span>
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+        }
+        confirmLabel="Хадгалах"
+        busy={saving}
+        onCancel={() => setConfirmingSave(false)}
+        onConfirm={() => void save()}
+      />
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        danger
+        title={`@${user.username}-ийг бүрмөсөн устгах уу?`}
+        body={
+          <>
+            Бүртгэл болон түүнд харьяалагдах бүх өгөгдөл устана. Буцаах боломжгүй.
+          </>
+        }
+        detail={
+          <ul className="space-y-1">
+            <li>{user.orderCount} захиалга</li>
+            <li>{user.positionCount} хувьцаа</li>
+            <li>{money(user.cash)} үлдэгдэл</li>
+            <li>{user.sessions} нэвтэрсэн сешн</li>
+          </ul>
+        }
+        confirmLabel="Устгах"
+        busy={saving}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => void remove()}
+      />
     </form>
   );
 }
+
+const money = (value: number) =>
+  `${value.toLocaleString("mn-MN", { maximumFractionDigits: 0 })}₮`;
