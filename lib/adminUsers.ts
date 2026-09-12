@@ -216,3 +216,84 @@ export function orderFilter(id: string): Filter<Transaction> {
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+export interface AdminOrderListRow extends AdminOrderRow {
+  userId: string;
+  username: string;
+}
+
+export interface AdminOrderPage {
+  rows: AdminOrderListRow[];
+  total: number;
+  page: number;
+  pages: number;
+  size: number;
+}
+
+/** How many orders a page of the list holds. */
+export const ORDERS_PER_PAGE = 50;
+
+/**
+ * Every order on the installation, newest first.
+ *
+ * Paged rather than capped. The account pages take the last five hundred of
+ * one person's history because that is all one person has; this is everyone's,
+ * and an installation two years old has more of them than anybody wants in
+ * one response. A page number in the URL is also the only way to reach the
+ * old ones at all.
+ *
+ * Filtering by symbol is offered because "what happened in QPAY" is the
+ * question this page gets asked, and scanning fifty rows at a time for it is
+ * not an answer.
+ */
+export async function listOrders(
+  db: Db,
+  { page = 1, symbol }: { page?: number; symbol?: string } = {},
+): Promise<AdminOrderPage> {
+  const filter: Filter<Transaction> = symbol ? { symbol: symbol.toUpperCase() } : {};
+  const [total, docs] = await Promise.all([
+    db.collection<Transaction>("transactions").countDocuments(filter),
+    db
+      .collection<Transaction>("transactions")
+      .find(filter, {
+        sort: { createdAt: -1 },
+        skip: (page - 1) * ORDERS_PER_PAGE,
+        limit: ORDERS_PER_PAGE,
+      })
+      .toArray(),
+  ]);
+
+  // The names for this page's rows, asked for once rather than per row.
+  const owners = await db
+    .collection<User>("users")
+    .find({ _id: { $in: docs.map((t) => t.userId) } } as never, {
+      projection: { username: 1 },
+    })
+    .toArray();
+  const nameById = new Map(owners.map((u) => [String(u._id), u.username]));
+
+  return {
+    total,
+    page,
+    size: ORDERS_PER_PAGE,
+    pages: Math.max(1, Math.ceil(total / ORDERS_PER_PAGE)),
+    rows: docs.map((tx) => ({
+      id: String(tx._id),
+      userId: tx.userId,
+      // An order whose account has been deleted keeps its row; the history is
+      // the installation's, not only the account's.
+      username: nameById.get(tx.userId) ?? "устсан",
+      companyCode: tx.companyCode,
+      symbol: tx.symbol,
+      side: tx.side,
+      quantity: tx.quantity,
+      price: tx.price,
+      total: tx.total,
+      createdAt: tx.createdAt,
+      imported: Boolean(tx.source),
+      reversalOf: tx.reversalOf ?? null,
+      reversedBy: null,
+      editedAt: tx.editedAt ?? null,
+    })),
+  };
+}
