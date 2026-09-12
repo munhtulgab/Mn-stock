@@ -16,9 +16,14 @@ import type { AdminUserDetail } from "@/lib/adminUsers";
  * their portfolio page, so an administrator reading this and the reader
  * reading theirs are looking at one number rather than two.
  *
- * Each line carries a mark. Eight rows of label-and-value are eight rows the
- * eye has to read in order; a glyph at the head of each is what lets the one
- * being looked for be found without reading the other seven.
+ * Each figure carries a mark. Nine rows of label-and-value are nine rows the
+ * eye has to read in order; a glyph on each is what lets the one being looked
+ * for be found without reading the other eight. On the four tiles the mark is
+ * the tile's own background, large and clipped by the corner — at 15px in a
+ * badge it was a smudge competing with the label beside it, and the tile has
+ * room for a mark that can actually be recognised at arm's length. In the
+ * list below it stays a small glyph at the head of the line, because a row
+ * twenty pixels tall has no background to put anything behind.
  */
 export default function AccountSummary({ user }: { user: AdminUserDetail }) {
   const v = user.valuation;
@@ -45,6 +50,7 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
           icon={<TrendGlyph down={down} />}
           label="Ашиг / алдагдал"
           tone={tone}
+          note="зах зээлийн үнэ хасах өртөг"
           value={
             <>
               {up && "+"}
@@ -56,6 +62,7 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
           icon={<PercentGlyph />}
           label="Ашгийн хувь"
           tone={tone}
+          note="оруулсан дүнгээс"
           value={
             v.totalGainLossPct === null ? (
               "—"
@@ -91,9 +98,17 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
 }
 
 /**
- * One headline figure. The mark sits in a tinted square rather than loose
- * beside the label: at 15px a stroked glyph on a white card is a smudge, and
- * the square is what gives it enough ground to read as a symbol.
+ * One headline figure, over its own mark.
+ *
+ * The glyph is the tile's background rather than a badge beside the label: at
+ * fifteen pixels in a tinted square it was a smudge, and it was taking the
+ * width the label needed. Run large and off the corner it is something to
+ * recognise the tile by before the words are read, which is the whole job of
+ * a mark on a figure nobody reads twice.
+ *
+ * It is clipped rather than inset. A watermark politely fitted inside the
+ * padding is a picture, and a picture in a tile this size competes with the
+ * number; one that runs off the edge is a texture, and stays behind it.
  */
 function Tile({
   icon,
@@ -108,31 +123,32 @@ function Tile({
   note?: string;
   tone?: "positive" | "negative" | "flat";
 }) {
-  const paint =
+  const ink =
     tone === "positive"
-      ? { color: "var(--app-positive)", background: "var(--app-positive-bg)" }
+      ? "var(--app-positive)"
       : tone === "negative"
-        ? { color: "var(--app-negative)", background: "var(--app-negative-bg)" }
-        : { color: "var(--brand-dark)", background: "var(--brand-light)" };
+        ? "var(--app-negative)"
+        : "var(--brand-dark)";
 
   return (
-    <div className="min-w-0 rounded-xl border border-app-border p-3">
-      <div className="flex items-center gap-2">
-        <span
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
-          style={paint}
-        >
-          {icon}
-        </span>
-        <span className="min-w-0 text-[11px] leading-tight text-app-muted">{label}</span>
-      </div>
-      <div
-        className="mt-2 truncate text-[17px] font-semibold tracking-[-0.02em] tabular-nums"
-        style={tone === "flat" ? undefined : { color: paint.color }}
+    <div className="relative min-w-0 overflow-hidden rounded-xl border border-app-border p-3">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-3 -bottom-4 opacity-[0.14]"
+        style={{ color: ink }}
       >
-        {value}
+        {icon}
+      </span>
+      <div className="relative">
+        <div className="text-[11px] leading-tight text-app-muted">{label}</div>
+        <div
+          className="mt-1.5 truncate text-[19px] font-semibold tracking-[-0.02em] tabular-nums"
+          style={tone === "flat" ? undefined : { color: ink }}
+        >
+          {value}
+        </div>
+        {note && <div className="mt-0.5 truncate text-[10px] text-app-muted">{note}</div>}
       </div>
-      {note && <div className="truncate text-[10px] text-app-muted">{note}</div>}
     </div>
   );
 }
@@ -157,24 +173,42 @@ function Row({
   );
 }
 
+/**
+ * The tile marks, drawn at the size they are actually used: 84px behind the
+ * figure. A stroke weight is in viewBox units, so the 1.9 that read as a
+ * hairline at fifteen pixels renders seven pixels thick at this size — heavy
+ * enough to read as a drawing rather than as a ground for one.
+ */
 const TILE = {
-  width: 15,
-  height: 15,
+  width: 84,
+  height: 84,
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
-  strokeWidth: 1.9,
+  strokeWidth: 1.25,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
 
-const LINE = { ...TILE, strokeWidth: 1.8, className: "shrink-0 text-app-muted" };
+const LINE = {
+  ...TILE,
+  width: 15,
+  height: 15,
+  strokeWidth: 1.8,
+  className: "shrink-0 text-app-muted",
+};
 
+/**
+ * A wallet, with the card pocket that makes it one. Without it the mark is a
+ * rounded rectangle with a dash in it, which at eighty pixels reads as an
+ * empty box rather than as anything holding money.
+ */
 function WalletGlyph() {
   return (
     <svg {...TILE}>
-      <path d="M3.5 8.2c0-1.5 1.2-2.7 2.7-2.7h11.6c1.5 0 2.7 1.2 2.7 2.7v7.6c0 1.5-1.2 2.7-2.7 2.7H6.2a2.7 2.7 0 0 1-2.7-2.7Z" />
-      <path d="M16.2 12h1.6" />
+      <path d="M3.2 8.4c0-1.5 1.2-2.7 2.7-2.7h12c1.5 0 2.7 1.2 2.7 2.7v7.2c0 1.5-1.2 2.7-2.7 2.7h-12a2.7 2.7 0 0 1-2.7-2.7Z" />
+      <path d="M20.6 10.3h-4.2a1.7 1.7 0 0 0 0 3.4h4.2" />
+      <path d="M17.1 12h.1" strokeWidth={2.6} />
     </svg>
   );
 }
