@@ -13,18 +13,28 @@ export default function Panel({
   title,
   note,
   flush,
+  watermark,
   children,
 }: {
   title: string;
   /** Right of the title: a pill control, a link, a count. */
   note?: React.ReactNode;
   flush?: boolean;
+  /**
+   * A decorative layer behind the header and content — a tint, a large
+   * faint glyph, or both. Painted first and left un-positioned in the
+   * stacking order, so it stays behind so long as the header/content wrapper
+   * below keeps its own `relative` (any positioned sibling that follows in
+   * the DOM paints on top of an earlier one with the same auto z-index).
+   */
+  watermark?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-app-border bg-app-card">
+    <section className="relative overflow-hidden rounded-2xl border border-app-border bg-app-card">
+      {watermark}
       <div
-        className={`flex items-center justify-between gap-3 px-5 pt-5 ${
+        className={`relative flex items-center justify-between gap-3 px-5 pt-5 ${
           flush ? "pb-4" : "pb-0"
         }`}
       >
@@ -33,7 +43,7 @@ export default function Panel({
         </h2>
         {note && <span className="shrink-0 text-[13px] text-app-muted">{note}</span>}
       </div>
-      <div className={flush ? "" : "px-5 pt-4 pb-5"}>{children}</div>
+      <div className={`relative ${flush ? "" : "px-5 pt-4 pb-5"}`}>{children}</div>
     </section>
   );
 }

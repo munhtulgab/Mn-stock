@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import Num from "@/components/Num";
 import { EditIcon, EyeIcon, SaveIcon, TrashIcon } from "@/components/icons";
+import {
+  UserIcon,
+  BadgeIcon,
+  MailIcon,
+  PhoneIcon,
+  CashIcon,
+  ShieldIcon,
+  DeviceIcon,
+} from "@/components/admin/lineIcons";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import type { AdminUserDetail } from "@/lib/adminUsers";
 
@@ -289,25 +298,30 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
       ) : (
         <>
           <dl className="text-sm">
-            <Line label="Хэрэглэгчийн нэр">@{user.username}</Line>
-            <Line label="Овог нэр" muted={!user.fullName}>
+            <Line label="Хэрэглэгчийн нэр" icon={<UserIcon />}>
+              @{user.username}
+            </Line>
+            <Line label="Овог нэр" icon={<BadgeIcon />} muted={!user.fullName}>
               {user.fullName || "оруулаагүй"}
             </Line>
-            <Line label="И-мэйл" muted={!user.email}>
+            <Line label="И-мэйл" icon={<MailIcon />} muted={!user.email}>
               {user.email || "оруулаагүй"}
             </Line>
-            <Line label="Утас" muted={!user.phone}>
+            <Line label="Утас" icon={<PhoneIcon />} muted={!user.phone}>
               {user.phone || "оруулаагүй"}
             </Line>
-            <Line label="Мөнгөн үлдэгдэл">
+            <Line label="Мөнгөн үлдэгдэл" icon={<CashIcon />}>
               <Num value={user.cash} digits={0} suffix="₮" />
             </Line>
-            <Line label="Эрх">
+            <Line label="Эрх" icon={<ShieldIcon />}>
               {user.role === "admin"
                 ? user.founder
                   ? "Системийн админ"
                   : "Админ"
                 : "Хэрэглэгч"}
+            </Line>
+            <Line label="Нэвтэрсэн тоо" icon={<DeviceIcon />}>
+              {user.sessions.toLocaleString("mn-MN")}
             </Line>
           </dl>
 
@@ -367,16 +381,21 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
 /** One stored detail, read-only: the label left, the value right. */
 function Line({
   label,
+  icon,
   muted,
   children,
 }: {
   label: string;
+  icon?: React.ReactNode;
   muted?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-app-divider py-2.5 last:border-0">
-      <dt className="shrink-0 text-app-muted">{label}</dt>
+      <dt className="flex min-w-0 shrink-0 items-center gap-2 text-app-muted">
+        {icon}
+        {label}
+      </dt>
       <dd
         className={`min-w-0 truncate text-right font-semibold ${
           muted ? "font-normal text-app-muted" : "text-app-text"
