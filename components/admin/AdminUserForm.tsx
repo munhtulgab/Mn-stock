@@ -320,7 +320,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
                   : "Админ"
                 : "Хэрэглэгч"}
             </Line>
-            <Line label="Нэвтэрсэн сешн" icon={<DeviceIcon />}>
+            <Line label="Нэвтэрсэн тоо" icon={<DeviceIcon />}>
               {user.sessions.toLocaleString("mn-MN")}
             </Line>
           </dl>

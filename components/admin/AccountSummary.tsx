@@ -32,7 +32,18 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
   const tone = up ? "positive" : down ? "negative" : "flat";
 
   return (
-    <Panel title="Дансны хураангуй">
+    <Panel
+      title="Дансны хураангуй"
+      watermark={
+        <>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-linear-to-br from-brand-light/60 via-transparent to-transparent"
+          />
+          <SummaryWatermarkGlyph className="pointer-events-none absolute -right-6 -bottom-8 h-40 w-40 text-brand/10" />
+        </>
+      }
+    >
       <div className="grid grid-cols-2 gap-2.5">
         <Tile
           icon={<WalletGlyph />}
@@ -131,6 +142,20 @@ function Tile({
       </div>
       {note && <div className="truncate text-[10px] text-app-muted">{note}</div>}
     </div>
+  );
+}
+
+function SummaryWatermarkGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 160 160" fill="none" className={className} aria-hidden>
+      <g stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="14" y="46" width="118" height="86" rx="14" />
+        <path d="M32 46V34a10 10 0 0 1 10-10h64a10 10 0 0 1 10 10v12" />
+        <circle cx="112" cy="89" r="8" fill="currentColor" stroke="none" />
+        <path d="M96 40 118 18 140 34 156 8" />
+        <path d="M132 8h24v22" />
+      </g>
+    </svg>
   );
 }
 
