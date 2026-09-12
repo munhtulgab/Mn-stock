@@ -43,7 +43,9 @@ export function LoginForm() {
         setLoading(false);
         return;
       }
-      window.location.href = "/";
+      // The server says where: an administration-only account goes straight to
+      // /admin rather than to a home page it is not allowed to see.
+      window.location.href = typeof data.redirectTo === "string" ? data.redirectTo : "/";
     } catch {
       setError("Сүлжээний алдаа гарлаа");
       setLoading(false);

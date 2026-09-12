@@ -8,6 +8,7 @@ import {
   usernameFilter,
   verifyPassword,
 } from "@/lib/auth";
+import { isServiceAdmin, SERVICE_ADMIN_USERNAME } from "@/lib/roles";
 import type { Session, User } from "@/lib/types";
 
 /** The same floors signup holds new accounts to; see its route. */
@@ -59,6 +60,22 @@ export async function PATCH(req: NextRequest) {
     }
   }
   if (renaming) {
+    // Neither into the administrator's name nor out of it. Into it, because
+    // the name carries the role and taking it would be a promotion nobody
+    // granted; out of it, because the account would stop being the one that
+    // cannot be deleted, and the name would be free for the next comer.
+    if (isServiceAdmin(user)) {
+      return NextResponse.json(
+        { error: "Системийн админы нэрийг өөрчлөх боломжгүй" },
+        { status: 409 },
+      );
+    }
+    if (username.toLowerCase() === SERVICE_ADMIN_USERNAME.toLowerCase()) {
+      return NextResponse.json(
+        { error: "Энэ хэрэглэгчийн нэрийг ашиглах боломжгүй" },
+        { status: 409 },
+      );
+    }
     // Case-insensitively, the way signing in matches it — and excluding this
     // account, so changing the capitalisation of your own name is allowed.
     const taken = await db

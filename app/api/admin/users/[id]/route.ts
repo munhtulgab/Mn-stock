@@ -44,6 +44,16 @@ export async function PATCH(
       : undefined;
 
   if (username !== undefined && username !== user.username) {
+    // The name is what makes this account the administrator and what makes it
+    // undeletable. Renaming it away would hand both to whoever claimed the
+    // name next, and would leave the account itself deletable — which is the
+    // long way round to the deletion the rule below refuses outright.
+    if (await isFounder(db, id)) {
+      return NextResponse.json(
+        { error: "Системийн админы нэрийг өөрчлөх боломжгүй" },
+        { status: 409 },
+      );
+    }
     if (username.length < MIN_USERNAME) {
       return NextResponse.json(
         { error: `Хэрэглэгчийн нэр дор хаяж ${MIN_USERNAME} тэмдэгт байна` },
@@ -69,7 +79,7 @@ export async function PATCH(
   if (role === "user") {
     if (await isFounder(db, id)) {
       return NextResponse.json(
-        { error: "Анхны бүртгэлийн админ эрхийг хасах боломжгүй" },
+        { error: "Системийн админы эрхийг хасах боломжгүй" },
         { status: 409 },
       );
     }
@@ -139,7 +149,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Өөрийн бүртгэлийг устгах боломжгүй" }, { status: 409 });
   }
   if (await isFounder(db, id)) {
-    return NextResponse.json({ error: "Анхны бүртгэлийг устгах боломжгүй" }, { status: 409 });
+    return NextResponse.json({ error: "Системийн админы бүртгэлийг устгах боломжгүй" }, { status: 409 });
   }
   const user = await db.collection<User>("users").findOne({ _id: id } as never);
   if (!user) return NextResponse.json({ error: "Хэрэглэгч олдсонгүй" }, { status: 404 });

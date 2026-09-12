@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
+import { isServiceAdmin } from "@/lib/roles";
 import BottomNav from "@/components/BottomNav";
 import MarketTicker from "@/components/MarketTicker";
 
@@ -25,6 +26,13 @@ export default async function AppLayout({
   const db = await getDb();
   const user = await getCurrentUser(db);
   if (!user) redirect("/login");
+  // The dedicated administrator has no business on this side of the app. It
+  // holds no portfolio anyone trades, watches no companies, and reads no
+  // alerts — it exists to look after other people's accounts, and every tab
+  // down here would be an empty version of a page that means something to
+  // somebody else. It changes its own password from its own row under
+  // Хэрэглэгч, which is the one thing it would have come to Профайл for.
+  if (isServiceAdmin(user)) redirect("/admin");
 
   return (
     /* dvh rather than vh: on a phone the viewport is the height it is right

@@ -8,6 +8,7 @@ import {
   usernameFilter,
   SESSION_COOKIE,
 } from "@/lib/auth";
+import { SERVICE_ADMIN_USERNAME } from "@/lib/roles";
 import type { Portfolio, User } from "@/lib/types";
 import { STARTING_CASH_BALANCE } from "@/lib/types";
 
@@ -23,6 +24,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "Хэрэглэгчийн нэр дор хаяж 3 тэмдэгт байна" },
       { status: 400 },
+    );
+  }
+  // Reserved, because the name is the role: whoever holds it administers the
+  // installation and cannot be deleted. Without this, registering it would be
+  // a way in rather than a sign-up. Only the admin area may create it, and
+  // only while it does not already exist.
+  if (username.toLowerCase() === SERVICE_ADMIN_USERNAME.toLowerCase()) {
+    return NextResponse.json(
+      { error: "Энэ хэрэглэгчийн нэрийг ашиглах боломжгүй" },
+      { status: 409 },
     );
   }
   if (!password || password.length < 4) {
