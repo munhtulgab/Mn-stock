@@ -277,7 +277,14 @@ export default async function StockDetailPage({
               analysis built; the closing line is the fallback because it can
               be drawn from the two fields the page already had. */}
           {analysis && analysis.enoughHistory ? (
-            <PriceChartPro candles={analysis.candles} symbol={security.symbol} />
+            <PriceChartPro
+              candles={analysis.candles}
+              symbol={security.symbol}
+              // A listing that is the metal gets the metal's chart and no
+              // other: its own is seventy-seven bars and is not what the
+              // page is opened for.
+              goldOnly={Boolean(analysis.goldBasis)}
+            />
           ) : (
             <PriceChart data={chartData} title="Ханшийн график" />
           )}
