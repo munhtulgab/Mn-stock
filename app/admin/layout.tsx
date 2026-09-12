@@ -45,7 +45,11 @@ export default async function AdminLayout({
       className="admin-surface min-h-dvh px-0 py-0 text-app-text sm:px-5 sm:py-5"
       style={{ backgroundColor: "var(--admin-ground)" }}
     >
-      <div className="sheet mx-auto w-full max-w-[1320px] overflow-hidden bg-app-bg sm:rounded-[26px]">
+      {/* `overflow-clip`, not `overflow-hidden`: both trim the corners, but
+          hidden makes this a scroll container, and a scroll container is what
+          a `position: sticky` child inside it sticks to. The holdings column
+          on an account page stopped sticking to anything at all. */}
+      <div className="sheet mx-auto w-full max-w-[1320px] overflow-clip bg-app-bg sm:rounded-[26px]">
         <AdminNav
           username={admin.username}
           email={admin.email}

@@ -148,7 +148,24 @@ export async function getPortfolioSummary(
       .find({ userId, quantity: { $gt: 0 } })
       .toArray(),
   ]);
+  return valuePortfolio(db, holdingDocs, portfolio.cashBalance);
+}
 
+/**
+ * The same figures, for positions and a balance already in hand.
+ *
+ * Split out of `getPortfolioSummary` because that function opens a portfolio
+ * that does not exist yet, and the admin area reads accounts it must not
+ * write to: looking at somebody's page should not be what gives them a
+ * starting balance. Everything below the balance is identical, so an
+ * administrator and the account holder see the same valuation rather than
+ * two figures that have to be reconciled.
+ */
+export async function valuePortfolio(
+  db: Db,
+  holdingDocs: Holding[],
+  cashBalance: number,
+): Promise<PortfolioSummary> {
   const companyCodes = holdingDocs.map((h) => h.companyCode);
   const [securities, pricesByCode, livePrices] = await Promise.all([
     db
@@ -197,11 +214,11 @@ export async function getPortfolioSummary(
     };
   });
 
-  const totalValue = portfolio.cashBalance + holdingsValue;
+  const totalValue = cashBalance + holdingsValue;
   const totalGainLoss = holdingsValue - totalCostBasis;
 
   return {
-    cashBalance: portfolio.cashBalance,
+    cashBalance,
     holdings: holdings.sort((a, b) => b.marketValue - a.marketValue),
     holdingsValue,
     totalValue,

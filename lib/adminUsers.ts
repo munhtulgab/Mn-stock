@@ -1,5 +1,6 @@
 import { ObjectId, type Db, type Filter } from "mongodb";
 import { founderId } from "@/lib/roles";
+import { valuePortfolio } from "@/lib/portfolio";
 import type {
   Holding,
   Portfolio,
@@ -13,10 +14,15 @@ import type {
 /**
  * What the admin area needs to know about the people using the installation.
  *
- * Deliberately no prices in any of it. An administrator is looking after
- * accounts, not at the market — the market has four pages of its own on the
- * other side of the app, and a holding shown here is a number of shares and
- * what was paid for them, never what it is worth this morning.
+ * The list is prices-free: it is a list of people, and valuing every account
+ * to draw one line each would price the whole installation on every keystroke
+ * of the search box. One account opened in full is valued, because the first
+ * question asked about an account is what is in it, and a position stated
+ * only as shares and average cost does not answer it.
+ *
+ * That valuation is the account holder's own — `valuePortfolio`, the same
+ * function behind their portfolio page — so the two figures agree rather than
+ * having to be reconciled.
  */
 
 export interface AdminUserRow {
@@ -91,6 +97,24 @@ export interface AdminHoldingRow {
   symbol: string;
   quantity: number;
   avgCost: number;
+  /** Null when nothing has ever been published for the company. */
+  currentPrice: number | null;
+  /** Valued at `currentPrice`, or at cost while no price is known. */
+  marketValue: number;
+  costBasis: number;
+  gainLoss: number;
+  gainLossPct: number | null;
+}
+
+/** What the account is worth, and what it cost to get there. */
+export interface AdminValuation {
+  /** Cash plus positions. */
+  totalValue: number;
+  holdingsValue: number;
+  /** What was paid for the positions still held. */
+  totalCostBasis: number;
+  totalGainLoss: number;
+  totalGainLossPct: number | null;
 }
 
 export interface AdminOrderRow {
@@ -115,6 +139,7 @@ export interface AdminUserDetail extends AdminUserRow {
   holdings: AdminHoldingRow[];
   orders: AdminOrderRow[];
   sessions: number;
+  valuation: AdminValuation;
 }
 
 /** One account in full: who they are, what they hold, what they have traded. */
@@ -124,7 +149,11 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
 
   const [founder, holdings, transactions, portfolio, sessions] = await Promise.all([
     founderId(db),
-    db.collection<Holding>("holdings").find({ userId: id }).sort({ symbol: 1 }).toArray(),
+    db
+      .collection<Holding>("holdings")
+      .find({ userId: id, quantity: { $gt: 0 } })
+      .sort({ symbol: 1 })
+      .toArray(),
     db
       .collection<Transaction>("transactions")
       .find({ userId: id })
@@ -134,6 +163,10 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
     db.collection<Portfolio>("portfolios").findOne({ userId: id }),
     db.collection<Session>("sessions").countDocuments({ userId: id }),
   ]);
+
+  const cash = portfolio?.cashBalance ?? 0;
+  const valued = await valuePortfolio(db, holdings, cash);
+  const valuedByCode = new Map(valued.holdings.map((h) => [h.companyCode, h]));
 
   // Which orders have already been undone, so the page can say so and not
   // offer to undo them twice.
@@ -154,14 +187,30 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
     createdAt: user.createdAt ?? null,
     orderCount: transactions.length,
     positionCount: holdings.length,
-    cash: portfolio?.cashBalance ?? 0,
+    cash,
     sessions,
-    holdings: holdings.map((h) => ({
-      companyCode: h.companyCode,
-      symbol: h.symbol,
-      quantity: h.quantity,
-      avgCost: h.avgCost,
-    })),
+    valuation: {
+      totalValue: valued.totalValue,
+      holdingsValue: valued.holdingsValue,
+      totalCostBasis: valued.totalCostBasis,
+      totalGainLoss: valued.totalGainLoss,
+      totalGainLossPct: valued.totalGainLossPct,
+    },
+    holdings: holdings.map((h) => {
+      const v = valuedByCode.get(h.companyCode);
+      const costBasis = h.avgCost * h.quantity;
+      return {
+        companyCode: h.companyCode,
+        symbol: h.symbol,
+        quantity: h.quantity,
+        avgCost: h.avgCost,
+        currentPrice: v?.currentPrice ?? null,
+        marketValue: v?.marketValue ?? costBasis,
+        costBasis,
+        gainLoss: v?.gainLoss ?? 0,
+        gainLossPct: v?.gainLossPct ?? null,
+      };
+    }),
     orders: transactions.map((tx) => ({
       id: String(tx._id),
       companyCode: tx.companyCode,
