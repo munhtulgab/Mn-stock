@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   Bar,
@@ -61,11 +61,21 @@ const ROW_SCROLL =
 
 type ChartType = "candle" | "line" | "gold";
 
+/**
+ * The views on offer, which depend on what the listing is.
+ *
+ * A company is its own price: a candle chart and a line of it, and the metal
+ * has nothing to do with it. A gold tracker is the metal: one view, and it is
+ * gold. Neither list is a subset of the other on the screen — Алт is not
+ * offered where it means nothing, and Лаа is not offered where it would draw
+ * eleven weeks of a seventeen-year story.
+ */
 const CHART_TYPES: { key: ChartType; label: string }[] = [
   { key: "candle", label: "Лаа" },
   { key: "line", label: "График" },
-  { key: "gold", label: "Алт" },
 ];
+
+const GOLD_TYPES: { key: ChartType; label: string }[] = [{ key: "gold", label: "Алт" }];
 
 /**
  * Mongolbank's buying price for gold, over the price itself.
@@ -418,13 +428,14 @@ export default function PriceChartPro({
   /** Needed only to fetch the rest of the history for the whole-life range. */
   symbol: string;
   /**
-   * For a listing that is the metal: the gold chart is the only chart.
+   * Which chart this listing has.
    *
    * A gold tracker three months old has a candle chart of seventy-seven bars
    * and a line chart of the same, and neither is what the page is opened to
-   * see. Offering all three and defaulting to the shortest made the reader
-   * pick the right one before the page said anything — so on those listings
-   * there is one view, it is the metal, and it opens on the whole of it.
+   * see: there the one view is the metal, and it opens on the whole of it.
+   * Everywhere else the metal is not on the page at all — a brewer's price
+   * has nothing to do with the gold price, and a chip offering to draw it
+   * beside APU was a question nobody had asked.
    */
   goldOnly?: boolean;
 }) {
@@ -442,28 +453,6 @@ export default function PriceChartPro({
   const [goldFailed, setGoldFailed] = useState(false);
 
   const range = RANGES[rangeIndex];
-
-  /**
-   * Picking Алт opens the whole of the metal's history, and leaving it puts
-   * the range back where it was.
-   *
-   * The point of the view is seventeen years; opening it on the five the
-   * chart defaults to shows a third of the series and hides the years that
-   * make it worth looking at. The range the reader had chosen for the listing
-   * is theirs, though, so it is given back rather than left on "all time"
-   * when they switch away.
-   */
-  const beforeGold = useRef<number | null>(null);
-  function pickType(next: ChartType) {
-    if (next === "gold" && type !== "gold") {
-      beforeGold.current = rangeIndex;
-      setRangeIndex(WHOLE_HISTORY);
-    } else if (next !== "gold" && type === "gold" && beforeGold.current !== null) {
-      setRangeIndex(beforeGold.current);
-      beforeGold.current = null;
-    }
-    setType(next);
-  }
 
   // The page is sent with twelve years, which is what the scorecards need.
   // "Бүх цаг үе" means more than that for anything listed longer ago, so the
@@ -603,11 +592,11 @@ export default function PriceChartPro({
       <div className="flex items-center justify-between gap-2 mb-2">
         <h2 className="text-sm font-semibold text-app-text truncate">График</h2>
         <div className="flex items-center gap-1 shrink-0">
-          {(goldOnly ? CHART_TYPES.filter((t) => t.key === "gold") : CHART_TYPES).map((option) => (
+          {(goldOnly ? GOLD_TYPES : CHART_TYPES).map((option) => (
             <Chip
               key={option.key}
               active={option.key === type}
-              onClick={() => pickType(option.key)}
+              onClick={() => setType(option.key)}
             >
               {option.label}
             </Chip>
