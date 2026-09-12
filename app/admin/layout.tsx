@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getDb } from "@/lib/mongodb";
-import { requireAdminPage } from "@/lib/roles";
+import { isServiceAdmin, requireAdminPage } from "@/lib/roles";
 import AdminNav from "@/components/admin/AdminNav";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,11 @@ export default async function AdminLayout({
 
   return (
     <div className="flex min-h-dvh flex-col bg-app-bg">
-      <AdminNav username={admin.username} />
+      <AdminNav
+        username={admin.username}
+        serviceAdmin={isServiceAdmin(admin)}
+        accountHref={`/admin/users/${admin._id}`}
+      />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-5 pb-16">{children}</main>
     </div>
   );

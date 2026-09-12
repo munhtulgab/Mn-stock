@@ -85,7 +85,7 @@ export default async function AdminUsersPage({
                     )}
                   </span>
                   <span className="block truncate text-xs text-app-muted">
-                    {u.founder ? "үүсгэн байгуулагч · " : ""}
+                    {u.founder ? "системийн админ · " : ""}
                     {u.fullName || "нэр оруулаагүй"}
                     {u.createdAt ? ` · ${ulaanbaatarDateTime(u.createdAt)}` : ""}
                   </span>

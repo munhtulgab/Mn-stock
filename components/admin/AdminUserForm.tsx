@@ -102,7 +102,17 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-xs text-app-muted">
           Хэрэглэгчийн нэр
-          <input className={FIELD} value={form.username} onChange={set("username")} required />
+          {/* Locked on the system administrator: the name is what makes that
+              account the administrator and what makes it undeletable, so the
+              server refuses to change it. Better not to offer the field than
+              to offer one that always fails. */}
+          <input
+            className={`${FIELD} disabled:opacity-60`}
+            value={form.username}
+            onChange={set("username")}
+            disabled={user.founder}
+            required
+          />
         </label>
         <label className="text-xs text-app-muted">
           Овог нэр
@@ -164,7 +174,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
           Админ эрхтэй
           <span className="block text-xs text-app-muted">
             {user.founder
-              ? "Анхны бүртгэл үргэлж админ байна — энэ эрхийг хасах боломжгүй."
+              ? "Системийн админ. Энэ эрхийг хасах, бүртгэлийг устгах боломжгүй."
               : "Системийн тохиргоо болон бүх хэрэглэгчийн мэдээлэлд хандана."}
           </span>
         </span>

@@ -12,8 +12,8 @@ import type { User } from "@/lib/types";
  * the admin area's user list writes — and the first account ever opened is one
  * whether its document says so or not.
  *
- * Which account that is can be said outright with ADMIN_USERNAME; left unset,
- * it is the oldest one.
+ * Which account that is: the one called `admin`, or whatever ADMIN_USERNAME
+ * names instead — and until such an account exists, the oldest one.
  *
  * That second rule is not a convenience. Roles arrived long after the app did,
  * so every account in the database predates the field: without a rule naming
@@ -23,18 +23,35 @@ import type { User } from "@/lib/types";
  * should not be able to lock itself out of its own administration with one
  * mis-click on the page that grants it.
  */
+/**
+ * The account this installation is administered from: `admin`, or whatever
+ * ADMIN_USERNAME names instead.
+ *
+ * It does not have to exist. Until it does, the rules below fall back to the
+ * oldest account, which is what keeps an installation that predates all of
+ * this reachable.
+ */
+export const SERVICE_ADMIN_USERNAME =
+  process.env.ADMIN_USERNAME?.trim() || "admin";
+
+/**
+ * Whether this is that account. Matched by name and case-insensitively, the
+ * same way signing in matches it.
+ */
+export function isServiceAdmin(user: User | null | undefined): boolean {
+  return user?.username?.toLowerCase() === SERVICE_ADMIN_USERNAME.toLowerCase();
+}
+
 export async function founderId(db: Db): Promise<string | null> {
-  // The escape hatch, for an installation whose oldest account is not the
-  // operator's — a test account opened before the real one, say. Naming an
-  // account here moves the whole rule to it: the badge, the role that cannot
-  // be taken away, and the account that cannot be deleted.
-  const named = process.env.ADMIN_USERNAME?.trim();
-  if (named) {
-    const user = await db
-      .collection<User>("users")
-      .findOne(usernameFilter(named), { projection: { _id: 1 } });
-    if (user) return String(user._id);
-  }
+  // The dedicated account owns the whole rule once it exists: the badge, the
+  // role that cannot be taken away, and the account that cannot be deleted.
+  // ADMIN_USERNAME renames it, which is the way back in if its password is
+  // ever lost — point the variable at another account and redeploy.
+  const named = await db
+    .collection<User>("users")
+    .findOne(usernameFilter(SERVICE_ADMIN_USERNAME), { projection: { _id: 1 } });
+  if (named) return String(named._id);
+
   const first = await db
     .collection<User>("users")
     // By `_id` as well, so two accounts opened in the same millisecond — which

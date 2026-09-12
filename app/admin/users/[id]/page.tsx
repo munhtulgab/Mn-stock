@@ -51,7 +51,7 @@ export default async function AdminUserPage({
             )}
           </h1>
           <p className="truncate text-sm text-app-muted">
-            {user.founder ? "үүсгэн байгуулагч · " : ""}
+            {user.founder ? "системийн админ · " : ""}
             {user.fullName || "нэр оруулаагүй"}
             {user.createdAt ? ` · бүртгүүлсэн ${ulaanbaatarDateTime(user.createdAt)}` : ""}
             {` · ${user.sessions} нэвтэрсэн сешн`}
