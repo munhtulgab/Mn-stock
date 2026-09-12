@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import { RefreshIcon } from "@/components/icons";
 
@@ -10,9 +11,17 @@ import { RefreshIcon } from "@/components/icons";
  * The job is on a schedule and this is the button for when the schedule is not
  * soon enough — after a settings change, or when a source has been down. It
  * takes a while, so the button says so rather than looking dead.
+ *
+ * And the page it sits on is redrawn when it finishes. Системийн байдал two
+ * panels away states the last sync time, and the whole point of pressing this
+ * is to change that: a toast saying it worked over a panel still showing
+ * yesterday's timestamp is the button reporting one thing and the page
+ * another. The refresh runs on failure too — a sync that gave up partway
+ * still moved what it managed before it stopped.
  */
 export default function SyncButton() {
   const [running, setRunning] = useState(false);
+  const router = useRouter();
   const toast = useToast();
 
   async function run() {
@@ -34,6 +43,7 @@ export default function SyncButton() {
       });
     } finally {
       setRunning(false);
+      router.refresh();
     }
   }
 
