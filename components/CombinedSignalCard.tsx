@@ -25,8 +25,11 @@ function confidenceWord(confidence: number): string {
 
 export default function CombinedSignalCard({
   combined,
+  basis,
 }: {
   combined: CombinedSignal;
+  /** Named where the readings behind the verdict are not this listing's own. */
+  basis?: string;
 }) {
   return (
     <div className="rounded-2xl border border-app-border bg-app-card p-4">
@@ -34,6 +37,9 @@ export default function CombinedSignalCard({
         <h2 className="text-sm font-semibold text-app-text">Нэгдсэн дүгнэлт</h2>
         <SignalBadge signal={combined.signal} />
         <span className="text-xs text-app-muted">Оноо {combined.score}</span>
+        {basis && (
+          <span className="text-[11px] text-app-muted">{basis}</span>
+        )}
       </div>
 
       <div className="mb-3">

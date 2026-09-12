@@ -169,6 +169,29 @@ function shortNumber(value: number): string {
 }
 
 /** A wick from low to high with the open-to-close body drawn on it. */
+/** A swatch and a name: which mark on the chart is which. */
+function Key({
+  colour,
+  square,
+  children,
+}: {
+  colour?: string;
+  /** Candles are a body, not a line, so the mark is a block. */
+  square?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        aria-hidden
+        className={square ? "h-2.5 w-1.5 rounded-[1px]" : "h-0.5 w-4 rounded-full"}
+        style={{ backgroundColor: colour ?? UP }}
+      />
+      {children}
+    </span>
+  );
+}
+
 function CandleShape(props: {
   x?: number;
   y?: number;
@@ -557,20 +580,10 @@ export default function PriceChartPro({
               }}
             />
 
-            {type === "candle" ? (
-              <Bar dataKey="range" shape={<CandleShape />} isAnimationActive={false} name="Ханш" />
-            ) : (
-              <Line
-                type="monotone"
-                dataKey="close"
-                stroke={INK}
-                strokeWidth={1.5}
-                dot={false}
-                isAnimationActive={false}
-                name="Хаалтын ханш"
-              />
-            )}
-
+            {/* Gold first, so the listing's own line is drawn over it. The
+                two run within a percent or two of each other by design, and
+                whichever is painted last is the only one visible where they
+                touch — which should be the security whose page this is. */}
             {type === "gold" && (
               <Line
                 type="monotone"
@@ -581,6 +594,20 @@ export default function PriceChartPro({
                 isAnimationActive={false}
                 connectNulls
                 name={GOLD_LABEL}
+              />
+            )}
+
+            {type === "candle" ? (
+              <Bar dataKey="range" shape={<CandleShape />} isAnimationActive={false} name="Ханш" />
+            ) : (
+              <Line
+                type="monotone"
+                dataKey="close"
+                stroke={INK}
+                strokeWidth={type === "gold" ? 2 : 1.5}
+                dot={false}
+                isAnimationActive={false}
+                name="Хаалтын ханш"
               />
             )}
 
@@ -604,6 +631,21 @@ export default function PriceChartPro({
             )}
           </ComposedChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* What the lines are.
+          
+          The chart drew two of them in the gold view and named neither: the
+          reader was left to work out which was the listing they had opened
+          and which was the metal. A tooltip says it, but only once the
+          pointer is on the line and only for whichever line it is nearest —
+          which is no help at all on a phone. */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-app-muted">
+        <Key colour={type === "candle" ? undefined : INK} square={type === "candle"}>
+          {symbol}
+          {type === "candle" ? " (лаа)" : " (хаалтын ханш)"}
+        </Key>
+        {type === "gold" && <Key colour={GOLD}>{GOLD_LABEL}</Key>}
       </div>
 
       {/* What is laid over the price. One line that scrolls sideways rather
