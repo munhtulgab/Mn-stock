@@ -5,8 +5,14 @@ import { getPortfolioSummary, getTransactions } from "@/lib/portfolio";
 import TransactionList from "@/components/TransactionList";
 import HoldingsList from "@/components/HoldingsList";
 import PortfolioAllocation from "@/components/PortfolioAllocation";
-import Num, { Pct } from "@/components/Num";
+import Num from "@/components/Num";
 import PageHeader from "@/components/PageHeader";
+import StatTile, {
+  CashGlyph,
+  DepositGlyph,
+  PercentGlyph,
+  TrendGlyph,
+} from "@/components/StatTile";
 
 /**
  * Enough to see this week's activity without turning the portfolio into a
@@ -23,6 +29,17 @@ export default async function PortfolioPage() {
     getPortfolioSummary(db, user!._id!),
     getTransactions(db, user!._id!),
   ]);
+
+  /**
+   * Nothing made and nothing lost is neither good news nor bad, and a zero
+   * painted green says it was good news. It takes the plain colour.
+   */
+  const gain =
+    portfolio.totalGainLoss > 0
+      ? ("positive" as const)
+      : portfolio.totalGainLoss < 0
+        ? ("negative" as const)
+        : ("flat" as const);
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-6">
@@ -58,40 +75,54 @@ export default async function PortfolioPage() {
             breaks the same number down by company, which is the useful form
             of it. Cash takes the place: it is the only thing on this card
             that cannot be derived, and it is what a reader checks before
-            deciding whether they can buy anything. */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-4 border-t border-app-border">
+            deciding whether they can buy anything.
+
+            They are tiles rather than four bare label-and-value pairs, and
+            the same tiles the administrator's account summary uses. Four
+            figures at 14px under a 24px total read as a footnote to it; they
+            are not one — the total says what the account is worth and these
+            say why. A mark behind each is what lets the one being looked for
+            be found without reading the other three. */}
+        <div className="grid grid-cols-2 gap-3 border-t border-app-border pt-4 lg:grid-cols-4">
           {/* What the positions cost, which the card never said. Without it
               the gain below is a number with nothing to be a gain on: a
               reader could see 326,821₮ made and 4,237,052₮ held and still not
               know what had been put in. */}
-          <div>
-            <div className="text-xs text-app-muted">Нийт хөрөнгө оруулалт</div>
-            <div className="text-sm text-app-text">
-              <Num value={portfolio.totalCostBasis} digits={2} suffix="₮" />
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-app-muted">Бэлэн мөнгө</div>
-            <div className="text-sm text-app-text">
-              <Num value={portfolio.cashBalance} digits={2} suffix="₮" />
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-app-muted">Нийт ашиг/алдагдал</div>
-            <div
-              className={`text-sm ${
-                portfolio.totalGainLoss >= 0 ? "text-app-positive" : "text-app-negative"
-              }`}
-            >
+          <StatTile
+            icon={<DepositGlyph />}
+            label="Нийт хөрөнгө оруулалт"
+            value={<Num value={portfolio.totalCostBasis} digits={2} suffix="₮" />}
+          />
+          <StatTile
+            icon={<CashGlyph />}
+            label="Бэлэн мөнгө"
+            value={<Num value={portfolio.cashBalance} digits={2} suffix="₮" />}
+          />
+          <StatTile
+            icon={<TrendGlyph down={portfolio.totalGainLoss < 0} />}
+            label="Нийт ашиг/алдагдал"
+            tone={gain}
+            value={
               <Num value={portfolio.totalGainLoss} digits={2} suffix="₮" showSign />
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-app-muted">Ашгийн хувь</div>
-            <div className="text-sm">
-              <Pct value={portfolio.totalGainLossPct} />
-            </div>
-          </div>
+            }
+          />
+          <StatTile
+            icon={<PercentGlyph />}
+            label="Ашгийн хувь"
+            tone={gain}
+            value={
+              portfolio.totalGainLossPct === null ? (
+                "—"
+              ) : (
+                <Num
+                  value={portfolio.totalGainLossPct}
+                  digits={2}
+                  suffix="%"
+                  showSign
+                />
+              )
+            }
+          />
         </div>
 
         <PortfolioAllocation holdings={portfolio.holdings} />
