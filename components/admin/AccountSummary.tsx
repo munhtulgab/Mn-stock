@@ -32,18 +32,7 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
   const tone = up ? "positive" : down ? "negative" : "flat";
 
   return (
-    <Panel
-      title="Дансны хураангуй"
-      watermark={
-        <>
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-linear-to-br from-brand-light/60 via-transparent to-transparent"
-          />
-          <SummaryWatermarkGlyph className="pointer-events-none absolute -right-6 -bottom-8 h-40 w-40 text-brand/10" />
-        </>
-      }
-    >
+    <Panel title="Дансны хураангуй">
       <div className="grid grid-cols-2 gap-2.5">
         <Tile
           icon={<WalletGlyph />}
@@ -99,9 +88,21 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
 }
 
 /**
- * One headline figure. The mark sits in a tinted square rather than loose
- * beside the label: at 15px a stroked glyph on a white card is a smudge, and
- * the square is what gives it enough ground to read as a symbol.
+ * One headline figure, over its own mark.
+ *
+ * The glyph is the tile's background rather than a badge beside the label. At
+ * fifteen pixels in a tinted square it was a smudge, and it was taking the
+ * width the label needed — "Нийт хөрөнгө оруулалт" wrapped around it. Run
+ * large and off the corner it is something to recognise the tile by before
+ * the words are read, which is the whole job of a mark on a figure nobody
+ * reads twice.
+ *
+ * Clipped rather than inset. A watermark politely fitted inside the padding
+ * is a picture, and a picture in a tile this size competes with the number;
+ * one that runs off the edge is a texture, and stays behind it. Six of these
+ * is also why the panel behind them carries none of its own: a wash and a
+ * seventh glyph under six tiles that each have one is a busy ground for a
+ * grid whose whole job is to be read at a glance.
  */
 function Tile({
   icon,
@@ -116,67 +117,64 @@ function Tile({
   note?: string;
   tone?: "positive" | "negative" | "flat";
 }) {
-  const paint =
+  const ink =
     tone === "positive"
-      ? { color: "var(--app-positive)", background: "var(--app-positive-bg)" }
+      ? "var(--app-positive)"
       : tone === "negative"
-        ? { color: "var(--app-negative)", background: "var(--app-negative-bg)" }
-        : { color: "var(--brand-dark)", background: "var(--brand-light)" };
+        ? "var(--app-negative)"
+        : "var(--brand-dark)";
 
   return (
-    <div className="min-w-0 rounded-xl border border-app-border p-3">
-      <div className="flex items-center gap-2">
-        <span
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
-          style={paint}
-        >
-          {icon}
-        </span>
-        <span className="min-w-0 text-[11px] leading-tight text-app-muted">{label}</span>
-      </div>
-      <div
-        className="mt-2 truncate text-[17px] font-semibold tracking-[-0.02em] tabular-nums"
-        style={tone === "flat" ? undefined : { color: paint.color }}
+    <div className="relative min-w-0 overflow-hidden rounded-xl border border-app-border p-3">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-3 -bottom-4 opacity-[0.14]"
+        style={{ color: ink }}
       >
-        {value}
+        {icon}
+      </span>
+      <div className="relative">
+        <div className="text-[11px] leading-tight text-app-muted">{label}</div>
+        <div
+          className="mt-1.5 truncate text-[19px] font-semibold tracking-[-0.02em] tabular-nums"
+          style={tone === "flat" ? undefined : { color: ink }}
+        >
+          {value}
+        </div>
+        {note && <div className="mt-0.5 truncate text-[10px] text-app-muted">{note}</div>}
       </div>
-      {note && <div className="truncate text-[10px] text-app-muted">{note}</div>}
     </div>
   );
 }
 
-function SummaryWatermarkGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 160 160" fill="none" className={className} aria-hidden>
-      <g stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="14" y="46" width="118" height="86" rx="14" />
-        <path d="M32 46V34a10 10 0 0 1 10-10h64a10 10 0 0 1 10 10v12" />
-        <circle cx="112" cy="89" r="8" fill="currentColor" stroke="none" />
-        <path d="M96 40 118 18 140 34 156 8" />
-        <path d="M132 8h24v22" />
-      </g>
-    </svg>
-  );
-}
-
+/**
+ * The marks, drawn at the size they are used: 84px behind a figure. Stroke
+ * weight is in viewBox units, so the 1.9 that read as a hairline at fifteen
+ * pixels renders seven pixels thick at this size — heavy enough to read as a
+ * drawing rather than as a ground for one.
+ */
 const TILE = {
-  width: 15,
-  height: 15,
+  width: 84,
+  height: 84,
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
-  strokeWidth: 1.9,
+  strokeWidth: 1.25,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
 
-const LINE = { ...TILE, strokeWidth: 1.8, className: "shrink-0 text-app-muted" };
-
+/**
+ * A wallet, with the card pocket that makes it one. Without it the mark is a
+ * rounded rectangle with a dash in it, which passed at fifteen pixels and
+ * reads as an empty box at eighty.
+ */
 function WalletGlyph() {
   return (
     <svg {...TILE}>
-      <path d="M3.5 8.2c0-1.5 1.2-2.7 2.7-2.7h11.6c1.5 0 2.7 1.2 2.7 2.7v7.6c0 1.5-1.2 2.7-2.7 2.7H6.2a2.7 2.7 0 0 1-2.7-2.7Z" />
-      <path d="M16.2 12h1.6" />
+      <path d="M3.2 8.4c0-1.5 1.2-2.7 2.7-2.7h12c1.5 0 2.7 1.2 2.7 2.7v7.2c0 1.5-1.2 2.7-2.7 2.7h-12a2.7 2.7 0 0 1-2.7-2.7Z" />
+      <path d="M20.6 10.3h-4.2a1.7 1.7 0 0 0 0 3.4h4.2" />
+      <path d="M17.1 12h.1" strokeWidth={2.6} />
     </svg>
   );
 }
@@ -211,7 +209,7 @@ function PercentGlyph() {
 
 function OrderGlyph() {
   return (
-    <svg {...LINE}>
+    <svg {...TILE}>
       <path d="M6 3.8h12v16.4l-3-1.8-3 1.8-3-1.8-3 1.8z" />
       <path d="M9 8.6h6M9 12.3h4" />
     </svg>
@@ -220,7 +218,7 @@ function OrderGlyph() {
 
 function StackGlyph() {
   return (
-    <svg {...LINE}>
+    <svg {...TILE}>
       <path d="m12 3.4 8.2 4.2L12 11.8 3.8 7.6z" />
       <path d="m3.8 12 8.2 4.2 8.2-4.2M3.8 16.4l8.2 4.2 8.2-4.2" />
     </svg>
