@@ -2,26 +2,25 @@ import Num from "@/components/Num";
 import type { DailyOrders } from "@/lib/adminOverview";
 
 /**
- * A year of trading, one column a day, measured in tögrög.
+ * A quarter of trading, one column a day, measured in tögrög.
  *
  * Counts were the wrong unit. Thirty small orders and one large one are the
  * same column when you count them and nothing like each other when you look
  * at what changed hands, and it is the second question an administrator has
  * about a day. So the height is turnover.
  *
- * A year rather than a fortnight, because that is the span in which this
+ * Ninety days rather than a fortnight, because that is the span in which this
  * shape says anything: an exchange is shut two days in seven and on every
- * public holiday, so a fortnight is mostly gaps and a year is a season. The
- * blanks are drawn as stubs rather than skipped — a strip that closes up its
- * empty days would space Monday next to Friday and quietly lie about rhythm.
+ * public holiday, so a fortnight is mostly gaps and a quarter is a season.
+ * Not a year either — at a column a day a year is a column two pixels wide,
+ * which is a texture rather than a chart. The blanks are drawn as stubs
+ * rather than skipped: a strip that closes up its empty days would space
+ * Monday next to Friday and quietly lie about rhythm.
  *
  * Deliberately not a charting library: one series, no axes, no legend, no
  * interaction past a title on hover. A library would ship more code than the
  * page it sits on. The busiest day sets the scale, so the shape is relative
  * and the figures underneath are where the quantities live.
- *
- * The narrow layout shows the last ninety days of the same array. At 390px a
- * year is a column a pixel wide, which is a smear rather than a chart.
  */
 export default function OrdersStrip({ days }: { days: DailyOrders[] }) {
   const peak = Math.max(1, ...days.map((d) => d.turnover));
@@ -32,14 +31,11 @@ export default function OrdersStrip({ days }: { days: DailyOrders[] }) {
 
   return (
     <div>
-      <div className="hidden sm:block">
-        <Columns days={days} peak={peak} />
-        <MonthRule days={days} />
-      </div>
-      <div className="sm:hidden">
-        <Columns days={days.slice(-90)} peak={peak} />
-        <MonthRule days={days.slice(-90)} />
-      </div>
+      {/* One rendering at every width. A quarter fits the narrow layout as
+          well as the wide one — it is the year that needed a shorter cut for
+          the phone, and there is no longer a year. */}
+      <Columns days={days} peak={peak} />
+      <MonthRule days={days} />
 
       <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 border-t border-app-divider pt-4 sm:grid-cols-4">
         <Fact label="Нийт эргэлт">
@@ -84,9 +80,9 @@ function Columns({ days, peak }: { days: DailyOrders[]; peak: number }) {
 }
 
 /**
- * A label where a month begins, and nowhere else. Three hundred and
- * sixty-five dates do not fit under three hundred and sixty-five columns; the
- * twelve that mark the months do, and they are what the eye is looking for.
+ * A label where a month begins, and nowhere else. Ninety dates do not fit
+ * under ninety columns; the three that mark the months do, and they are what
+ * the eye is looking for.
  */
 function MonthRule({ days }: { days: DailyOrders[] }) {
   return (

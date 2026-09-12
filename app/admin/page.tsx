@@ -62,8 +62,12 @@ export default async function AdminOverviewPage({
 
       {/* A colour each. Four identical cards are four cards nobody learns
           the position of; after a week the blue one is where the orders are,
-          before the word is read. */}
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          before the word is read.
+
+          One row from the laptop up. Four across is the whole point of the
+          row — it is read in one sweep, and the moment it folds into two-by-two
+          the bottom pair drops below the fold and stops being glanced at. */}
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           tone="brand"
           icon="users"
@@ -106,7 +110,7 @@ export default async function AdminOverviewPage({
       </section>
 
       <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Panel title="Арилжааны идэвх" note="Сүүлийн 365 хоног">
+        <Panel title="Арилжааны идэвх" note="Сүүлийн 90 хоног">
           <OrdersStrip days={o.daily} />
         </Panel>
 

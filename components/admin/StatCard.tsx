@@ -83,7 +83,10 @@ export default function StatCard({
 
       <div className="relative">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <span className="text-[32px] leading-none font-bold tracking-[-0.03em] text-white tabular-nums lg:text-[36px]">
+          {/* Grows at xl, not at lg: with four cards across, the laptop is
+              where a column is narrowest, and 36px there is what pushes the
+              change chip onto a line of its own. */}
+          <span className="text-[32px] leading-none font-bold tracking-[-0.03em] text-white tabular-nums xl:text-[36px]">
             {value}
           </span>
           {delta && <DeltaChip delta={delta} direction={direction} />}

@@ -23,7 +23,7 @@ export interface RecentOrder {
   createdAt: Date;
 }
 
-/** One day's worth of orders, for the year strip on the dashboard. */
+/** One day's worth of orders, for the activity strip on the dashboard. */
 export interface DailyOrders {
   /** `YYYY-MM-DD` in Ulaanbaatar. */
   day: string;
@@ -53,8 +53,15 @@ export interface AdminOverview {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** How far the activity strip looks back. A year, so a season is visible. */
-const STRIP_DAYS = 365;
+/**
+ * How far the activity strip looks back.
+ *
+ * A quarter. A year fitted, but at a column a day it fitted by making each
+ * column two pixels wide, and the shape of a fortnight inside it could not be
+ * read at all. Ninety days is long enough to hold a season and short enough
+ * that a single busy Tuesday is still a column you can point at.
+ */
+const STRIP_DAYS = 90;
 const STRIP_MS = STRIP_DAYS * DAY_MS;
 
 /**
@@ -108,7 +115,7 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
       .findOne({ key: "main" }),
     db
       .collection<Transaction>("transactions")
-      .find({}, { sort: { createdAt: -1 }, limit: 8 })
+      .find({}, { sort: { createdAt: -1 }, limit: 15 })
       .toArray(),
     db
       .collection<User>("users")
@@ -140,8 +147,9 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
 
   // Every day in the window, including the quiet ones — a strip with gaps in
   // it reads as missing data rather than as a day nobody traded. An exchange
-  // is shut two days in seven and on every public holiday, so most of a year
-  // is legitimately empty and the shape depends on those blanks being drawn.
+  // is shut two days in seven and on every public holiday, so a good third of
+  // the window is legitimately empty and the shape depends on those blanks
+  // being drawn.
   const byDay = new Map(dailyRows.map((r) => [r._id, r]));
   const daily: DailyOrders[] = Array.from({ length: STRIP_DAYS }, (_, i) => {
     const day = ulaanbaatarDaysAgo(STRIP_DAYS - 1 - i);
