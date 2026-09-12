@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Seeded design canvas. A 2.5 MB build artifact: the Claude Design editor
+# payload with the artboards beside it in `design/*.dc.html` baked in. Rebuilt
+# from those sources whenever the canvas changes, so the sources are what is
+# worth keeping.
+/design/mse-admin-redesign.html

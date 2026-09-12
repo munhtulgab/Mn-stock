@@ -1,0 +1,191 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #00d16c; text-decoration: none; }
+    a:hover { color: #ffffff; }
+
+    .c {
+      --bg: #0d0f14; --card: #171a21; --elev: #1e222b;
+      --border: #3a404e; --divider: #252932;
+      --text: #ffffff; --muted: #8b90a0;
+      --pos: #00d16c; --pos-bg: #0e2a1d;
+      --neg: #ff5a5f; --neg-bg: #2c1518;
+      width: 100%; min-height: 960px;
+      background: var(--bg); color: var(--text);
+      font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      font-size: 14px; line-height: 1.45;
+      padding: 40px 56px 48px;
+      box-sizing: border-box;
+      display: flex; flex-direction: column; gap: 38px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .masthead { display: flex; align-items: flex-end; gap: 24px; }
+    .kicker {
+      font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--pos); font-weight: 700;
+    }
+    .display {
+      font-size: 46px; font-weight: 800; letter-spacing: -0.038em;
+      line-height: 1.02; margin: 6px 0 0; text-wrap: balance;
+    }
+    .lede { font-size: 15px; color: var(--muted); margin-top: 8px; max-width: 46ch; }
+    .nav { margin-left: auto; display: flex; gap: 6px; align-self: flex-start; }
+    .nav span {
+      padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+      color: var(--muted); border: 1px solid transparent;
+    }
+    .nav span.on { color: #05140c; background: var(--pos); }
+
+    /* One number owns the page; the rest are subordinate by an order of size. */
+    .hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 22px; align-items: stretch; }
+    .headline-stat {
+      border-radius: 22px; background: var(--pos); color: #05140c;
+      padding: 32px 34px; display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .hs-label { font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; font-weight: 700; opacity: 0.72; }
+    .hs-value { font-size: 92px; font-weight: 800; letter-spacing: -0.05em; line-height: 0.92; font-variant-numeric: tabular-nums; }
+    .hs-foot { display: flex; align-items: baseline; gap: 10px; font-size: 14px; font-weight: 600; }
+    .hs-bar { height: 5px; border-radius: 999px; background: rgba(5,20,12,0.22); margin-top: 18px; overflow: hidden; }
+    .hs-bar > span { display: block; height: 100%; width: 68%; background: #05140c; border-radius: 999px; }
+
+    .trio { display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 22px; }
+    .stat {
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: baseline; gap: 16px; padding-bottom: 14px;
+    }
+    .stat:last-child { border-bottom: 0; }
+    .stat-value { font-size: 40px; font-weight: 750; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; line-height: 1; }
+    .stat-label { font-size: 13px; color: var(--muted); }
+    .stat-delta { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--pos); }
+
+    .rule { display: flex; align-items: baseline; gap: 14px; }
+    .rule h2 { font-size: 13px; letter-spacing: 0.13em; text-transform: uppercase; font-weight: 700; margin: 0; }
+    .rule .line { flex: 1 1 auto; height: 1px; background: var(--border); }
+    .rule .more { font-size: 12px; color: var(--muted); }
+
+    .feed { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+    .entry {
+      border-left: 2px solid var(--divider); padding-left: 16px;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .entry.hot { border-left-color: var(--pos); }
+    .entry-when { font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    .entry-head { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+    .entry-body { font-size: 13px; color: var(--muted); }
+    .entry-amt { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+    .foot { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; }
+    .fact { display: flex; flex-direction: column; gap: 3px; }
+    .fact-key { font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    .fact-val { font-size: 17px; font-weight: 650; }
+    .fact-val.ok { color: var(--pos); }
+    .fact-val.off { color: var(--muted); }
+  </style>
+</helmet>
+
+<div class="c">
+  <div class="masthead">
+    <div>
+      <div class="kicker">Хяналтын самбар</div>
+      <h1 class="display">Өнөөдөр 38 захиалга,<br>шинэ 6 бүртгэл.</h1>
+      <p class="lede">Систем бүрэн ажиллаж байна. Анхаарал шаардсан зүйл алга.</p>
+    </div>
+    <nav class="nav">
+      <span class="on">Самбар</span>
+      <span>Хэрэглэгч</span>
+      <span>Систем</span>
+    </nav>
+  </div>
+
+  <div class="hero">
+    <div class="headline-stat">
+      <div>
+        <div class="hs-label">Нийт хэрэглэгч</div>
+        <div class="hs-value">128</div>
+      </div>
+      <div>
+        <div class="hs-foot"><span>+6 энэ долоо хоногт</span><span style="opacity: 0.65">41 нь яг одоо онлайн</span></div>
+        <div class="hs-bar"><span></span></div>
+      </div>
+    </div>
+    <div class="trio">
+      <div class="stat">
+        <span class="stat-value">1 904</span>
+        <span class="stat-label">захиалга</span>
+        <span class="stat-delta">+38</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">184.2<span style="font-size: 20px; font-weight: 600"> сая₮</span></span>
+        <span class="stat-label">эргэлт</span>
+        <span class="stat-delta">+4.1%</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">96</span>
+        <span class="stat-label">мэдэгдэл</span>
+        <span class="stat-delta">+12</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="rule" style="margin-bottom: 20px">
+      <h2>Сүүлийн хөдөлгөөн</h2>
+      <span class="line"></span>
+      <span class="more">Бүгдийг харах</span>
+    </div>
+    <div class="feed">
+      <sc-for list="{{ entries }}" as="e" hint-placeholder-count="6">
+        <div class="entry {{ e.hot }}">
+          <span class="entry-when">{{ e.when }}</span>
+          <span class="entry-head">{{ e.head }}</span>
+          <span class="entry-body">{{ e.body }}</span>
+          <span class="entry-amt">{{ e.amount }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div>
+    <div class="rule" style="margin-bottom: 18px">
+      <h2>Систем</h2>
+      <span class="line"></span>
+      <span class="more">Сүүлийн синк 12 минутын өмнө</span>
+    </div>
+    <div class="foot">
+      <div class="fact"><span class="fact-key">AI түлхүүр</span><span class="fact-val">5 / 7</span></div>
+      <div class="fact"><span class="fact-key">Мэдээллийн эх сурвалж</span><span class="fact-val ok">9 идэвхтэй</span></div>
+      <div class="fact"><span class="fact-key">Push мэдэгдэл</span><span class="fact-val ok">Идэвхтэй</span></div>
+      <div class="fact"><span class="fact-key">CallPro SMS</span><span class="fact-val off">Унтраалттай</span></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{ "$preview": { "width": 1440, "height": 960 } }'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      entries: [
+        { when: '11:04 · @reader', head: 'QPAY авлаа', body: '100 ширхэг, 600.00₮-өөр', amount: '60 000₮', hot: 'hot' },
+        { when: '10:47 · @bataa', head: 'GOV зарлаа', body: '250 ширхэг, 850.00₮-өөр', amount: '212 500₮', hot: '' },
+        { when: '10:12 · @oyunaa', head: 'ALTT авлаа', body: '40 ширхэг, 3 700.00₮-өөр', amount: '148 000₮', hot: '' },
+        { when: '09:58 · @temka', head: 'APU авлаа', body: '600 ширхэг, 900.00₮-өөр', amount: '540 000₮', hot: 'hot' },
+        { when: '09:31 · @saraa', head: 'TCK зарлаа', body: '75 ширхэг, 1 250.00₮-өөр', amount: '93 750₮', hot: '' },
+        { when: '09:04 · @bilguun', head: 'Шинэ бүртгэл', body: 'Билгүүн Н нэгдлээ', amount: '—', hot: '' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,523 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--text); }
+
+    .phone {
+      --bg: #0d0f14;
+      --card: #171a21;
+      --elev: #1e222b;
+      --border: #3a404e;
+      --divider: #252932;
+      --text: #ffffff;
+      --muted: #8b90a0;
+      --pos: #00d16c;
+      --pos-bg: #0e2a1d;
+      --neg: #ff5a5f;
+      --neg-bg: #2c1518;
+      --lift: rgba(255,255,255,0.045);
+      --scrim: rgba(3,5,9,0.74);
+    }
+    .phone.t-light {
+      --bg: #f4f5f8;
+      --card: #ffffff;
+      --elev: #eef0f4;
+      --border: #dde1e9;
+      --divider: #edeff4;
+      --text: #10131a;
+      --muted: #667085;
+      --pos: #00a857;
+      --pos-bg: #e4f7ed;
+      --neg: #d92d33;
+      --neg-bg: #fdeaea;
+      --lift: rgba(16,19,26,0.03);
+      --scrim: rgba(16,19,26,0.38);
+    }
+
+    .phone {
+      position: relative;
+      width: 100%; height: 844px;
+      background: var(--bg); color: var(--text);
+      font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      font-size: 14px; line-height: 1.45;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mark {
+      width: 26px; height: 26px; border-radius: 8px; flex: 0 0 auto;
+      background: var(--accent); color: #05140c;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .bar-title { font-size: 16px; font-weight: 650; letter-spacing: -0.015em; }
+    .bar-sub { font-size: 11px; color: var(--muted); }
+    .icon-btn {
+      width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto;
+      border: 1px solid var(--border); background: var(--card); color: var(--muted);
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+
+    /* A segmented control, not a rail: at this width a rail eats a third
+       of the screen and a bottom bar collides with the phone's own. */
+    .segs { display: flex; gap: 6px; padding: 12px 16px 4px; }
+    .seg {
+      flex: 1 1 0; padding: 8px 0; border-radius: 10px;
+      border: 1px solid transparent; background: none;
+      color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; text-align: center;
+    }
+    .seg.on { background: var(--card); border-color: var(--border); color: var(--text); }
+
+    .scroll { flex: 1 1 auto; overflow: hidden; padding: 12px 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+
+    .card {
+      border: 1px solid var(--border); border-radius: 14px;
+      background: var(--card); box-shadow: inset 0 1px 0 var(--lift);
+    }
+    .pad { padding: 14px; }
+
+    .stat2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .stat-label { font-size: 11px; color: var(--muted); }
+    .stat-value { font-size: 24px; font-weight: 650; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .delta { font-size: 11px; font-weight: 600; color: var(--pos); }
+
+    .eyebrow { font-size: 10px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    .section-title { font-size: 14px; font-weight: 600; }
+    .head { display: flex; align-items: baseline; gap: 9px; }
+    .note { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+    .row { display: flex; align-items: center; gap: 11px; padding: 11px 14px; cursor: pointer; }
+    .row + .row { border-top: 1px solid var(--divider); }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 999px; flex: 0 0 auto;
+      color: #05140c; display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+    }
+    .who-name { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+    .who-sub { font-size: 11px; color: var(--muted); }
+    .right { margin-left: auto; text-align: right; flex: 0 0 auto; }
+    .money { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+      background: var(--elev); color: var(--muted); letter-spacing: 0.02em;
+    }
+    .pill.buy { background: var(--pos-bg); color: var(--pos); }
+    .pill.sell { background: var(--neg-bg); color: var(--neg); }
+    .pill.admin { background: var(--elev); color: var(--accent); }
+    .dot { width: 4px; height: 4px; border-radius: 999px; background: currentColor; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 11px 12px; border-radius: 11px; min-height: 44px;
+      border: 1px solid var(--border); background: var(--card); color: var(--text);
+      font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .btn.primary { background: var(--accent); border-color: transparent; color: #05140c; }
+    .btn.danger { color: var(--neg); }
+    .btn.wide { flex: 1 1 0; }
+    .acts { display: flex; gap: 8px; padding: 0 14px 12px; }
+
+    .back {
+      display: inline-flex; align-items: center; gap: 6px;
+      font: inherit; font-size: 13px; color: var(--muted);
+      background: none; border: 0; padding: 0; cursor: pointer;
+    }
+
+    .scrim {
+      position: absolute; inset: 0; z-index: 20; background: var(--scrim);
+      display: flex; align-items: flex-end; padding: 16px;
+      backdrop-filter: blur(2px);
+    }
+    .sheet {
+      width: 100%; border: 1px solid var(--border); border-radius: 20px;
+      background: var(--card); padding: 18px;
+      box-shadow: 0 -12px 40px rgba(0,0,0,0.4), inset 0 1px 0 var(--lift);
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .sheet-head { display: flex; gap: 11px; }
+    .sheet-icon {
+      width: 32px; height: 32px; border-radius: 10px; flex: 0 0 auto;
+      background: var(--neg-bg); color: var(--neg);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sheet-title { font-size: 15px; font-weight: 650; }
+    .sheet-body { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .sheet-detail {
+      border-radius: 12px; background: var(--bg); padding: 12px;
+      display: flex; flex-direction: column; gap: 6px; font-size: 13px;
+    }
+  </style>
+</helmet>
+
+<div class="phone {{themeClass}}" style="--accent: {{accent}}">
+
+  <header class="bar">
+    <span class="mark">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19V6.5"></path><path d="M4 19h16"></path>
+        <path d="M8 19v-6"></path><path d="M13 19V9"></path><path d="M18 19v-9.5"></path>
+      </svg>
+    </span>
+    <span style="flex: 1 1 auto; min-width: 0">
+      <span class="bar-title">{{ title }}</span>
+      <span class="bar-sub">{{ sub }}</span>
+    </span>
+    <button class="icon-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
+      </svg>
+    </button>
+  </header>
+
+  <sc-if value="{{ notDetail }}" hint-placeholder-val="{{ true }}">
+    <div class="segs">
+      <button class="seg {{segOverview}}" onClick="{{ goOverview }}">Самбар</button>
+      <button class="seg {{segUsers}}" onClick="{{ goUsers }}">Хэрэглэгч</button>
+      <button class="seg {{segSystem}}" onClick="{{ goSystem }}">Систем</button>
+    </div>
+  </sc-if>
+
+  <div class="scroll">
+
+    <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+      <div class="stat2">
+        <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+          <div class="card pad" style="display: flex; flex-direction: column; gap: 5px">
+            <span class="stat-label">{{ s.label }}</span>
+            <span class="stat-value">{{ s.value }}</span>
+            <span class="delta">{{ s.delta }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div class="card">
+        <div class="pad" style="padding-bottom: 6px">
+          <div class="head">
+            <span class="eyebrow">Идэвх</span>
+            <span class="section-title">Сүүлийн захиалга</span>
+          </div>
+        </div>
+        <sc-for list="{{ recent }}" as="r" hint-placeholder-count="4">
+          <div class="row" onClick="{{ r.open }}">
+            <span class="avatar" style="background: {{ r.tint }}">{{ r.initials }}</span>
+            <span style="min-width: 0">
+              <span class="who-name">{{ r.symbol }} <span class="pill {{ r.sideClass }}"><span class="dot"></span>{{ r.side }}</span></span>
+              <span class="who-sub">{{ r.handle }} · {{ r.when }}</span>
+            </span>
+            <span class="right">
+              <span class="money">{{ r.total }}</span>
+              <span class="who-sub">{{ r.qty }} ш</span>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isUsers }}" hint-placeholder-val="{{ true }}">
+      <div class="card">
+        <sc-for list="{{ users }}" as="u" hint-placeholder-count="6">
+          <div class="row" onClick="{{ u.open }}">
+            <span class="avatar" style="background: {{ u.tint }}">{{ u.initials }}</span>
+            <span style="min-width: 0">
+              <span class="who-name">{{ u.handle }} <span class="pill {{ u.roleClass }}">{{ u.roleShort }}</span></span>
+              <span class="who-sub">{{ u.name }}</span>
+            </span>
+            <span class="right">
+              <span class="money">{{ u.cash }}</span>
+              <span class="who-sub">{{ u.orders }} захиалга</span>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+      <button class="back" onClick="{{ goUsers }}">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 6l-6 6 6 6"></path>
+        </svg>
+        Хэрэглэгчид
+      </button>
+
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span class="avatar" style="width: 44px; height: 44px; font-size: 15px; background: var(--accent)">УД</span>
+        <span>
+          <span style="font-size: 18px; font-weight: 650; letter-spacing: -0.02em">@reader</span>
+          <span class="who-sub">Уншигч Дорж · 1 нэвтэрсэн сешн</span>
+        </span>
+      </div>
+
+      <div class="card pad" style="display: flex; flex-direction: column; gap: 9px">
+        <div class="head"><span class="eyebrow">Данс</span><span class="section-title">Хураангуй</span></div>
+        <sc-for list="{{ summary }}" as="s" hint-placeholder-count="4">
+          <span style="display: flex; justify-content: space-between; font-size: 13px">
+            <span style="color: var(--muted)">{{ s.key }}</span>
+            <span style="font-weight: 600; font-variant-numeric: tabular-nums">{{ s.value }}</span>
+          </span>
+        </sc-for>
+      </div>
+
+      <div class="card">
+        <div class="pad" style="padding-bottom: 4px">
+          <div class="head">
+            <span class="eyebrow">Түүх</span><span class="section-title">Захиалга</span>
+            <span class="note">3</span>
+          </div>
+        </div>
+        <sc-for list="{{ orders }}" as="o" hint-placeholder-count="2">
+          <div>
+            <div class="row" style="cursor: default">
+              <span class="avatar" style="background: var(--elev); color: var(--muted)">QP</span>
+              <span style="min-width: 0">
+                <span class="who-name">{{ o.symbol }} <span class="pill {{ o.sideClass }}"><span class="dot"></span>{{ o.side }}</span></span>
+                <span class="who-sub">{{ o.when }}</span>
+              </span>
+              <span class="right">
+                <span class="money">{{ o.total }}</span>
+                <span class="who-sub">{{ o.line }}</span>
+              </span>
+            </div>
+            <div class="acts">
+              <button class="btn wide" onClick="{{ o.askEdit }}">Засах</button>
+              <button class="btn wide" onClick="{{ o.askReverse }}">Буцаах</button>
+              <button class="btn wide danger" onClick="{{ o.askDelete }}">Устгах</button>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <button class="btn danger" style="width: 100%" onClick="{{ askDeleteUser }}">
+        Хэрэглэгчийг устгах
+      </button>
+    </sc-if>
+
+    <sc-if value="{{ isSystem }}" hint-placeholder-val="{{ false }}">
+      <div class="card pad" style="display: flex; flex-direction: column; gap: 10px">
+        <div class="head"><span class="eyebrow">Байдал</span><span class="section-title">Систем</span></div>
+        <sc-for list="{{ health }}" as="h" hint-placeholder-count="5">
+          <span style="display: flex; justify-content: space-between; align-items: center; font-size: 13px">
+            <span style="color: var(--muted)">{{ h.key }}</span>
+            <span class="pill {{ h.tone }}"><span class="dot"></span>{{ h.value }}</span>
+          </span>
+        </sc-for>
+      </div>
+      <button class="btn primary" style="width: 100%">Одоо синк хийх</button>
+    </sc-if>
+
+  </div>
+
+  <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="scrim">
+      <div class="sheet">
+        <div class="sheet-head">
+          <span class="sheet-icon" style="background: {{ dialog.iconBg }}; color: {{ dialog.iconFg }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="8.6"></circle><path d="M12 7.8v4.7"></path><path d="M12 15.9h.01"></path>
+            </svg>
+          </span>
+          <span>
+            <span class="sheet-title">{{ dialog.title }}</span>
+            <span class="sheet-body">{{ dialog.body }}</span>
+          </span>
+        </div>
+        <sc-if value="{{ dialog.hasDetail }}" hint-placeholder-val="{{ true }}">
+          <div class="sheet-detail">
+            <sc-for list="{{ dialog.lines }}" as="l" hint-placeholder-count="2">
+              <span style="display: flex; justify-content: space-between; gap: 10px">
+                <span style="color: var(--muted)">{{ l.key }}</span>
+                <span style="font-weight: 600">{{ l.now }}</span>
+              </span>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="display: flex; gap: 9px">
+          <button class="btn wide" onClick="{{ closeDialog }}">Болих</button>
+          <button class="btn wide primary" style="background: {{ dialog.confirmBg }}; color: {{ dialog.confirmFg }}" onClick="{{ closeDialog }}">{{ dialog.confirm }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{
+  "$preview": { "width": 390, "height": 844 },
+  "accent": { "editor": "color", "default": "#00d16c", "options": ["#00d16c", "#5b8cff", "#ff9f45", "#c084fc"], "section": "Загвар" },
+  "theme": { "editor": "enum", "default": "dark", "options": ["dark", "light"], "section": "Загвар" },
+  "screen": { "editor": "enum", "default": "users", "options": ["overview", "users", "detail", "system"], "section": "Дэлгэц" }
+}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: null, dialog: null };
+  }
+
+  screen() {
+    return this.state.tab ?? this.props.screen ?? 'users';
+  }
+
+  go(tab) {
+    return () => this.setState({ tab, dialog: null });
+  }
+
+  ask(dialog) {
+    return () => this.setState({ dialog });
+  }
+
+  renderVals() {
+    const screen = this.screen();
+    const accent = this.props.accent ?? '#00d16c';
+    const openDetail = this.go('detail');
+
+    const titles = {
+      overview: ['Хяналт', 'Сүүлийн 24 цаг'],
+      users: ['Хэрэглэгчид', '128 бүртгэл'],
+      detail: ['Хэрэглэгч', '@reader'],
+      system: ['Систем', 'Тохиргоо, синк'],
+    };
+    const [title, sub] = titles[screen] ?? titles.users;
+
+    const person = (handle, name, tint) => ({
+      handle: '@' + handle,
+      name,
+      initials: name.slice(0, 2).toUpperCase(),
+      tint,
+      open: openDetail,
+    });
+
+    const dialogs = {
+      deleteUser: {
+        title: '@reader-ийг устгах уу?',
+        body: 'Бүртгэл болон бүх өгөгдөл устана. Буцаах боломжгүй.',
+        confirm: 'Устгах', confirmBg: '#ff5a5f', confirmFg: '#ffffff',
+        iconBg: 'rgba(255,90,95,0.14)', iconFg: '#ff5a5f',
+        hasDetail: true,
+        lines: [
+          { key: 'Захиалга', now: '3' },
+          { key: 'Хувьцаа', now: '1' },
+          { key: 'Үлдэгдэл', now: '7 520 000₮' },
+        ],
+      },
+      editOrder: {
+        title: 'Захиалгыг засах уу?',
+        body: 'Үлдэгдэл зөрүүгээр нь хөдөлнө.',
+        confirm: 'Засах', confirmBg: accent, confirmFg: '#05140c',
+        iconBg: 'rgba(255,176,32,0.14)', iconFg: '#ffb020',
+        hasDetail: true,
+        lines: [{ key: 'Тоо ширхэг', now: '100 ш → 60 ш' }, { key: 'Нийт', now: '30 000.00₮' }],
+      },
+      reverseOrder: {
+        title: 'Захиалгыг буцаах уу?',
+        body: 'Эсрэг захиалга нэмэгдэж, түүх хоёуланг нь харуулна.',
+        confirm: 'Буцаах', confirmBg: accent, confirmFg: '#05140c',
+        iconBg: 'rgba(255,176,32,0.14)', iconFg: '#ffb020',
+        hasDetail: false, lines: [],
+      },
+      deleteOrder: {
+        title: 'Захиалгыг устгах уу?',
+        body: 'Мөр арилж, үлдэгдэл сэргэнэ. Буцаах боломжгүй.',
+        confirm: 'Устгах', confirmBg: '#ff5a5f', confirmFg: '#ffffff',
+        iconBg: 'rgba(255,90,95,0.14)', iconFg: '#ff5a5f',
+        hasDetail: true,
+        lines: [{ key: 'QPAY АВСАН', now: '60 ш × 400.00₮' }],
+      },
+    };
+
+    const order = (side, tag, when, line, total) => ({
+      symbol: 'QPAY', side,
+      sideClass: side === 'АВСАН' ? 'buy' : 'sell',
+      tag, when, line, total,
+      askEdit: this.ask('editOrder'),
+      askReverse: this.ask('reverseOrder'),
+      askDelete: this.ask('deleteOrder'),
+    });
+
+    return {
+      accent,
+      themeClass: this.props.theme === 'light' ? 't-light' : 't-dark',
+      title, sub,
+
+      isOverview: screen === 'overview',
+      isUsers: screen === 'users',
+      isDetail: screen === 'detail',
+      isSystem: screen === 'system',
+      notDetail: screen !== 'detail',
+      segOverview: screen === 'overview' ? 'on' : '',
+      segUsers: screen === 'users' ? 'on' : '',
+      segSystem: screen === 'system' ? 'on' : '',
+
+      goOverview: this.go('overview'),
+      goUsers: this.go('users'),
+      goSystem: this.go('system'),
+      askDeleteUser: this.ask('deleteUser'),
+      closeDialog: () => this.setState({ dialog: null }),
+      dialogOpen: this.state.dialog !== null,
+      dialog: dialogs[this.state.dialog] ?? dialogs.deleteUser,
+
+      stats: [
+        { label: 'Хэрэглэгч', value: '128', delta: '+6 · 7 хоног' },
+        { label: 'Захиалга', value: '1 904', delta: '+38 өнөөдөр' },
+        { label: 'Сешн', value: '41', delta: 'яг одоо' },
+        { label: 'Мэдэгдэл', value: '96', delta: '+12 · 7 хоног' },
+      ],
+
+      recent: [
+        { ...person('reader', 'Уншигч Дорж', '#00d16c'), symbol: 'QPAY', side: 'АВСАН', sideClass: 'buy', qty: '100', total: '60 000₮', when: '11:04' },
+        { ...person('bataa', 'Батаа Ц', '#5b8cff'), symbol: 'GOV', side: 'ЗАРСАН', sideClass: 'sell', qty: '250', total: '212 500₮', when: '10:47' },
+        { ...person('oyunaa', 'Оюунаа Б', '#ff9f45'), symbol: 'ALTT', side: 'АВСАН', sideClass: 'buy', qty: '40', total: '148 000₮', when: '10:12' },
+        { ...person('temka', 'Тэмүүлэн Г', '#c084fc'), symbol: 'APU', side: 'АВСАН', sideClass: 'buy', qty: '600', total: '540 000₮', when: '09:58' },
+      ],
+
+      users: [
+        { ...person('Admin', 'Админ', accent), roleShort: 'АДМИН', roleClass: 'admin', orders: '0', cash: '10 000 000₮' },
+        { ...person('munkhtulga', 'Мөнхтулга Б', '#5b8cff'), roleShort: 'ХЭРЭГЛЭГЧ', roleClass: '', orders: '214', cash: '9 000 000₮' },
+        { ...person('reader', 'Уншигч Дорж', '#00d16c'), roleShort: 'ХЭРЭГЛЭГЧ', roleClass: '', orders: '3', cash: '7 520 000₮' },
+        { ...person('bataa', 'Батаа Ц', '#ff9f45'), roleShort: 'ХЭРЭГЛЭГЧ', roleClass: '', orders: '87', cash: '3 410 200₮' },
+        { ...person('oyunaa', 'Оюунаа Б', '#c084fc'), roleShort: 'ХЭРЭГЛЭГЧ', roleClass: '', orders: '52', cash: '1 875 000₮' },
+        { ...person('temka', 'Тэмүүлэн Г', '#00d16c'), roleShort: 'ХЭРЭГЛЭГЧ', roleClass: '', orders: '19', cash: '640 500₮' },
+      ],
+
+      summary: [
+        { key: 'Мөнгөн үлдэгдэл', value: '7 520 000₮' },
+        { key: 'Хувьцаа', value: '200 ш QPAY' },
+        { key: 'Дундаж өртөг', value: '450.00₮' },
+        { key: 'Захиалга', value: '3' },
+      ],
+
+      orders: [
+        order('ЗАРСАН', 'БУЦААЛТ', '2026-09-12 11:36', '100 ш × 500₮', '50 000₮'),
+        order('АВСАН', 'ЗАССАН', '2026-09-01 11:00', '60 ш × 400₮', '24 000₮'),
+      ],
+
+      health: [
+        { key: 'Сүүлийн синк', value: '12 мин', tone: '' },
+        { key: 'Эх сурвалж', value: '9 идэвхтэй', tone: 'buy' },
+        { key: 'AI түлхүүр', value: '5 / 7', tone: '' },
+        { key: 'Push', value: 'Идэвхтэй', tone: 'buy' },
+        { key: 'SMS', value: 'Унтраалттай', tone: '' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
