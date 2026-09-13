@@ -379,3 +379,29 @@ test("the confidence rule tells the model what the number has to mean", () => {
   assert.match(system, /НОТОЛГООНЫ НИЙЦЭЛ/);
   assert.match(system, /ДОХИОНЫ ХҮЧ/);
 });
+
+test("the answer is asked for in Mongolian, in so many words", () => {
+  // It never was. Everything here is written in Mongolian and every provider
+  // answered in Mongolian, so nothing said to — until a model arrived that
+  // reads the instructions rather than mirroring them and returned a
+  // structurally perfect English analysis, which is a card nobody using this
+  // app can read.
+  const { system } = buildPrompt(input);
+  assert.match(system, /монгол хэлээр бич/i);
+  // And the exception, because `technical_reason` is required to name
+  // indicators with their figures and "RSI(14) 62.3" is not to be
+  // transliterated.
+  assert.match(system, /BUY\/SELL\/HOLD латинаар/);
+});
+
+test("the language rule reaches the provider with the least room too", () => {
+  // Groq's prompt is composed down to whatever fits its minute, so a rule
+  // added to the top of the instructions is exactly the kind of thing that
+  // can fall off the bottom for the one provider most likely to need it.
+  const { system } = buildPrompt({
+    ...input,
+    budgetTokens: PROVIDER_TOKEN_BUDGET.groq,
+    completionTokens: completionTokensFor("groq"),
+  });
+  assert.match(system, /монгол хэлээр бич/i);
+});

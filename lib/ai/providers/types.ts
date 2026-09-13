@@ -8,7 +8,8 @@ export type ProviderName =
   | "mistral"
   | "cerebras"
   | "cloudflare"
-  | "zai";
+  | "zai"
+  | "nvidia";
 
 /**
  * What one whole request may cost each provider, in tokens.

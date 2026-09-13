@@ -138,6 +138,19 @@ export const MODEL_PREFERENCES: Record<string, string[]> = {
   // would walk a working free key onto a model it has no balance for and
   // report an insufficient-balance error as though the key were spent.
   zai: ["4.7-flash", "4.5-flash", "flash"],
+  // Only what was seen to answer on a real key. This catalogue lists other
+  // labs' flagships — mistral-large-2, palmyra-fin-70b, kimi-k2.6 — and
+  // answers 404 "Not found for account" to most of them, so a preference
+  // list written from the listing would keep picking models the account
+  // cannot call. Ordered by Mongolian rather than by size: the nemotrons
+  // are the fastest things here and both answer in English.
+  nvidia: [
+    "deepseek-v4-flash",
+    "deepseek-v4-pro",
+    "kimi-k3",
+    "nemotron-3-super",
+    "gpt-oss-20b",
+  ],
   // Largest first, as everywhere here. A free account is refused the first
   // two and lands on `mistral-small-latest`, which is the substitution above
   // walking down rather than a list that has to be kept in step with a plan.
