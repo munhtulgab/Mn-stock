@@ -41,6 +41,37 @@ function extractGeminiRetrySeconds(bodyText: string): number | null {
 const ATTEMPT_MS = 45_000;
 const BUDGET_MS = 75_000;
 
+/**
+ * Where to go when the configured model is busy.
+ *
+ * "The model is overloaded" is about one model's fleet, not about Google:
+ * `gemini-flash-latest` can be turning requests away in a minute when
+ * `gemini-2.0-flash` is answering normally. Retrying the same busy name
+ * three times and reporting a 503 spent the whole allowance discovering
+ * that the busy name is busy, and lost the panel an analyst on a regular
+ * basis for a reason that had a way round it.
+ *
+ * So the retries are walked down this list instead: the configured name
+ * first, then a generation back, then one further. Each is a real model id
+ * rather than an alias, because an alias is how the first one got busy —
+ * `-latest` points wherever the traffic already is.
+ */
+const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+
+/**
+ * Whether a 503 body is this model's fleet being busy rather than the
+ * service being down.
+ *
+ * The status is matched as the JSON field Google sends it in, not as a bare
+ * word: the plain text "Service Unavailable" that a proxy or a gateway
+ * returns for an outage contains "Unavailable" too, and reading that as an
+ * overload spends the fallback list walking three models through the same
+ * outage — leaving the last of them without even a retry.
+ */
+function isOverloaded(body: string): boolean {
+  return /overloaded/i.test(body) || /"status"\s*:\s*"UNAVAILABLE"/.test(body);
+}
+
 /** A 400 that is about the key rather than anything in the request. */
 function isKeyRefusal(body: string): boolean {
   return /API_KEY_INVALID|API key not valid/i.test(body);
@@ -55,7 +86,12 @@ export async function callGemini(
   apiKey: string,
   prompt: AnalystPrompt,
 ): Promise<ProviderResult> {
-  const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
+  const configured = process.env.GEMINI_MODEL || "gemini-flash-latest";
+  // The configured name first, then the ones to fall back to — minus the
+  // configured one, so pointing GEMINI_MODEL at a fallback does not try it
+  // twice and cut the list short.
+  const models = [configured, ...FALLBACK_MODELS.filter((m) => m !== configured)];
+  let modelIndex = 0;
   const deadline = Date.now() + BUDGET_MS;
   let attempts = 0;
   /**
@@ -84,6 +120,7 @@ export async function callGemini(
       if (attempts > 0 && left < ATTEMPT_MS) break;
       attempts++;
 
+      const model = models[modelIndex];
       let res: Response;
       try {
         res = await fetch(
@@ -130,6 +167,20 @@ export async function callGemini(
         // about the key. Retrying that one would only delay saying so.
         if (skipThinking && res.status === 400 && !isKeyRefusal(body)) {
           skipThinking = false;
+          continue;
+        }
+
+        // A busy fleet, and there is another model that may not be. Move to
+        // it before spending a retry on the same name: waiting helps where a
+        // moment was unlucky, and this one has been unlucky twice.
+        if (
+          res.status === 503 &&
+          isOverloaded(body) &&
+          modelIndex + 1 < models.length
+        ) {
+          console.warn(`gemini: ${model} overloaded, trying ${models[modelIndex + 1]}`);
+          modelIndex++;
+          await sleep(retryDelayMs(1));
           continue;
         }
 
