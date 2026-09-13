@@ -1,4 +1,5 @@
 import type { Db } from "mongodb";
+import { PROVIDER_NAMES, resolveModel } from "@/lib/ai/providers/catalog";
 import type { Signal } from "@/lib/types";
 
 export interface NotificationSettings {
@@ -65,11 +66,19 @@ export interface AppSettings {
     groq?: string;
     openrouter?: string;
     mistral?: string;
-    cerebras?: string;
     cloudflare?: string;
     zai?: string;
     nvidia?: string;
   };
+  /**
+   * The model each provider is asked for, where an administrator has picked
+   * one.
+   *
+   * Sparse on purpose: a provider with no entry runs on whatever the
+   * catalogue says, so an installation that never opens the page behaves
+   * exactly as it did before there was one. See `resolveModel`.
+   */
+  aiModels?: Partial<Record<string, string>>;
   /**
    * Cloudflare puts the account in the URL rather than in the token, so
    * Workers AI needs this as well as the key. Not a secret — it appears in
@@ -111,6 +120,7 @@ export async function getSettings(db: Db): Promise<AppSettings> {
     marketinfoToken: doc.marketinfoToken,
     extraCaCerts: doc.extraCaCerts,
     apiKeys: doc.apiKeys ?? {},
+    aiModels: doc.aiModels ?? {},
     cloudflareAccountId: doc.cloudflareAccountId,
     sms: {
       enabled: doc.sms?.enabled ?? false,
@@ -149,11 +159,40 @@ export function maskSettings(settings: AppSettings) {
       groq: mask(settings.apiKeys.groq),
       openrouter: mask(settings.apiKeys.openrouter),
       mistral: mask(settings.apiKeys.mistral),
-      cerebras: mask(settings.apiKeys.cerebras),
       cloudflare: mask(settings.apiKeys.cloudflare),
       zai: mask(settings.apiKeys.zai),
       nvidia: mask(settings.apiKeys.nvidia),
     },
+    // Not a secret: a model name is what the panel already shows.
+    //
+    // Two maps rather than one. `aiModels` is what an administrator picked,
+    // which is empty for a provider nobody has touched; `aiModelsEffective`
+    // is what that provider will actually be asked for, which needs the
+    // environment and so has to be worked out here — a client component
+    // reading `process.env` sees nothing and would show the catalogue
+    // default to an installation that has pinned something else.
+    aiModels: settings.aiModels ?? {},
+    aiModelsEffective: Object.fromEntries(
+      PROVIDER_NAMES.map((p) => [p, resolveModel(p, settings.aiModels?.[p])]),
+    ),
+    // Whether the provider can be called at all, which is not the same
+    // question as whether a key is stored here: `resolveApiKey` falls back to
+    // the environment, and an installation that sets its keys there was being
+    // told on this page that it had none configured — with the model picker
+    // disabled underneath the message, for a provider answering perfectly
+    // well in the panel two clicks away.
+    apiKeysAvailable: Object.fromEntries(
+      PROVIDER_NAMES.map((p) => [
+        p,
+        Boolean(
+          resolveApiKey(
+            settings,
+            p as keyof AppSettings["apiKeys"],
+            `${p.toUpperCase()}_API_KEY`,
+          ),
+        ),
+      ]),
+    ),
     cloudflareAccountId: settings.cloudflareAccountId ?? null,
     sms: {
       enabled: settings.sms.enabled,
@@ -176,6 +215,7 @@ export async function updateSettings(
     marketinfoToken?: string;
     extraCaCerts?: string;
     apiKeys?: Partial<AppSettings["apiKeys"]>;
+    aiModels?: Partial<Record<string, string>>;
     cloudflareAccountId?: string;
     sms?: Partial<SmsSettings>;
     notifications?: Partial<NotificationSettings>;
@@ -189,6 +229,9 @@ export async function updateSettings(
     facebookCookie: patch.facebookCookie ?? current.facebookCookie,
     extraCaCerts: patch.extraCaCerts ?? current.extraCaCerts,
     apiKeys: { ...current.apiKeys, ...patch.apiKeys },
+    // Merged rather than replaced, so saving one provider's model does not
+    // clear the rest; an empty string is how the page says "back to default".
+    aiModels: pruneModels({ ...current.aiModels, ...patch.aiModels }),
     cloudflareAccountId: patch.cloudflareAccountId ?? current.cloudflareAccountId,
     sms: { ...current.sms, ...patch.sms },
     notifications: { ...current.notifications, ...patch.notifications },
@@ -210,4 +253,13 @@ export function resolveApiKey(
   envVar?: string,
 ): string | undefined {
   return settings.apiKeys[provider] || (envVar ? process.env[envVar] : undefined);
+}
+
+/** Drops the blanks, so "back to the default" is an absent key not an empty one. */
+function pruneModels(
+  models: Partial<Record<string, string>>,
+): Partial<Record<string, string>> {
+  return Object.fromEntries(
+    Object.entries(models).filter(([, v]) => typeof v === "string" && v.trim()),
+  );
 }

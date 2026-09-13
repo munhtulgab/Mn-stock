@@ -6,7 +6,6 @@ import { callGemini } from "@/lib/ai/providers/gemini";
 import { callGroq } from "@/lib/ai/providers/groq";
 import { callOpenRouter } from "@/lib/ai/providers/openrouter";
 import { callMistral } from "@/lib/ai/providers/mistral";
-import { callCerebras } from "@/lib/ai/providers/cerebras";
 import { callCloudflare } from "@/lib/ai/providers/cloudflare";
 import { callZai } from "@/lib/ai/providers/zai";
 import { callNvidia } from "@/lib/ai/providers/nvidia";
@@ -65,7 +64,6 @@ export async function generateMultiProviderSignal(
   const groqKey = resolveApiKey(settings, "groq", "GROQ_API_KEY");
   const openrouterKey = resolveApiKey(settings, "openrouter", "OPENROUTER_API_KEY");
   const mistralKey = resolveApiKey(settings, "mistral", "MISTRAL_API_KEY");
-  const cerebrasKey = resolveApiKey(settings, "cerebras", "CEREBRAS_API_KEY");
   const cloudflareKey = resolveApiKey(settings, "cloudflare", "CLOUDFLARE_API_KEY");
   const zaiKey = resolveApiKey(settings, "zai", "ZAI_API_KEY");
   const nvidiaKey = resolveApiKey(settings, "nvidia", "NVIDIA_API_KEY");
@@ -81,7 +79,6 @@ export async function generateMultiProviderSignal(
     !groqKey &&
     !openrouterKey &&
     !mistralKey &&
-    !cerebrasKey &&
     !zaiKey &&
     !nvidiaKey &&
     !(cloudflareKey && cloudflareAccount)
@@ -110,18 +107,29 @@ export async function generateMultiProviderSignal(
     return built;
   };
 
+  /** Whatever the settings page picked, or nothing where it picked nothing. */
+  const modelFor = (provider: ProviderName): string | undefined =>
+    settings.aiModels?.[provider];
+
   const calls: Promise<ProviderResult>[] = [];
-  if (anthropicKey) calls.push(callAnthropic(anthropicKey, messageFor("anthropic")));
-  if (geminiKey) calls.push(callGemini(geminiKey, messageFor("gemini")));
-  if (groqKey) calls.push(callGroq(groqKey, messageFor("groq")));
-  if (openrouterKey) calls.push(callOpenRouter(openrouterKey, messageFor("openrouter")));
-  if (mistralKey) calls.push(callMistral(mistralKey, messageFor("mistral")));
-  if (cerebrasKey) calls.push(callCerebras(cerebrasKey, messageFor("cerebras")));
-  if (zaiKey) calls.push(callZai(zaiKey, messageFor("zai")));
-  if (nvidiaKey) calls.push(callNvidia(nvidiaKey, messageFor("nvidia")));
+  if (anthropicKey)
+    calls.push(callAnthropic(anthropicKey, messageFor("anthropic"), modelFor("anthropic")));
+  if (geminiKey) calls.push(callGemini(geminiKey, messageFor("gemini"), modelFor("gemini")));
+  if (groqKey) calls.push(callGroq(groqKey, messageFor("groq"), modelFor("groq")));
+  if (openrouterKey)
+    calls.push(callOpenRouter(openrouterKey, messageFor("openrouter"), modelFor("openrouter")));
+  if (mistralKey)
+    calls.push(callMistral(mistralKey, messageFor("mistral"), modelFor("mistral")));
+  if (zaiKey) calls.push(callZai(zaiKey, messageFor("zai"), modelFor("zai")));
+  if (nvidiaKey) calls.push(callNvidia(nvidiaKey, messageFor("nvidia"), modelFor("nvidia")));
   if (cloudflareKey && cloudflareAccount) {
     calls.push(
-      callCloudflare(cloudflareKey, cloudflareAccount, messageFor("cloudflare")),
+      callCloudflare(
+        cloudflareKey,
+        cloudflareAccount,
+        messageFor("cloudflare"),
+        modelFor("cloudflare"),
+      ),
     );
   }
 

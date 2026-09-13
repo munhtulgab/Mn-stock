@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useToast } from "./Toast";
+import ModelPicker from "./ModelPicker";
 import {
   CloseIcon,
   PlusIcon,
@@ -25,11 +26,15 @@ interface MaskedSettings {
     groq: string | null;
     openrouter: string | null;
     mistral: string | null;
-    cerebras: string | null;
     zai: string | null;
     nvidia: string | null;
     cloudflare: string | null;
   };
+  aiModels: Partial<Record<string, string>>;
+  /** What each provider is actually asked for, resolved on the server. */
+  aiModelsEffective: Partial<Record<string, string>>;
+  /** Whether each provider has a key at all — stored here or in the environment. */
+  apiKeysAvailable: Partial<Record<string, boolean>>;
   cloudflareAccountId: string | null;
   sms: {
     enabled: boolean;
@@ -117,12 +122,6 @@ const PROVIDER_FIELDS: {
     help: "console.mistral.ai дээрх API key",
   },
   {
-    key: "cerebras",
-    bodyKey: "cerebrasApiKey",
-    label: "Cerebras",
-    help: "cloud.cerebras.ai дээрх API key (дансанд billing идэвхтэй байх шаардлагатай)",
-  },
-  {
     key: "cloudflare",
     bodyKey: "cloudflareApiKey",
     label: "Cloudflare Workers AI",
@@ -179,6 +178,12 @@ export default function SettingsForm({
     "idle",
   );
   const [current, setCurrent] = useState(initial.apiKeys);
+  const [available, setAvailable] = useState(initial.apiKeysAvailable ?? {});
+  /** Pending model picks, empty string meaning "leave it on the default". */
+  const [modelInputs, setModelInputs] = useState<Record<string, string>>({});
+  const [modelsCurrent, setModelsCurrent] = useState(
+    initial.aiModelsEffective ?? {},
+  );
 
   const [smsEnabled, setSmsEnabled] = useState(initial.sms.enabled);
   const [smsKeyInput, setSmsKeyInput] = useState("");
@@ -359,6 +364,10 @@ export default function SettingsForm({
       if (apifyInput.trim()) body.apifyToken = apifyInput.trim();
       if (caInput.trim()) body.extraCaCerts = caInput.trim();
       if (cfAccountInput.trim()) body.cloudflareAccountId = cfAccountInput.trim();
+      // Every provider the operator touched, blanks included: a blank is how
+      // the picker says "back to the catalogue default", and dropping it here
+      // would make that the one edit the page could not save.
+      if (Object.keys(modelInputs).length > 0) body.aiModels = modelInputs;
 
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -368,6 +377,9 @@ export default function SettingsForm({
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setCurrent(data.apiKeys);
+      setModelsCurrent(data.aiModelsEffective ?? {});
+      setAvailable(data.apiKeysAvailable ?? {});
+      setModelInputs({});
       setSmsCurrent(data.sms);
       setNotifCurrent(data.notifications);
       setFbCurrent(data.facebookToken);
@@ -407,9 +419,13 @@ export default function SettingsForm({
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium text-app-text">{f.label}</div>
                 <span
-                  className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${current[f.key] ? "bg-app-positive-bg text-app-positive" : "bg-app-bg text-app-muted"}`}
+                  className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${available[f.key] ? "bg-app-positive-bg text-app-positive" : "bg-app-bg text-app-muted"}`}
                 >
-                  {current[f.key] ? "Идэвхтэй" : "Тохируулаагүй"}
+                  {available[f.key]
+                    ? current[f.key]
+                      ? "Идэвхтэй"
+                      : "Идэвхтэй (env)"
+                    : "Тохируулаагүй"}
                 </span>
               </div>
               <div className="text-[11px] text-app-muted">{f.help}</div>
@@ -421,6 +437,15 @@ export default function SettingsForm({
                   setKeyInputs((prev) => ({ ...prev, [f.key]: e.target.value }))
                 }
                 className="w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text outline-none focus:border-brand"
+              />
+              <ModelPicker
+                provider={f.key}
+                hasKey={Boolean(available[f.key])}
+                configured={modelsCurrent[f.key] ?? ""}
+                value={modelInputs[f.key] ?? ""}
+                onChange={(next) =>
+                  setModelInputs((prev) => ({ ...prev, [f.key]: next }))
+                }
               />
             </div>
           ))}

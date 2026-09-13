@@ -1,6 +1,7 @@
 import { callOpenAiCompatible } from "./openaiCompatible";
 import type { ProviderResult } from "./types";
 import type { AnalystPrompt } from "@/lib/ai/prompt";
+import { resolveModel } from "./catalog";
 
 /**
  * Z.AI's GLM models, on the OpenAI shape.
@@ -24,12 +25,14 @@ import type { AnalystPrompt } from "@/lib/ai/prompt";
 export async function callZai(
   apiKey: string,
   prompt: AnalystPrompt,
+  /** Overrides the catalogue default; set on the settings page. */
+  model?: string,
 ): Promise<ProviderResult> {
   return callOpenAiCompatible({
     provider: "zai",
     baseUrl: "https://api.z.ai/api/paas/v4",
     apiKey,
-    model: process.env.ZAI_MODEL || "glm-4.7-flash",
+    model: resolveModel("zai", model),
     prompt,
     // Both measured on the live API rather than assumed.
     //

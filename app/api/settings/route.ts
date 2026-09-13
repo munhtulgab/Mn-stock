@@ -3,6 +3,7 @@ import { getDb } from "@/lib/mongodb";
 import { getSettings, maskSettings, updateSettings } from "@/lib/settings";
 import { isSettingsRequestAuthorized } from "@/lib/settingsAuth";
 import { normaliseCookie } from "@/lib/mse/facebook";
+import { isProviderName } from "@/lib/ai/providers/catalog";
 
 export async function GET(req: NextRequest) {
   const db = await getDb();
@@ -36,9 +37,6 @@ export async function POST(req: NextRequest) {
   if (typeof body.mistralApiKey === "string" && body.mistralApiKey.trim()) {
     apiKeys.mistral = body.mistralApiKey.trim();
   }
-  if (typeof body.cerebrasApiKey === "string" && body.cerebrasApiKey.trim()) {
-    apiKeys.cerebras = body.cerebrasApiKey.trim();
-  }
   if (typeof body.cloudflareApiKey === "string" && body.cloudflareApiKey.trim()) {
     apiKeys.cloudflare = body.cloudflareApiKey.trim();
   }
@@ -47,6 +45,17 @@ export async function POST(req: NextRequest) {
   }
   if (typeof body.nvidiaApiKey === "string" && body.nvidiaApiKey.trim()) {
     apiKeys.nvidia = body.nvidiaApiKey.trim();
+  }
+
+  // A model name per provider. Only the ones the page sent are touched, and
+  // a blank clears the pick rather than storing an empty name.
+  const aiModels: Record<string, string> = {};
+  if (body.aiModels && typeof body.aiModels === "object") {
+    for (const [provider, model] of Object.entries(body.aiModels)) {
+      if (isProviderName(provider) && typeof model === "string") {
+        aiModels[provider] = model.trim();
+      }
+    }
   }
 
   // Not a key, so it follows the same "blank leaves it alone, - clears it"
@@ -132,6 +141,7 @@ export async function POST(req: NextRequest) {
     marketinfoToken,
     extraCaCerts,
     apiKeys,
+    aiModels,
     cloudflareAccountId,
     sms: Object.keys(sms).length > 0 ? sms : undefined,
     notifications:

@@ -25,8 +25,8 @@ test("Cloudflare's valid-but-unauthorised token is not called an invalid key", (
 
 test("a 402 is about money, not about waiting", () => {
   const raw =
-    'cerebras API 402: {"message":"Payment required to access this resource. Visit your billing tab.","type":"payment_required_error","param":"quota","code":"payment_required"}';
-  const message = humanizeProviderError("cerebras", raw);
+    'nvidia API 402: {"message":"Payment required to access this resource. Visit your billing tab.","type":"payment_required_error","param":"quota","code":"payment_required"}';
+  const message = humanizeProviderError("nvidia", raw);
   assert.match(message, /төлбөр/);
   // The body carries the word "quota", which the rate-limit rule would have
   // claimed — telling the reader to wait for something only money clears.
@@ -37,8 +37,8 @@ test("a truncated answer is reported as a token limit, not a bad format", () => 
   // What a reasoning model's run looks like when its thinking eats the
   // completion allowance and the JSON stops mid-string.
   const raw =
-    "cerebras MAX_TOKENS: хариу дуусахаас өмнө токений хязгаарт хүрлээ (үүнээс 1294 нь дотоод бодолтод зарцуулагдсан)";
-  const message = humanizeProviderError("cerebras", raw);
+    "nvidia MAX_TOKENS: хариу дуусахаас өмнө токений хязгаарт хүрлээ (үүнээс 1294 нь дотоод бодолтод зарцуулагдсан)";
+  const message = humanizeProviderError("nvidia", raw);
   assert.match(message, /токений хязгаараас давж таслагдсан/);
   // Not the per-minute rule above it, which is a different failure and a
   // different fix — that one is about how much was sent, this about how
@@ -51,9 +51,9 @@ test("every message survives a second pass unchanged", () => {
   // that rewrote its own output would change the error on the second view.
   const raws = [
     'cloudflare API 401: {"errors":[{"code":10000,"message":"Authentication error"}]}',
-    'cerebras API 402: {"message":"Payment required","code":"payment_required"}',
+    'nvidia API 402: {"message":"Payment required","code":"payment_required"}',
     "groq API 413: Request too large for model on tokens per minute (TPM)",
-    "cerebras MAX_TOKENS: хариу дуусахаас өмнө токений хязгаарт хүрлээ",
+    "nvidia MAX_TOKENS: хариу дуусахаас өмнө токений хязгаарт хүрлээ",
     "gemini API 429: RESOURCE_EXHAUSTED quota",
   ];
   for (const raw of raws) {

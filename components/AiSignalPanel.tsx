@@ -26,7 +26,6 @@ const PROVIDER_LABEL: Record<string, string> = {
   groq: "Groq",
   openrouter: "OpenRouter",
   mistral: "Mistral",
-  cerebras: "Cerebras",
   cloudflare: "Cloudflare",
   zai: "Z.AI",
   nvidia: "NVIDIA",

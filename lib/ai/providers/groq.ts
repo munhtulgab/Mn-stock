@@ -1,6 +1,7 @@
 import { callOpenAiCompatible } from "./openaiCompatible";
 import type { ProviderResult } from "./types";
 import type { AnalystPrompt } from "@/lib/ai/prompt";
+import { resolveModel } from "./catalog";
 
 /**
  * Groq, on the tightest allowance of any provider here.
@@ -23,12 +24,14 @@ import type { AnalystPrompt } from "@/lib/ai/prompt";
 export async function callGroq(
   apiKey: string,
   prompt: AnalystPrompt,
+  /** Overrides the catalogue default; set on the settings page. */
+  model?: string,
 ): Promise<ProviderResult> {
   return callOpenAiCompatible({
     provider: "groq",
     baseUrl: "https://api.groq.com/openai/v1",
     apiKey,
-    model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+    model: resolveModel("groq", model),
     prompt,
     optionalBody: { response_format: { type: "json_object" } },
   });

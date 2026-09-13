@@ -10,7 +10,6 @@ const PROVIDER_LABEL: Record<string, string> = {
   groq: "Groq",
   openrouter: "OpenRouter",
   mistral: "Mistral",
-  cerebras: "Cerebras",
   cloudflare: "Cloudflare Workers AI",
   zai: "Z.AI (GLM)",
   nvidia: "NVIDIA NIM",
