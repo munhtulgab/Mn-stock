@@ -68,6 +68,7 @@ export interface AppSettings {
     cerebras?: string;
     cloudflare?: string;
     zai?: string;
+    nvidia?: string;
   };
   /**
    * Cloudflare puts the account in the URL rather than in the token, so
@@ -151,6 +152,7 @@ export function maskSettings(settings: AppSettings) {
       cerebras: mask(settings.apiKeys.cerebras),
       cloudflare: mask(settings.apiKeys.cloudflare),
       zai: mask(settings.apiKeys.zai),
+      nvidia: mask(settings.apiKeys.nvidia),
     },
     cloudflareAccountId: settings.cloudflareAccountId ?? null,
     sms: {

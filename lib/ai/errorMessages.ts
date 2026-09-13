@@ -13,6 +13,7 @@ const PROVIDER_LABEL: Record<string, string> = {
   cerebras: "Cerebras",
   cloudflare: "Cloudflare Workers AI",
   zai: "Z.AI (GLM)",
+  nvidia: "NVIDIA NIM",
 };
 
 interface Rule {

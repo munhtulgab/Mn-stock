@@ -113,10 +113,27 @@ const SECTION_GUIDE: Record<string, string> = {
 };
 
 /** The rules and the output shape, which never vary. */
+/**
+ * The rules, and the one that was only ever implied.
+ *
+ * The language rule is first because it was missing. Everything here is
+ * written in Mongolian and every provider on the panel answered in Mongolian,
+ * so nothing ever said to — and the moment a model arrived that reads the
+ * instructions rather than mirroring them, it answered a page of Mongolian in
+ * English. Nemotron did exactly that: on a short question it wrote Mongolian,
+ * on this app's real prompt it wrote a structurally perfect English answer,
+ * which is a panel nobody here can read.
+ *
+ * The carve-out matters as much as the rule. `technical_reason` is required
+ * to name indicators with their figures, and "RSI(14) 62.3" is not something
+ * to transliterate; so is the signal itself, which the schema constrains to
+ * BUY/SELL/HOLD anyway.
+ */
 const RULES_AND_FORMAT = `---
 
 ### 2.1 ЗААВАЛ БАРИМТЛАХ ДҮРЭМ (HARD RULES)
 
+- Гурван тайлбарыг ЗААВАЛ монгол хэлээр бич, англиар биш. Индикаторын нэр, BUY/SELL/HOLD латинаар үлдэнэ.
 - Зөвхөн өгөгдсөн дата дээр тулгуурлана. Өгөгдөөгүй үзүүлэлтийг зохиож бичихгүй. Дутуу байвал (утга нь null эсвэл "—" байвал) тайлбартаа дутуу гэж хэл.
 - \`technical_reason\` дотор дор хаяж хоёр нэрлэсэн индикаторыг тоон утгатай нь дурд (жишээ нь "RSI(14) 62.3 · NEUTRAL, MACD BUY").
 - \`fundamental_reason\` дотор дор хаяж нэг харьцааг салбарын медиантай нь харьцуулж дурд, ногдол ашиг байвал түүнийг мөн дурд.

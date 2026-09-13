@@ -45,6 +45,9 @@ export async function POST(req: NextRequest) {
   if (typeof body.zaiApiKey === "string" && body.zaiApiKey.trim()) {
     apiKeys.zai = body.zaiApiKey.trim();
   }
+  if (typeof body.nvidiaApiKey === "string" && body.nvidiaApiKey.trim()) {
+    apiKeys.nvidia = body.nvidiaApiKey.trim();
+  }
 
   // Not a key, so it follows the same "blank leaves it alone, - clears it"
   // rule the tokens use rather than being wiped by an untouched field.

@@ -27,6 +27,7 @@ interface MaskedSettings {
     mistral: string | null;
     cerebras: string | null;
     zai: string | null;
+    nvidia: string | null;
     cloudflare: string | null;
   };
   cloudflareAccountId: string | null;
@@ -132,6 +133,12 @@ const PROVIDER_FIELDS: {
     bodyKey: "zaiApiKey",
     label: "Z.AI (GLM)",
     help: "z.ai дээрх API key. glm-4.7-flash үнэгүй — карт шаардахгүй.",
+  },
+  {
+    key: "nvidia",
+    bodyKey: "nvidiaApiKey",
+    label: "NVIDIA NIM",
+    help: "build.nvidia.com дээрх nvapi- түлхүүр. Үнэгүй кредит, карт шаардахгүй.",
   },
 ];
 
