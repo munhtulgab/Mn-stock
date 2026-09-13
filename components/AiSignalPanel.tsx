@@ -28,6 +28,7 @@ const PROVIDER_LABEL: Record<string, string> = {
   mistral: "Mistral",
   cerebras: "Cerebras",
   cloudflare: "Cloudflare",
+  zai: "Z.AI",
 };
 
 export default function AiSignalPanel({ symbol }: { symbol: string }) {

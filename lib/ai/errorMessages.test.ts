@@ -89,3 +89,21 @@ test("the substitution's own refusal reads as a plan limit, not a missing model"
   const raw = 'mistral model "mistral-small-latest" энэ түлхүүрээр ашиглах боломжгүй';
   assert.match(humanizeProviderError("mistral", raw), /багц/);
 });
+
+test("a spent balance is not reported as a rate limit", () => {
+  // Z.AI sends this with a 429 status, which the rate-limit rule would
+  // otherwise claim — and then tell the reader to wait for something that
+  // waiting never clears.
+  const raw =
+    'zai API 429: {"error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}';
+  const message = humanizeProviderError("zai", raw);
+  assert.match(message, /үлдэгдэл хүрэлцэхгүй/);
+  assert.doesNotMatch(message, /Түр хүлээгээд/);
+});
+
+test("the balance message survives being read back from storage", () => {
+  // Every stored signal is put through the humaniser again each time it is
+  // read, so the Mongolian wording has to keep landing on its own rule.
+  const once = humanizeProviderError("zai", 'zai API 429: {"code":"1113"}');
+  assert.equal(humanizeProviderError("zai", once), once);
+});

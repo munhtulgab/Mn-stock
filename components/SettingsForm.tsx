@@ -26,6 +26,7 @@ interface MaskedSettings {
     openrouter: string | null;
     mistral: string | null;
     cerebras: string | null;
+    zai: string | null;
     cloudflare: string | null;
   };
   cloudflareAccountId: string | null;
@@ -125,6 +126,12 @@ const PROVIDER_FIELDS: {
     bodyKey: "cloudflareApiKey",
     label: "Cloudflare Workers AI",
     help: "Workers AI эрхтэй API token. Доорх Account ID-г бөглөх шаардлагатай.",
+  },
+  {
+    key: "zai",
+    bodyKey: "zaiApiKey",
+    label: "Z.AI (GLM)",
+    help: "z.ai дээрх API key. glm-4.7-flash үнэгүй — карт шаардахгүй.",
   },
 ];
 

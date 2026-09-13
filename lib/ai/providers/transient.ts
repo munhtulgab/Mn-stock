@@ -29,9 +29,17 @@ export const TRANSIENT_RETRIES = 2;
  * Kept short on purpose. These failures return immediately — nothing was
  * queued — so the wait is the whole cost, and the call itself still has to
  * fit inside the request that is holding the page.
+ *
+ * The first two steps are what they always were. The ladder past them is for
+ * a provider given more than two tries — Z.AI's free flash model turns
+ * requests away often enough that two is not a fair test of it — and it
+ * lengthens rather than repeating 1,500ms, because a busy minute that has
+ * already survived three seconds is not going to clear in another 1.5.
  */
+const BACKOFF_MS = [500, 1500, 3000, 5000, 7000];
+
 export function retryDelayMs(attempt: number): number {
-  return attempt === 1 ? 500 : 1500;
+  return BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length) - 1];
 }
 
 export function sleep(ms: number): Promise<void> {

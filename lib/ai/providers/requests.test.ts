@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { callGemini } from "./gemini";
 import { callGroq } from "./groq";
+import { callZai } from "./zai";
 import type { AnalystPrompt } from "@/lib/ai/prompt";
 
 const prompt: AnalystPrompt = { system: "заавар", user: "асуулт" };
@@ -179,4 +180,57 @@ test("every model being busy is reported as busy, not as something else", async 
   restore();
   assert.equal(res.ok, false);
   assert.match(res.error ?? "", /503/);
+});
+
+test("Z.AI is asked to skip the thinking and answer in one object", () => {
+  // GLM reasons before it answers and charges that to the completion
+  // allowance: asked for fifty tokens it spent all fifty on reasoning and
+  // returned an empty string. Disabled, the same call answers in 435.
+  const { calls, restore } = stubFetch([ok(ANSWER)]);
+  return callZai("k", prompt).then((res) => {
+    restore();
+    assert.equal(res.ok, true, res.error);
+    assert.deepEqual(calls[0].body.thinking, { type: "disabled" });
+    assert.deepEqual(calls[0].body.response_format, { type: "json_object" });
+    assert.equal(calls[0].body.model, "glm-4.7-flash");
+  });
+});
+
+/** How the free tier turns a request away: a 429 that is not a rate limit. */
+const overloaded = {
+  status: 429,
+  body: '{"error":{"code":"1305","message":"The service may be temporarily overloaded, please try again later"}}',
+};
+
+test("a 429 that means 'busy' is retried, not reported", async () => {
+  // Measured against the live API: the same prompt is refused on one attempt
+  // and answered on the next, minutes apart, with nothing else changed.
+  const { calls, restore } = stubFetch([overloaded, overloaded, ok(ANSWER)]);
+  const res = await callZai("k", prompt);
+  restore();
+  assert.equal(res.ok, true, res.error);
+  assert.equal(calls.length, 3);
+});
+
+test("a 429 that really is a spent balance is reported at once", async () => {
+  // 1113 does not clear by waiting, so retrying it five times only makes the
+  // reader wait longer for the same answer.
+  const { calls, restore } = stubFetch([
+    { status: 429, body: '{"error":{"code":"1113","message":"Insufficient balance or no resource package."}}' },
+  ]);
+  const res = await callZai("k", prompt);
+  restore();
+  assert.equal(res.ok, false);
+  assert.equal(calls.length, 1, "it should not have been retried");
+  assert.match(res.error ?? "", /1113/);
+});
+
+test("a busy provider that never clears gives up rather than looping", async () => {
+  const { calls, restore } = stubFetch([overloaded]);
+  const res = await callZai("k", prompt);
+  restore();
+  assert.equal(res.ok, false);
+  // The first attempt plus the retries it is allowed, and no more.
+  assert.equal(calls.length, 6);
+  assert.match(res.error ?? "", /1305/);
 });

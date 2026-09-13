@@ -8,6 +8,7 @@ import { callOpenRouter } from "@/lib/ai/providers/openrouter";
 import { callMistral } from "@/lib/ai/providers/mistral";
 import { callCerebras } from "@/lib/ai/providers/cerebras";
 import { callCloudflare } from "@/lib/ai/providers/cloudflare";
+import { callZai } from "@/lib/ai/providers/zai";
 import {
   PROVIDER_TOKEN_BUDGET,
   completionTokensFor,
@@ -65,6 +66,7 @@ export async function generateMultiProviderSignal(
   const mistralKey = resolveApiKey(settings, "mistral", "MISTRAL_API_KEY");
   const cerebrasKey = resolveApiKey(settings, "cerebras", "CEREBRAS_API_KEY");
   const cloudflareKey = resolveApiKey(settings, "cloudflare", "CLOUDFLARE_API_KEY");
+  const zaiKey = resolveApiKey(settings, "zai", "ZAI_API_KEY");
   // Workers AI addresses the account in the URL, so a key on its own is not
   // enough to call it. Without the id the provider simply does not run,
   // rather than every request 404ing against a path with `undefined` in it.
@@ -78,6 +80,7 @@ export async function generateMultiProviderSignal(
     !openrouterKey &&
     !mistralKey &&
     !cerebrasKey &&
+    !zaiKey &&
     !(cloudflareKey && cloudflareAccount)
   ) {
     throw new NoProviderConfiguredError();
@@ -111,6 +114,7 @@ export async function generateMultiProviderSignal(
   if (openrouterKey) calls.push(callOpenRouter(openrouterKey, messageFor("openrouter")));
   if (mistralKey) calls.push(callMistral(mistralKey, messageFor("mistral")));
   if (cerebrasKey) calls.push(callCerebras(cerebrasKey, messageFor("cerebras")));
+  if (zaiKey) calls.push(callZai(zaiKey, messageFor("zai")));
   if (cloudflareKey && cloudflareAccount) {
     calls.push(
       callCloudflare(cloudflareKey, cloudflareAccount, messageFor("cloudflare")),

@@ -12,6 +12,7 @@ const PROVIDER_LABEL: Record<string, string> = {
   mistral: "Mistral",
   cerebras: "Cerebras",
   cloudflare: "Cloudflare Workers AI",
+  zai: "Z.AI (GLM)",
 };
 
 interface Rule {
@@ -44,6 +45,18 @@ const RULES: Rule[] = [
     test: (m) => /\b402\b|payment_required|Payment required|төлбөр төлөгдөөгүй/i.test(m),
     message: (p) =>
       `${p}: Дансанд төлбөр/кредит байхгүй байна (402). Тухайн үйлчилгээний billing хуудсан дээрээс төлбөрөө идэвхжүүлнэ үү.`,
+  },
+  {
+    // Above the rate-limit rule, which would otherwise read the 429 this
+    // arrives as and tell the reader to wait. Z.AI answers
+    // `{"code":"1113","message":"Insufficient balance or no resource
+    // package"}` with a 429 status when the key is valid and the account has
+    // nothing to spend — on a paid model, or once a free allowance is gone.
+    // Waiting does not clear it, and neither does a new key.
+    test: (m) =>
+      /Insufficient balance|no resource package|\b1113\b|үлдэгдэл хүрэлцэхгүй/i.test(m),
+    message: (p) =>
+      `${p}: Дансны үлдэгдэл хүрэлцэхгүй байна. Үнэгүй загвар сонгох (жишээ нь Z.AI дээр glm-4.7-flash), эсвэл дансаа цэнэглэнэ үү.`,
   },
   {
     test: (m) => /RESOURCE_EXHAUSTED|429|rate.?limit|quota/i.test(m),

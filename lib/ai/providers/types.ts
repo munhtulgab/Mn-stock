@@ -7,7 +7,8 @@ export type ProviderName =
   | "openrouter"
   | "mistral"
   | "cerebras"
-  | "cloudflare";
+  | "cloudflare"
+  | "zai";
 
 /**
  * What one whole request may cost each provider, in tokens.
