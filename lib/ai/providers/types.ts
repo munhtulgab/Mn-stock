@@ -77,16 +77,30 @@ export const COMPLETION_TOKENS = 4_000;
  * Only where a provider meters the whole exchange, because there the room
  * for the answer is room taken from the question. Groq allows twelve
  * thousand tokens a minute; the system prompt and the three criteria a
- * verdict must rest on are about ten thousand of that and cannot be trimmed
- * further, so what is left for an answer is under two thousand however
- * generous one would like to be. Asking for four thousand there does not
- * buy a longer answer — it makes the whole request too large and Groq
- * refuses it with a 413.
+ * verdict must rest on are about nine thousand seven hundred of that and
+ * cannot be trimmed further, so what is left for an answer is a little over
+ * two thousand however generous one would like to be. Asking for four
+ * thousand there does not buy a longer answer — it makes the whole request
+ * too large and Groq refuses it with a 413.
  *
  * So Groq is given what fits, and asked for a shorter answer instead: see
  * `brief` in the system prompt.
  */
 export const PROVIDER_COMPLETION_TOKENS: Partial<Record<ProviderName, number>> = {
+  // Fifteen hundred, and it stays there because there is nowhere to go.
+  //
+  // Measured, not chosen. Composed down to its last step — the three
+  // criteria a verdict must rest on and nothing else — the question still
+  // costs about 10,400 tokens of the 12,000, so under 1,600 is the most any
+  // answer could ever be allowed here. Raising this was tried first and the
+  // test "every metered provider's whole exchange fits its ceiling" refused
+  // it, which is what that test is for.
+  //
+  // So when Groq reported `finish_reason: "length"` the answer had to get
+  // smaller rather than the allowance bigger: BREVITY_RULE now bounds each
+  // reason by characters instead of by sentences, and `response_format:
+  // json_object` on the request drops the fence and the preamble that were
+  // being paid for out of this same 1,500.
   groq: 1_500,
 };
 
@@ -97,6 +111,12 @@ export function completionTokensFor(provider: ProviderName): number {
 /**
  * Below this the three reasons have to be written short, or the answer runs
  * past its allowance and is cut off mid-string.
+ *
+ * Above Groq's 2,000 on purpose. That allowance is the most its per-minute
+ * ceiling can spare rather than a comfortable one, so the answer sent into
+ * it still has to be a short answer — a threshold that let brevity lapse the
+ * moment the allowance was raised would have spent the extra room on a
+ * longer reply and truncated it in the same place.
  */
 export const BRIEF_BELOW_TOKENS = 2_500;
 

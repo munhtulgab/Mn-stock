@@ -173,10 +173,50 @@ test("every metered provider's whole exchange fits its ceiling", () => {
 test("a tight answer allowance asks for a shorter answer", () => {
   // The other half of the same fix. Groq cannot be given more room, so it is
   // asked to need less; anything with room is left to write at length.
-  const tight = buildPrompt({ ...input, budgetTokens: 12_000, completionTokens: 1_500 });
+  //
+  // Built at the allowance Groq is actually given rather than at a number
+  // written out here: the two drifted apart once already, and a brevity test
+  // that measures a figure nothing sends is a test that passes for nothing.
+  const tight = buildPrompt({
+    ...input,
+    budgetTokens: PROVIDER_TOKEN_BUDGET.groq,
+    completionTokens: completionTokensFor("groq"),
+  });
   const roomy = buildPrompt({ ...input, completionTokens: 4_000 });
-  assert.match(tight.system, /1-2 өгүүлбэрт багтаа/);
-  assert.doesNotMatch(roomy.system, /1-2 өгүүлбэрт багтаа/);
+  assert.match(tight.system, /1-2 өгүүлбэрт/);
+  assert.doesNotMatch(roomy.system, /1-2 өгүүлбэрт/);
+});
+
+test("the tight answer is bounded by something the model can count", () => {
+  // "1-2 sentences" was the whole rule and Groq still ran out of room: a
+  // sentence has no length, and two long ones obey it. The bound has to be a
+  // number, and the three fields together have to fit what is left of the
+  // allowance once the JSON around them is paid for.
+  const { system } = buildPrompt({
+    ...input,
+    budgetTokens: PROVIDER_TOKEN_BUDGET.groq,
+    completionTokens: completionTokensFor("groq"),
+  });
+  const bound = system.match(/(\d+) тэмдэгтээс хэтрэхгүй/);
+  assert.ok(bound, "no character bound in the brief instructions");
+  const perField = Number(bound[1]);
+  // Cyrillic runs about a token a character, so three fields at this bound
+  // must leave room for the numbers, the keys and the braces.
+  assert.ok(
+    perField * 3 < completionTokensFor("groq") * 0.75,
+    `${perField} × 3 leaves too little of ${completionTokensFor("groq")} for the rest`,
+  );
+});
+
+test("the brief answer is told not to wrap itself in anything", () => {
+  // A preamble, a closing remark and a ```json fence are tokens spent on
+  // nothing, and on this allowance they are tokens the answer needed.
+  const { system } = buildPrompt({
+    ...input,
+    budgetTokens: PROVIDER_TOKEN_BUDGET.groq,
+    completionTokens: completionTokensFor("groq"),
+  });
+  assert.match(system, /зөвхөн JSON объект байна/);
 });
 
 test("a provider with room is trimmed for nobody", () => {

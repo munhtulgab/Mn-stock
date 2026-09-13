@@ -80,6 +80,17 @@ export async function callOpenAiCompatible(opts: {
   maxTokens?: number;
   /** Provider-specific request fields, sent only where they are understood. */
   extraBody?: Record<string, unknown>;
+  /**
+   * Fields worth asking for but not worth failing over.
+   *
+   * Sent like `extraBody`, and dropped for one more try if the provider
+   * answers 400 — the same bargain Gemini strikes with `thinkingConfig`. A
+   * field like `response_format` is understood by the model configured
+   * today and may not be by whatever `*_MODEL` is pointed at tomorrow, and a
+   * request that is merely improved by it must not become a request that
+   * fails without it. One wasted call is the whole cost of being wrong.
+   */
+  optionalBody?: Record<string, unknown>;
 }): Promise<ProviderResult> {
   const {
     provider,
@@ -90,6 +101,7 @@ export async function callOpenAiCompatible(opts: {
     extraHeaders,
     maxTokens,
     extraBody,
+    optionalBody,
   } = opts;
 
   const cacheKey = `${provider}:${model}`;
@@ -101,6 +113,8 @@ export async function callOpenAiCompatible(opts: {
   let substitutions = 0;
   /** The listing, read at most once however many models get refused. */
   let available: string[] | null = null;
+  /** Whether the hopeful fields above are still on the request. */
+  let sendOptional = optionalBody !== undefined;
 
   try {
     // The name this call would start on is one an earlier call was already
@@ -131,6 +145,7 @@ export async function callOpenAiCompatible(opts: {
             { role: "user", content: prompt.user },
           ],
           ...extraBody,
+          ...(sendOptional ? optionalBody : {}),
         }),
         // Forty seconds rather than thirty. Workers AI answered inside the
         // old window until the day it did not, and a provider that is merely
@@ -173,6 +188,23 @@ export async function callOpenAiCompatible(opts: {
                     .join(", ")}`
                 : ` бөгөөд боломжит загваруудын жагсаалтыг ч уншиж чадсангүй`),
           );
+        }
+
+        // Not the model, then, and the only unusual thing left in the
+        // request is what this provider was merely asked for. Send what it
+        // has always accepted and let the real fault, if there is one, speak
+        // for itself.
+        //
+        // After the substitution above rather than before it: a name that is
+        // retired answers 400 too, and dropping a field first would spend a
+        // whole prompt against a metered plan finding out that the field was
+        // never the problem.
+        if (sendOptional && res.status === 400) {
+          console.warn(
+            `${provider}: 400 with the optional fields, retrying without them`,
+          );
+          sendOptional = false;
+          continue;
         }
 
         if (isTransientStatus(res.status) && attempt < TRANSIENT_RETRIES) {

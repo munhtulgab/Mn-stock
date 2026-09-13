@@ -178,8 +178,22 @@ const RULES_AND_FORMAT = `---
  * on Groq's minute allowance there is no room to raise the ceiling to meet
  * it. Shortening the answer is the only lever left, and the reasons lose
  * little by it: the numbers they must name are the substance.
+ *
+ * Counted rather than described. "1-2 sentences" was the whole rule and Groq
+ * still returned `finish_reason: "length"`: a sentence has no length, and a
+ * model writing two long ones has obeyed. A character bound is a thing the
+ * model can check itself against — three fields at 220 is 660 characters,
+ * which is roughly 660 tokens of Cyrillic and leaves the rest of the
+ * allowance for the numbers and the JSON around them.
+ *
+ * The second line is the wrapper. A preamble, a closing remark and a ```json
+ * fence are tokens spent on nothing, and on this allowance they are tokens
+ * the answer needed — Groq is also sent `response_format: json_object`, and
+ * this says the same thing in the instructions for the run where that field
+ * had to be dropped.
  */
-const BREVITY_RULE = `- \`technical_reason\`, \`fundamental_reason\`, \`overall_logic\` бүрийг 1-2 өгүүлбэрт багтаа. Шаардлагатай тоо, үзүүлэлтээ хэвээр дурдана — зөвхөн тайлбарын урт нь богино байна.`;
+const BREVITY_RULE = `- \`technical_reason\`, \`fundamental_reason\`, \`overall_logic\` бүрийг 1-2 өгүүлбэрт, тус бүр 220 тэмдэгтээс хэтрэхгүй бич. Шаардлагатай тоо, үзүүлэлтээ хэвээр дурдана — зөвхөн тайлбарын урт нь богино байна.
+- Хариу нь зөвхөн JSON объект байна. Урд нь тайлбар, ард нь дүгнэлт, \`\`\` хашилт бичихгүй.`;
 
 export function systemPromptFor(
   sections: readonly string[],
