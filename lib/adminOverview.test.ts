@@ -1,0 +1,63 @@
+import { strict as assert } from "node:assert";
+import { test } from "node:test";
+import { alignDays, countTally } from "./adminOverview";
+
+test("a quiet day is a zero, not a missing bar", () => {
+  // The gap is the point. Plotting only the days that have a row slides a
+  // quiet Sunday up against a busy Friday as though they were neighbours,
+  // and the sparkline shows a week that never happened.
+  const days = ["2026-09-07", "2026-09-08", "2026-09-09"];
+  const counts = new Map([["2026-09-07", 4], ["2026-09-09", 1]]);
+  assert.deepEqual(alignDays(days, counts), [4, 0, 1]);
+});
+
+test("a week with nothing in it is seven zeros, not an empty array", () => {
+  const days = ["2026-09-07", "2026-09-08"];
+  assert.deepEqual(alignDays(days, new Map()), [0, 0]);
+});
+
+test("days the tally does not cover are ignored, not appended", () => {
+  // The map is whatever the database returned; the days are the window. A
+  // row outside it must not lengthen the series or the bars stop lining up
+  // with the labels every card shares.
+  const days = ["2026-09-08", "2026-09-09"];
+  const counts = new Map([["2026-01-01", 99], ["2026-09-09", 2]]);
+  assert.deepEqual(alignDays(days, counts), [0, 2]);
+});
+
+const TALLY = [
+  { day: "2026-06-01", n: 120 },
+  { day: "2026-09-06", n: 5 },
+  { day: "2026-09-08", n: 3 },
+  { day: "2026-09-11", n: 7 },
+];
+
+test("the total is every day ever counted, not the feed's cap", () => {
+  // The whole reason the tally exists. The alerts collection is trimmed to
+  // two hundred rows, so counting it answered two hundred for ever once the
+  // cap was reached — a dashboard figure that could no longer move, with a
+  // change beside it computed from two numbers that could no longer move.
+  assert.equal(countTally(TALLY, "2026-09-07").total, 135);
+});
+
+test("the window is counted from its own edge, inclusive", () => {
+  // A row dated exactly on the boundary is inside the window: the tally is
+  // kept by day, so "seven days ago" means that whole day.
+  assert.equal(countTally(TALLY, "2026-09-06").recent, 15);
+  assert.equal(countTally(TALLY, "2026-09-07").recent, 10);
+  assert.equal(countTally(TALLY, "2026-09-12").recent, 0);
+});
+
+test("an empty tally is zero rather than NaN", () => {
+  // It is read on an installation's first day, before anything has fired.
+  assert.deepEqual(countTally([], "2026-09-07"), { total: 0, recent: 0 });
+});
+
+test("the total is never smaller than the window inside it", () => {
+  // The dashboard divides one by the other to get the change; a recent
+  // larger than the total would print a negative base and a nonsense percent.
+  for (const since of ["2026-01-01", "2026-06-01", "2026-09-08", "2027-01-01"]) {
+    const { total, recent } = countTally(TALLY, since);
+    assert.ok(recent <= total, `${since}: ${recent} of ${total}`);
+  }
+});
