@@ -1,6 +1,8 @@
 import type { Db } from "mongodb";
 import { getSettings } from "@/lib/settings";
-import { ulaanbaatarDaysAgo } from "@/lib/day";
+import { ulaanbaatarDay, ulaanbaatarDaysAgo } from "@/lib/day";
+import { notificationTally } from "@/lib/notifications";
+import { PROVIDER_NAMES } from "@/lib/ai/providers/catalog";
 import type { AppNotification, Session, Transaction, User } from "@/lib/types";
 
 /**
@@ -48,6 +50,20 @@ export interface AdminOverview {
     lastFullPriceSyncCompletedAt: Date | null;
   };
   daily: DailyOrders[];
+  /**
+   * The last seven days, day by day, for the sparkline behind each KPI.
+   *
+   * One array per tile and all four the same length, so a card can draw its
+   * own week without knowing which day is which — the labels come from
+   * `weekDays`, which is the same seven days in the same order.
+   */
+  week: {
+    days: string[];
+    users: number[];
+    sessions: number[];
+    orders: number[];
+    alerts: number[];
+  };
   latestOrders: RecentOrder[];
   latestUsers: { id: string; username: string; fullName: string | null; createdAt: Date | null }[];
 }
@@ -64,6 +80,77 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const STRIP_DAYS = 90;
 const STRIP_MS = STRIP_DAYS * DAY_MS;
 
+/** How many days the sparkline behind each KPI covers. */
+const WEEK_DAYS = 7;
+
+/**
+ * A run of days in order, with the days nothing happened on drawn as zero.
+ *
+ * The gaps are the point. A sparkline built only from the days that have a
+ * row in the database plots seven bars whatever week it is, silently sliding
+ * a quiet Sunday up against a busy Friday as though they were neighbours.
+ */
+export function alignDays(
+  days: readonly string[],
+  counts: ReadonlyMap<string, number>,
+): number[] {
+  return days.map((day) => counts.get(day) ?? 0);
+}
+
+/**
+ * A tally's whole total, and the part of it inside the window.
+ *
+ * `since` is a day rather than an instant because the tally is kept by day:
+ * comparing `YYYY-MM-DD` strings is the same comparison as comparing the
+ * dates, and it keeps the window's edge on the same boundary the counting
+ * used.
+ */
+export function countTally(
+  rows: readonly { day: string; n: number }[],
+  since: string,
+): { total: number; recent: number } {
+  let total = 0;
+  let recent = 0;
+  for (const row of rows) {
+    total += row.n;
+    if (row.day >= since) recent += row.n;
+  }
+  return { total, recent };
+}
+
+/**
+ * How many documents fell on each of the last `days` Ulaanbaatar days.
+ *
+ * By the day it happened where the reader is, not where the database is: a
+ * registration at nine in the morning belongs to that morning whatever the
+ * server's clock is set to. Same grouping the orders strip uses.
+ */
+async function dayCounts(
+  db: Db,
+  collection: string,
+  days: number,
+): Promise<Map<string, number>> {
+  const rows = await db
+    .collection(collection)
+    .aggregate<{ _id: string; n: number }>([
+      { $match: { createdAt: { $gte: new Date(Date.now() - days * DAY_MS) } } },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              date: "$createdAt",
+              format: "%Y-%m-%d",
+              timezone: "Asia/Ulaanbaatar",
+            },
+          },
+          n: { $sum: 1 },
+        },
+      },
+    ])
+    .toArray();
+  return new Map(rows.map((r) => [r._id, r.n]));
+}
+
 /**
  * @param windowDays how far back "recent" reaches, which the period control
  *   on the page chooses. The counts themselves are totals and do not move
@@ -79,14 +166,15 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
     sessions,
     orderTotals,
     recentOrders,
-    alerts,
-    recentAlerts,
+    alertDays,
     lastAlert,
     settings,
     syncState,
     latestOrderDocs,
     latestUserDocs,
     dailyRows,
+    userDays,
+    sessionDays,
   ] = await Promise.all([
     db.collection<User>("users").countDocuments({}),
     db.collection<User>("users").countDocuments({ role: "admin" }),
@@ -99,8 +187,10 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
       ])
       .toArray(),
     db.collection<Transaction>("transactions").countDocuments({ createdAt: { $gte: since } }),
-    db.collection<AppNotification>("notifications").countDocuments({}),
-    db.collection<AppNotification>("notifications").countDocuments({ createdAt: { $gte: since } }),
+    // Not `countDocuments` on the feed: it is trimmed to two hundred rows, so
+    // that answered two hundred for ever once the cap was reached and the
+    // dashboard showed a frozen figure with a meaningless change beside it.
+    notificationTally(db),
     db
       .collection<AppNotification>("notifications")
       .find({}, { sort: { createdAt: -1 }, limit: 1, projection: { createdAt: 1 } })
@@ -143,6 +233,13 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
         },
       ])
       .toArray(),
+    // The other two tiles' weeks. Registrations and sign-ins are events with
+    // a date on them, so they group the same way the orders above do; the
+    // sessions tile shows its own count of live sessions, which is a level
+    // rather than a flow, and what is drawn behind it is the sign-ins that
+    // produced them.
+    dayCounts(db, "users", WEEK_DAYS),
+    dayCounts(db, "sessions", WEEK_DAYS),
   ]);
 
   // Every day in the window, including the quiet ones — a strip with gaps in
@@ -156,6 +253,15 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
     const row = byDay.get(day);
     return { day, count: row?.n ?? 0, turnover: row?.sum ?? 0 };
   });
+
+  // The same seven days for every tile, so one row of labels describes all
+  // four sparklines and a card never has to know which day a bar is.
+  const weekDays = Array.from({ length: WEEK_DAYS }, (_, i) =>
+    ulaanbaatarDaysAgo(WEEK_DAYS - 1 - i),
+  );
+  const alertsByDay = new Map(alertDays.map((r) => [r.day, r.n]));
+  const ordersByDay = new Map(daily.map((d) => [d.day, d.count]));
+  const alerts = countTally(alertDays, ulaanbaatarDay(since));
 
   // The names for the recent orders, asked for once rather than per row.
   const owners = await db
@@ -181,11 +287,22 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
       sells: sells?.n ?? 0,
       turnover: (buys?.total ?? 0) + (sells?.total ?? 0),
     },
-    alerts: { total: alerts, recent: recentAlerts, lastAt: lastAlert?.createdAt ?? null },
+    alerts: {
+      total: alerts.total,
+      recent: alerts.recent,
+      lastAt: lastAlert?.createdAt ?? null,
+    },
     daily,
+    week: {
+      days: weekDays,
+      users: alignDays(weekDays, userDays),
+      sessions: alignDays(weekDays, sessionDays),
+      orders: alignDays(weekDays, ordersByDay),
+      alerts: alignDays(weekDays, alertsByDay),
+    },
     system: {
       aiKeys: apiKeys,
-      aiKeysPossible: 7,
+      aiKeysPossible: PROVIDER_NAMES.length,
       newsSources: settings.newsSources.length,
       pushEnabled: settings.notifications.pushEnabled,
       smsEnabled: settings.sms.enabled,

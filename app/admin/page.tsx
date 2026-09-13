@@ -66,11 +66,19 @@ export default async function AdminOverviewPage({
 
           One row from the laptop up. Four across is the whole point of the
           row — it is read in one sweep, and the moment it folds into two-by-two
-          the bottom pair drops below the fold and stops being glanced at. */}
+          the bottom pair drops below the fold and stops being glanced at.
+
+          Each carries its own last seven days behind the figure. A total says
+          where a thing stands and nothing about where it is going, and the
+          change chip beside it is one number for the whole window — which is
+          the same "+7.5%" whether it arrived on Monday or all at once this
+          morning. The week says which. */}
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           tone="brand"
           icon="users"
+          trend={o.week.users}
+          trendDays={o.week.days}
           label="Хэрэглэгч"
           value={o.users.total.toLocaleString("mn-MN")}
           delta={users.delta}
@@ -80,6 +88,8 @@ export default async function AdminOverviewPage({
         <StatCard
           tone="slate"
           icon="sessions"
+          trend={o.week.sessions}
+          trendDays={o.week.days}
           label="Нэвтэрсэн сешн"
           value={o.users.sessions.toLocaleString("mn-MN")}
           delta="Идэвхтэй"
@@ -88,6 +98,8 @@ export default async function AdminOverviewPage({
         <StatCard
           tone="blue"
           icon="orders"
+          trend={o.week.orders}
+          trendDays={o.week.days}
           label="Захиалга"
           value={o.orders.total.toLocaleString("mn-MN")}
           delta={orders.delta}
@@ -97,6 +109,8 @@ export default async function AdminOverviewPage({
         <StatCard
           tone="violet"
           icon="alerts"
+          trend={o.week.alerts}
+          trendDays={o.week.days}
           label="Мэдэгдэл"
           value={o.alerts.total.toLocaleString("mn-MN")}
           delta={alerts.delta}

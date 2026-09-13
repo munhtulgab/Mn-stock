@@ -43,6 +43,8 @@ export default function StatCard({
   direction = "flat",
   previous,
   icon,
+  trend,
+  trendDays,
 }: {
   tone: StatTone;
   label: string;
@@ -53,6 +55,10 @@ export default function StatCard({
   /** What it was, e.g. "7 хоногийн өмнө: 89". */
   previous?: React.ReactNode;
   icon: StatIcon;
+  /** Seven daily counts, oldest first, drawn behind the figure. */
+  trend?: number[];
+  /** The days those counts are for, same order — used for the hover title. */
+  trendDays?: string[];
 }) {
   const t = TONES[tone];
 
@@ -71,6 +77,10 @@ export default function StatCard({
       >
         <Glyph name={icon} size={150} />
       </span>
+
+      {trend && trend.length > 0 && (
+        <Sparkline values={trend} days={trendDays} />
+      )}
 
       <div className="relative flex items-start gap-3">
         <span className="text-[13px] font-semibold tracking-[0.02em] text-white/85 uppercase">
@@ -209,5 +219,72 @@ function Glyph({ name, size }: { name: StatIcon; size: number }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+/**
+ * The last seven days, behind the figure rather than beside it.
+ *
+ * A tile's job is one number read at a glance, and a chart placed next to
+ * that number competes with it — the eye has two things to land on and picks
+ * neither. Set behind, at the opacity the glyph watermark already uses, it
+ * answers the second question the number raises ("and is that going
+ * anywhere?") only once the first has been read. It is a shape, not a
+ * reading: the figures it summarises are the card's own value and the line
+ * beneath it.
+ *
+ * Bars rather than a line. Seven points is too few for a line to have a
+ * shape — it reads as six angles — and these are counts of separate days
+ * rather than samples of something continuous, which is what a bar says and
+ * a line does not.
+ *
+ * Today is drawn brighter than the six behind it, the stat tile's usual
+ * "current period in the accent": on a card whose whole palette is one white
+ * at varying opacity, that is the only accent there is.
+ */
+function Sparkline({ values, days }: { values: number[]; days?: string[] }) {
+  // Against the busiest day rather than against zero, so a quiet week still
+  // has a shape. A week with nothing in it draws nothing, which is honest —
+  // seven bars of equal height would suggest seven equal days.
+  const peak = Math.max(...values);
+  if (peak <= 0) return null;
+
+  // Seven bars, two-pixel gaps, 61px of lane in all. Measured against the
+  // narrowest the card ever is — four across at 1024px, where the sessions
+  // tile's "Идэвхтэй" chip is the longest thing on the value row: at nine
+  // pixels a bar the two overlapped by four, and text laid over bars reads
+  // as a rendering fault rather than as a watermark.
+  const BAR = 7;
+  const GAP = 2;
+  const H = 54;
+  const width = values.length * BAR + (values.length - 1) * GAP;
+
+  return (
+    <span
+      className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2"
+      aria-hidden
+    >
+      <svg width={width} height={H} viewBox={`0 0 ${width} ${H}`} fill="none">
+        {values.map((n, i) => {
+          // A day with something in it is never a sliver: below about three
+          // pixels a bar reads as the axis, and "one order" and "no orders"
+          // have to look different.
+          const h = n === 0 ? 0 : Math.max(3, Math.round((n / peak) * H));
+          const today = i === values.length - 1;
+          return (
+            <rect
+              key={days?.[i] ?? i}
+              x={i * (BAR + GAP)}
+              y={H - h}
+              width={BAR}
+              height={h}
+              rx={4}
+              fill="#ffffff"
+              opacity={today ? 0.42 : 0.18}
+            />
+          );
+        })}
+      </svg>
+    </span>
   );
 }

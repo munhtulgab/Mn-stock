@@ -9,6 +9,76 @@ import type { AppNotification, User } from "@/lib/types";
 const KEEP = 200;
 
 /**
+ * A count per day, kept because the feed above is not a count of anything.
+ *
+ * The trim is the point of the feed and the ruin of counting from it: once
+ * two hundred alerts have been sent, `countDocuments` answers two hundred
+ * for ever. The admin dashboard was reading exactly that and showing a
+ * "Мэдэгдэл" figure frozen at the cap, with a change beside it computed from
+ * two numbers that could no longer move.
+ *
+ * So the tally is written alongside and never trimmed. One small document
+ * per day — a year of them is 365 rows — which also gives the dashboard a
+ * real day-by-day series to draw instead of one derived from whatever
+ * survived the cull.
+ */
+const DAILY = "notificationDaily";
+
+interface DailyTally {
+  /** `YYYY-MM-DD` in Ulaanbaatar, so a day means the day it was read on. */
+  day: string;
+  n: number;
+}
+
+/**
+ * Adds the batch to the day tallies, newest day first in the batch's own
+ * order, in one round trip.
+ */
+async function tally(db: Db, days: string[]): Promise<void> {
+  const perDay = new Map<string, number>();
+  for (const day of days) perDay.set(day, (perDay.get(day) ?? 0) + 1);
+
+  await db.collection<DailyTally>(DAILY).bulkWrite(
+    [...perDay].map(([day, n]) => ({
+      updateOne: { filter: { day }, update: { $inc: { n } }, upsert: true },
+    })),
+  );
+}
+
+/**
+ * Counts the alerts still in the feed into the tally, once.
+ *
+ * For installations that were already running before the tally existed. Runs
+ * before the batch it precedes is written, so it counts only what was there
+ * already. What is left in the feed is all the history there is to recover — anything
+ * trimmed before this ran is gone and was never counted anywhere — so this
+ * restores the count to at least what the old page was showing rather than
+ * starting it from zero, which would have read as every alert disappearing.
+ */
+async function backfill(db: Db): Promise<void> {
+  const tallies = db.collection<DailyTally>(DAILY);
+  if ((await tallies.estimatedDocumentCount()) > 0) return;
+
+  const rows = await db
+    .collection<AppNotification>("notifications")
+    .find({}, { projection: { createdAt: 1 } })
+    .toArray();
+  if (rows.length === 0) return;
+  await tally(db, rows.map((r) => ulaanbaatarDay(new Date(r.createdAt))));
+}
+
+/** Every day's count, oldest first. Never trimmed, so this is the real total. */
+export async function notificationTally(
+  db: Db,
+): Promise<{ day: string; n: number }[]> {
+  const rows = await db
+    .collection<DailyTally>(DAILY)
+    .find({}, { projection: { _id: 0, day: 1, n: 1 } })
+    .toArray();
+  return rows.sort((a, b) => a.day.localeCompare(b.day));
+}
+
+/**
  * Records an alert in the in-app feed. The feed is shared by every user —
  * signal changes are market-wide — and read state is tracked per user.
  */
@@ -36,10 +106,19 @@ export async function recordNotifications(
   if (notifications.length === 0) return;
 
   const collection = db.collection<AppNotification>("notifications");
+
+  // Before the insert, not after. The backfill counts what is in the feed,
+  // and rows written a line earlier are in the feed — so running it second
+  // counted this batch twice, once as history and once as itself.
+  await backfill(db);
+
   const base = Date.now() - (notifications.length - 1);
-  await collection.insertMany(
-    notifications.map((n, i) => ({ ...n, createdAt: new Date(base + i) })) as never,
-  );
+  const stamped = notifications.map((n, i) => ({
+    ...n,
+    createdAt: new Date(base + i),
+  }));
+  await collection.insertMany(stamped as never);
+  await tally(db, stamped.map((n) => ulaanbaatarDay(n.createdAt)));
 
   // Keep the feed bounded; nobody scrolls past a couple hundred alerts.
   const total = await collection.countDocuments();
