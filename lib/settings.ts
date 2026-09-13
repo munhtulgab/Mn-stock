@@ -67,6 +67,7 @@ export interface AppSettings {
     mistral?: string;
     cerebras?: string;
     cloudflare?: string;
+    zai?: string;
   };
   /**
    * Cloudflare puts the account in the URL rather than in the token, so
@@ -149,6 +150,7 @@ export function maskSettings(settings: AppSettings) {
       mistral: mask(settings.apiKeys.mistral),
       cerebras: mask(settings.apiKeys.cerebras),
       cloudflare: mask(settings.apiKeys.cloudflare),
+      zai: mask(settings.apiKeys.zai),
     },
     cloudflareAccountId: settings.cloudflareAccountId ?? null,
     sms: {

@@ -132,6 +132,12 @@ export const MODEL_PREFERENCES: Record<string, string[]> = {
     "gemma2-9b",
   ],
   cerebras: ["llama-3.3-70b", "llama3.3-70b", "llama-4-scout", "qwen-3-32b", "llama3.1-8b"],
+  // Flash only, and deliberately so. Z.AI's `/models` returns the billed
+  // catalogue — glm-4.5 through glm-5.3 — and none of the free flash models
+  // appear in it, so a substitution that took the "best" of the listing
+  // would walk a working free key onto a model it has no balance for and
+  // report an insufficient-balance error as though the key were spent.
+  zai: ["4.7-flash", "4.5-flash", "flash"],
   // Largest first, as everywhere here. A free account is refused the first
   // two and lands on `mistral-small-latest`, which is the substitution above
   // walking down rather than a list that has to be kept in step with a plan.

@@ -62,7 +62,21 @@ const refusedModels = new Map<string, Set<string>>();
  */
 const MODEL_SUBSTITUTIONS = 3;
 
-/** How long one completion request may take. */
+/**
+ * How long one completion request may take, and how long all its tries may.
+ *
+ * Forty seconds rather than thirty. Workers AI answered inside the old
+ * window until the day it did not, and a provider that is merely slow should
+ * not be reported as a failure on a page that is already waiting on five
+ * others in parallel — the wall clock here is the slowest provider, not the
+ * sum of them.
+ *
+ * Both are overridable, because "slow" is a fact about a provider rather
+ * than about this function: a free tier that queues a large prompt for the
+ * best part of a minute needs a longer window than one that answers in five
+ * seconds, and giving everybody the longer one would turn a dead provider
+ * into a minute of the reader's time.
+ */
 const REQUEST_MS = 40_000;
 
 export async function callOpenAiCompatible(opts: {
@@ -91,6 +105,27 @@ export async function callOpenAiCompatible(opts: {
    * fails without it. One wasted call is the whole cost of being wrong.
    */
   optionalBody?: Record<string, unknown>;
+  /**
+   * Failures this provider calls temporary that the status alone does not.
+   *
+   * `isTransientStatus` deliberately leaves 429 out: a rate limit carries the
+   * provider's own Retry-After and waiting it out inside a page render helps
+   * nobody. But a provider is free to answer 429 to something that is not a
+   * rate limit at all — Z.AI sends `{"code":"1305","message":"The service may
+   * be temporarily overloaded"}` with that status — and reporting that as a
+   * spent quota tells the reader to fix something that is not wrong.
+   */
+  retryOn?: (status: number, body: string) => boolean;
+  /** How many further tries a temporary failure is worth here. */
+  transientRetries?: number;
+  /** How long one attempt may take. See REQUEST_MS. */
+  requestMs?: number;
+  /**
+   * A ceiling on all of them together, so several fast refusals and one slow
+   * answer cannot add up to more than the page can hold. A retry is only
+   * started when there is room for a whole attempt inside what is left.
+   */
+  budgetMs?: number;
 }): Promise<ProviderResult> {
   const {
     provider,
@@ -102,7 +137,13 @@ export async function callOpenAiCompatible(opts: {
     maxTokens,
     extraBody,
     optionalBody,
+    retryOn,
+    transientRetries = TRANSIENT_RETRIES,
+    requestMs = REQUEST_MS,
+    budgetMs,
   } = opts;
+
+  const deadline = budgetMs === undefined ? Infinity : Date.now() + budgetMs;
 
   const cacheKey = `${provider}:${model}`;
   // Everything this key has been turned away from, so the pick below cannot
@@ -147,12 +188,7 @@ export async function callOpenAiCompatible(opts: {
           ...extraBody,
           ...(sendOptional ? optionalBody : {}),
         }),
-        // Forty seconds rather than thirty. Workers AI answered inside the
-        // old window until the day it did not, and a provider that is merely
-        // slow should not be reported as a failure on a page that is already
-        // waiting on five others in parallel — the wall clock here is the
-        // slowest provider, not the sum of them.
-        signal: AbortSignal.timeout(REQUEST_MS),
+        signal: AbortSignal.timeout(requestMs),
       });
 
       if (!res.ok) {
@@ -207,9 +243,17 @@ export async function callOpenAiCompatible(opts: {
           continue;
         }
 
-        if (isTransientStatus(res.status) && attempt < TRANSIENT_RETRIES) {
-          await sleep(retryDelayMs(attempt + 1));
-          continue;
+        const temporary =
+          isTransientStatus(res.status) || (retryOn?.(res.status, body) ?? false);
+        if (temporary && attempt < transientRetries) {
+          const wait = retryDelayMs(attempt + 1);
+          // Only if a whole attempt still fits. Starting one that the budget
+          // will cut off partway spends the wait and the request and reports
+          // a timeout instead of the refusal that actually happened.
+          if (Date.now() + wait + requestMs <= deadline) {
+            await sleep(wait);
+            continue;
+          }
         }
 
         const retrySeconds = extractRetrySeconds(res, body);
