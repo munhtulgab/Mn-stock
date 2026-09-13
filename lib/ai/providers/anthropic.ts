@@ -2,17 +2,19 @@ import Anthropic from "@anthropic-ai/sdk";
 import { parseAiSignal } from "@/lib/ai/schema";
 import type { AnalystPrompt } from "@/lib/ai/prompt";
 import type { ProviderResult } from "./types";
+import { resolveModel } from "./catalog";
 
 export async function callAnthropic(
   apiKey: string,
   prompt: AnalystPrompt,
+  /** Overrides the catalogue default; set on the settings page. */
+  model?: string,
 ): Promise<ProviderResult> {
   try {
     const client = new Anthropic({ apiKey });
-    const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
     const response = await client.messages.create({
-      model,
+      model: resolveModel("anthropic", model),
       max_tokens: 1200,
       system: prompt.system,
       messages: [{ role: "user", content: prompt.user }],

@@ -131,7 +131,6 @@ export const MODEL_PREFERENCES: Record<string, string[]> = {
     "llama-3.1-8b",
     "gemma2-9b",
   ],
-  cerebras: ["llama-3.3-70b", "llama3.3-70b", "llama-4-scout", "qwen-3-32b", "llama3.1-8b"],
   // Flash only, and deliberately so. Z.AI's `/models` returns the billed
   // catalogue — glm-4.5 through glm-5.3 — and none of the free flash models
   // appear in it, so a substitution that took the "best" of the listing

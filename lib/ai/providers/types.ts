@@ -6,7 +6,6 @@ export type ProviderName =
   | "groq"
   | "openrouter"
   | "mistral"
-  | "cerebras"
   | "cloudflare"
   | "zai"
   | "nvidia";
@@ -42,11 +41,6 @@ export const PROVIDER_TOKEN_BUDGET: Partial<Record<ProviderName, number>> = {
   groq: 12_000,
   // Workers AI's Llama models carry a 24k context.
   cloudflare: 24_000,
-  // Cerebras advertises a wide context on gpt-oss-120b, but this one could
-  // not be measured — inference is refused until the account has billing —
-  // so it gets a bound rather than the benefit of the doubt. Raise it once
-  // a real run has been seen.
-  cerebras: 20_000,
 };
 
 /**

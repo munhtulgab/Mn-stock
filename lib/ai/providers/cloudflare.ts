@@ -1,6 +1,7 @@
 import { callOpenAiCompatible } from "./openaiCompatible";
 import type { ProviderResult } from "./types";
 import type { AnalystPrompt } from "@/lib/ai/prompt";
+import { baseUrlFor, resolveModel } from "./catalog";
 
 /**
  * Cloudflare Workers AI, through its OpenAI-compatible endpoint.
@@ -19,13 +20,14 @@ export async function callCloudflare(
   apiKey: string,
   accountId: string,
   prompt: AnalystPrompt,
+  /** Overrides the catalogue default; set on the settings page. */
+  model?: string,
 ): Promise<ProviderResult> {
   return callOpenAiCompatible({
     provider: "cloudflare",
-    baseUrl: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`,
+    baseUrl: baseUrlFor("cloudflare", accountId)!,
     apiKey,
-    model:
-      process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    model: resolveModel("cloudflare", model),
     prompt,
   });
 }

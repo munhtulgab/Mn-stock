@@ -3,6 +3,7 @@ import { parseAiSignal } from "@/lib/ai/schema";
 import { withRetryAfter } from "@/lib/ai/retryAfter";
 import { TRANSIENT_RETRIES, isTransientStatus, retryDelayMs, sleep } from "./transient";
 import type { ProviderResult } from "./types";
+import { resolveModel } from "./catalog";
 
 interface GeminiErrorDetail {
   "@type"?: string;
@@ -85,8 +86,10 @@ function isTimeout(err: unknown): boolean {
 export async function callGemini(
   apiKey: string,
   prompt: AnalystPrompt,
+  /** Overrides the catalogue default; set on the settings page. */
+  model?: string,
 ): Promise<ProviderResult> {
-  const configured = process.env.GEMINI_MODEL || "gemini-flash-latest";
+  const configured = resolveModel("gemini", model);
   // The configured name first, then the ones to fall back to — minus the
   // configured one, so pointing GEMINI_MODEL at a fallback does not try it
   // twice and cut the list short.
@@ -120,11 +123,11 @@ export async function callGemini(
       if (attempts > 0 && left < ATTEMPT_MS) break;
       attempts++;
 
-      const model = models[modelIndex];
+      const chosen = models[modelIndex];
       let res: Response;
       try {
         res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${chosen}:generateContent?key=${apiKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -178,7 +181,7 @@ export async function callGemini(
           isOverloaded(body) &&
           modelIndex + 1 < models.length
         ) {
-          console.warn(`gemini: ${model} overloaded, trying ${models[modelIndex + 1]}`);
+          console.warn(`gemini: ${chosen} overloaded, trying ${models[modelIndex + 1]}`);
           modelIndex++;
           await sleep(retryDelayMs(1));
           continue;

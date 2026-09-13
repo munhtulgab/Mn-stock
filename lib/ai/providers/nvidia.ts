@@ -1,6 +1,7 @@
 import { callOpenAiCompatible } from "./openaiCompatible";
 import type { ProviderResult } from "./types";
 import type { AnalystPrompt } from "@/lib/ai/prompt";
+import { resolveModel } from "./catalog";
 
 /**
  * NVIDIA's hosted model catalogue, on the OpenAI shape.
@@ -31,12 +32,14 @@ import type { AnalystPrompt } from "@/lib/ai/prompt";
 export async function callNvidia(
   apiKey: string,
   prompt: AnalystPrompt,
+  /** Overrides the catalogue default; set on the settings page. */
+  model?: string,
 ): Promise<ProviderResult> {
   return callOpenAiCompatible({
     provider: "nvidia",
     baseUrl: "https://integrate.api.nvidia.com/v1",
     apiKey,
-    model: process.env.NVIDIA_MODEL || "deepseek-ai/deepseek-v4-flash-0731",
+    model: resolveModel("nvidia", model),
     prompt,
     // Eight thousand because this model reasons before it answers and that
     // is charged here: measured runs spent 3,683, 3,733 and 5,557 tokens to
