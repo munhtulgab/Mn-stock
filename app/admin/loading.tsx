@@ -3,6 +3,7 @@ import {
   PanelSkeleton,
   StatRowSkeleton,
   TableSkeleton,
+  WeekDigestSkeleton,
 } from "@/components/admin/AdminSkeleton";
 
 export default function Loading() {
@@ -14,6 +15,7 @@ export default function Loading() {
         <PanelSkeleton lines={6} />
         <PanelSkeleton lines={4} />
       </section>
+      <WeekDigestSkeleton />
       <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <TableSkeleton rows={6} />
         <PanelSkeleton lines={5} />

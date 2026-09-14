@@ -10,6 +10,7 @@ import SyncButton from "@/components/admin/SyncButton";
 import PageHead from "@/components/admin/PageHead";
 import Panel from "@/components/admin/Panel";
 import OrdersStrip from "@/components/admin/OrdersStrip";
+import WeekDigest from "@/components/admin/WeekDigest";
 import PeriodPicker from "@/components/admin/PeriodPicker";
 import { periodFrom } from "@/lib/adminPeriod";
 
@@ -170,6 +171,25 @@ export default async function AdminOverviewPage({
           </div>
         </Panel>
       </section>
+
+      {/* The week, between the quarter above it and the rows below.
+
+          It goes here rather than in a column beside Шинэ бүртгэл because it
+          is four readings of one span and the narrow column is not wide
+          enough for any of them: the ring and the curve would sit one above
+          the other at half size, and seven day-columns in 300px are a
+          texture. Full width, and the row underneath stays what it was. */}
+      <WeekDigest
+        days={o.week.days}
+        orders={o.week.orders}
+        turnover={o.week.turnover}
+        newUsers={o.week.users}
+        alerts={o.week.alerts}
+        previousOrders={o.week.previousOrders}
+        previousTurnover={o.week.previousTurnover}
+        activeUsers={o.week.activeUsers}
+        totalUsers={o.users.total}
+      />
 
       <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Panel

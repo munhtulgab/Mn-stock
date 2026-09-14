@@ -1,5 +1,6 @@
-import { ObjectId, type Db, type Filter } from "mongodb";
+import { ObjectId, type Db, type Document, type Filter } from "mongodb";
 import { founderId } from "@/lib/roles";
+import { rangeSince } from "@/lib/adminFilters";
 import { valuePortfolio } from "@/lib/portfolio";
 import type {
   Holding,
@@ -41,18 +42,52 @@ export interface AdminUserRow {
   cash: number;
 }
 
-/** Everyone, with the account figures the list shows against each name. */
-export async function listUsers(db: Db, query?: string): Promise<AdminUserRow[]> {
-  const filter: Filter<User> = query
-    ? {
-        $or: [
-          { username: { $regex: escapeRegex(query), $options: "i" } },
-          { fullName: { $regex: escapeRegex(query), $options: "i" } },
-          { email: { $regex: escapeRegex(query), $options: "i" } },
-          { phone: { $regex: escapeRegex(query), $options: "i" } },
-        ],
-      }
-    : {};
+/** What the list can be narrowed by. See `lib/adminFilters.ts` for the words. */
+export interface UserFilters {
+  /** Name, username, e-mail or phone. */
+  q?: string;
+  /** "admin" or "user", as the list reckons it rather than as stored. */
+  role?: string;
+  /** A `RANGES` value: how recently the account was opened. */
+  joined?: string;
+  /** "with" or "without": whether the account has ever placed an order. */
+  activity?: string;
+}
+
+/**
+ * Everyone, with the account figures the list shows against each name.
+ *
+ * The query and the registration date are asked of the database; the role and
+ * whether the account has traded are applied afterwards, to the rows this
+ * function has already built. That is not laziness on either count:
+ *
+ *  - The role shown is not the role stored. An account with no `role` field
+ *    is an ordinary reader, and the first account ever opened is an
+ *    administrator whatever its document says — see `founderId`. Asking Mongo
+ *    for `role: "admin"` would disagree with the pill printed beside the name.
+ *  - The order count is a tally over another collection that this function
+ *    already has to build in full for the column. Turning it into a query
+ *    would be a second pass over the same rows to learn the same thing.
+ */
+export async function listUsers(
+  db: Db,
+  filters: UserFilters = {},
+): Promise<AdminUserRow[]> {
+  const { q, role, joined, activity } = filters;
+  const terms: Filter<User>[] = [];
+  if (q) {
+    terms.push({
+      $or: [
+        { username: { $regex: escapeRegex(q), $options: "i" } },
+        { fullName: { $regex: escapeRegex(q), $options: "i" } },
+        { email: { $regex: escapeRegex(q), $options: "i" } },
+        { phone: { $regex: escapeRegex(q), $options: "i" } },
+      ],
+    });
+  }
+  const since = rangeSince(joined ?? "");
+  if (since) terms.push({ createdAt: { $gte: since } });
+  const filter: Filter<User> = terms.length > 0 ? { $and: terms } : {};
 
   // Four queries whatever the number of accounts, rather than three per
   // account. The two tallies come back grouped and are matched up here.
@@ -65,7 +100,7 @@ export async function listUsers(db: Db, query?: string): Promise<AdminUserRow[]>
   ]);
   const cashByUser = new Map(portfolios.map((p) => [p.userId, p.cashBalance]));
 
-  return users.map((user) => {
+  const rows: AdminUserRow[] = users.map((user) => {
     const id = String(user._id);
     return {
       id,
@@ -82,6 +117,13 @@ export async function listUsers(db: Db, query?: string): Promise<AdminUserRow[]>
       cash: cashByUser.get(id) ?? 0,
     };
   });
+
+  return rows.filter(
+    (row) =>
+      (!role || row.role === role) &&
+      (!activity ||
+        (activity === "with" ? row.orderCount > 0 : row.orderCount === 0)),
+  );
 }
 
 async function countBy(db: Db, collection: string): Promise<Map<string, number>> {
@@ -283,6 +325,34 @@ export interface AdminOrderPage {
 export const ORDERS_PER_PAGE = 50;
 
 /**
+ * What each mark means as a query.
+ *
+ * "Аппаас хийсэн" is the absence of a `source` rather than a value of it —
+ * rows written by the app itself never carry one — so it is spelled as the
+ * two ways absence is stored, not as a negation that would also drop every
+ * row where the field is an empty string.
+ */
+const MARK_FILTERS: Record<string, Document> = {
+  imported: { source: { $exists: true, $nin: [null, ""] } },
+  manual: { $or: [{ source: { $exists: false } }, { source: { $in: [null, ""] } }] },
+  reversal: { reversalOf: { $exists: true, $nin: [null, ""] } },
+  edited: { editedAt: { $exists: true, $ne: null } },
+};
+
+/** What the order list can be narrowed by. See `lib/adminFilters.ts`. */
+export interface OrderFilters {
+  page?: number;
+  /** A ticker or an account name — the two things a row is looked up by. */
+  q?: string;
+  /** "BUY" or "SELL". */
+  side?: string;
+  /** A `RANGES` value: how recently the order was placed. */
+  days?: string;
+  /** An `ORDER_MARKS` value: how the row got here. */
+  mark?: string;
+}
+
+/**
  * Every order on the installation, newest first.
  *
  * Paged rather than capped. The account pages take the last five hundred of
@@ -291,15 +361,40 @@ export const ORDERS_PER_PAGE = 50;
  * one response. A page number in the URL is also the only way to reach the
  * old ones at all.
  *
- * Filtering by symbol is offered because "what happened in QPAY" is the
- * question this page gets asked, and scanning fifty rows at a time for it is
- * not an answer.
+ * The query matches a ticker or an account name, because those are the two
+ * ways a row is looked for and an administrator holding one of them should
+ * not have to say which they are holding. Names cost a second query — the
+ * accounts collection is asked which ids match before the orders are asked
+ * for at all — and that is the price of one box instead of two.
+ *
+ * Filters are `$and`ed rather than merged into one object: the query already
+ * uses `$or`, and a second `$or` written into the same object at the top
+ * level would silently replace the first.
  */
 export async function listOrders(
   db: Db,
-  { page = 1, symbol }: { page?: number; symbol?: string } = {},
+  { page = 1, q, side, days, mark }: OrderFilters = {},
 ): Promise<AdminOrderPage> {
-  const filter: Filter<Transaction> = symbol ? { symbol: symbol.toUpperCase() } : {};
+  const terms: Filter<Transaction>[] = [];
+
+  if (q) {
+    const named = await db
+      .collection<User>("users")
+      .find({ username: { $regex: escapeRegex(q), $options: "i" } }, { projection: { _id: 1 } })
+      .toArray();
+    terms.push({
+      $or: [
+        { symbol: { $regex: escapeRegex(q), $options: "i" } },
+        { userId: { $in: named.map((u) => String(u._id)) } },
+      ],
+    } as Filter<Transaction>);
+  }
+  if (side === "BUY" || side === "SELL") terms.push({ side });
+  const since = rangeSince(days ?? "");
+  if (since) terms.push({ createdAt: { $gte: since } });
+  if (mark) terms.push((MARK_FILTERS[mark] ?? {}) as Filter<Transaction>);
+
+  const filter: Filter<Transaction> = terms.length > 0 ? { $and: terms } : {};
   const [total, docs] = await Promise.all([
     db.collection<Transaction>("transactions").countDocuments(filter),
     db

@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { alignDays, countTally } from "./adminOverview";
+import { alignDays, countTally, sumDays } from "./adminOverview";
 
 test("a quiet day is a zero, not a missing bar", () => {
   // The gap is the point. Plotting only the days that have a row slides a
@@ -60,4 +60,28 @@ test("the total is never smaller than the window inside it", () => {
     const { total, recent } = countTally(TALLY, since);
     assert.ok(recent <= total, `${since}: ${recent} of ${total}`);
   }
+});
+
+const WEEK: { day: string; count: number; turnover: number }[] = [
+  { day: "2026-09-01", count: 2, turnover: 1_000 },
+  { day: "2026-09-02", count: 0, turnover: 0 },
+  { day: "2026-09-03", count: 5, turnover: 12_500 },
+];
+
+test("a run of days adds up to its orders and its turnover", () => {
+  assert.deepEqual(sumDays(WEEK), { orders: 7, turnover: 13_500 });
+});
+
+test("no days at all is zero of each, not NaN", () => {
+  // `daily.slice(-14, -7)` on an installation younger than a fortnight is
+  // empty, and the card divides by what comes back to state its change.
+  assert.deepEqual(sumDays([]), { orders: 0, turnover: 0 });
+});
+
+test("a quiet day contributes nothing but is not skipped", () => {
+  // Guards the shape rather than the arithmetic: the digest's bars and this
+  // total are read off the same array, so a sum that quietly dropped the
+  // zeroes would disagree with the chart beside it.
+  assert.equal(sumDays(WEEK.filter((d) => d.count === 0)).orders, 0);
+  assert.equal(sumDays(WEEK).orders, sumDays(WEEK.filter((d) => d.count > 0)).orders);
 });

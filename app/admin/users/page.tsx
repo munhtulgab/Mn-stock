@@ -8,7 +8,8 @@ import Num from "@/components/Num";
 import Avatar from "@/components/Avatar";
 import NewUserForm from "@/components/admin/NewUserForm";
 import PageHead from "@/components/admin/PageHead";
-import { SearchIcon } from "@/components/icons";
+import FilterBar from "@/components/admin/FilterBar";
+import { RANGES, USER_ACTIVITY, USER_ROLES, pick } from "@/lib/adminFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -28,42 +29,61 @@ export const dynamic = "force-dynamic";
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; activity?: string; joined?: string }>;
 }) {
   const db = await getDb();
   await requireAdminPage(db);
-  const { q } = await searchParams;
-  const users = await listUsers(db, q?.trim() || undefined);
+  const params = await searchParams;
+  const q = params.q?.trim() ?? "";
+  const role = pick(params.role, USER_ROLES);
+  const activity = pick(params.activity, USER_ACTIVITY);
+  const joined = pick(params.joined, RANGES);
+  const filtered = Boolean(q || role || activity || joined);
+  const users = await listUsers(db, { q: q || undefined, role, activity, joined });
 
   return (
     <div className="space-y-5">
       <PageHead
         title="Хэрэглэгчид"
-        sub={q ? `"${q}" — ${users.length} илэрц` : `Нийт ${users.length} бүртгэл`}
+        sub={
+          filtered
+            ? `${users.length.toLocaleString("mn-MN")} илэрц`
+            : `Нийт ${users.length.toLocaleString("mn-MN")} бүртгэл`
+        }
       >
         <NewUserForm />
       </PageHead>
 
-      <form className="flex gap-2">
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-app-muted">
-            <SearchIcon size={16} />
-          </span>
-          <input
-            name="q"
-            defaultValue={q ?? ""}
-            placeholder="Нэр, утас, и-мэйлээр хайх"
-            className="w-full rounded-full border border-app-border bg-app-card py-2.5 pr-4 pl-9 text-sm text-app-text placeholder:text-app-muted"
-          />
-        </div>
-        <button className="rounded-full border border-app-border bg-app-card px-5 py-2.5 text-sm font-semibold text-app-text hover:bg-app-elevated">
-          Хайх
-        </button>
-      </form>
+      <FilterBar
+        action="/admin/users"
+        search={{
+          name: "q",
+          label: "Хайх",
+          placeholder: "Нэр, утас, и-мэйл",
+          value: q,
+        }}
+        selects={[
+          { name: "role", label: "Эрх", value: role, options: USER_ROLES, icon: "shield" },
+          {
+            name: "activity",
+            label: "Арилжаа",
+            value: activity,
+            options: USER_ACTIVITY,
+            icon: "receipt",
+          },
+          {
+            name: "joined",
+            label: "Бүртгүүлсэн",
+            value: joined,
+            options: RANGES,
+            icon: "calendar",
+          },
+        ]}
+      />
 
       {users.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-app-border p-8 text-center text-sm text-app-muted">
-          Илэрц олдсонгүй.
+          Энэ шүүлтэд тохирох бүртгэл алга.
         </p>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-app-border bg-app-card">
