@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import Avatar from "@/components/Avatar";
 
@@ -71,7 +71,7 @@ export default function AdminNav({
             key={href}
             href={href}
             prefetch
-            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm whitespace-nowrap transition-colors ${
+            className={`relative flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm whitespace-nowrap transition-colors ${
               active
                 ? "font-semibold text-white"
                 : "font-medium text-app-muted hover:text-app-text"
@@ -86,6 +86,7 @@ export default function AdminNav({
                 {count.toLocaleString("mn-MN")}
               </span>
             )}
+            <Pending />
           </Link>
         );
       })}
@@ -161,6 +162,31 @@ export default function AdminNav({
         />
       </div>
     </header>
+  );
+}
+
+/**
+ * That the click landed, while the page it asked for is still coming.
+ *
+ * The fallback below is prefetched, so most of the time this never appears —
+ * which is the point of it appearing when it does: a cold prefetch, or a
+ * slow connection, is exactly the case where the bar would otherwise sit
+ * there looking like nothing had happened.
+ *
+ * A bar under the pill rather than a spinner beside the label: it is always
+ * in the layout at a fixed size and only its opacity changes, so nothing
+ * moves when it turns on. See `use-link-status.md` — "prefer a fixed-size,
+ * always-rendered hint element and toggle its opacity".
+ */
+function Pending() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden
+      className={`pointer-events-none absolute inset-x-3 bottom-1 h-[2px] origin-left rounded-full bg-current transition-opacity ${
+        pending ? "animate-pulse opacity-60" : "opacity-0"
+      }`}
+    />
   );
 }
 

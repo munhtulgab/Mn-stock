@@ -102,6 +102,7 @@ export default async function AdminOrdersPage({
                   <Td>
                     <Link
                       href={`/admin/users/${t.userId}`}
+                      prefetch={false}
                       className="font-semibold text-app-text"
                     >
                       @{t.username}
@@ -111,6 +112,7 @@ export default async function AdminOrdersPage({
                     <span className="flex items-center gap-2">
                       <Link
                         href={`/admin/orders?symbol=${t.symbol}`}
+                        prefetch={false}
                         className="font-semibold text-app-text"
                       >
                         {t.symbol}
@@ -147,6 +149,7 @@ export default async function AdminOrdersPage({
               <Link
                 key={t.id}
                 href={`/admin/users/${t.userId}`}
+                prefetch={false}
                 className="rowlink flex items-center gap-3 px-5 py-3"
               >
                 <span className="min-w-0 flex-1">
