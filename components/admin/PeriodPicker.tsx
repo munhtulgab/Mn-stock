@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PERIODS, periodHref } from "@/lib/adminPeriod";
 
@@ -10,6 +10,10 @@ export default function PeriodPicker({ days }: { days: number }) {
   const box = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const params = useSearchParams();
+  // The window is a server round trip, and the pill is the only thing on
+  // screen that could say so: without this it closed its menu and sat on the
+  // old figure, which reads as the choice not having been taken.
+  const [pending, start] = useTransition();
   const current = PERIODS.find((p) => p.days === days) ?? PERIODS[0];
 
   // A menu that stays open after the pointer has gone elsewhere is a menu
@@ -32,7 +36,7 @@ export default function PeriodPicker({ days }: { days: number }) {
 
   function choose(next: number) {
     setOpen(false);
-    router.push(periodHref(next, params));
+    start(() => router.push(periodHref(next, params)));
   }
 
   return (
@@ -42,7 +46,10 @@ export default function PeriodPicker({ days }: { days: number }) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-full border border-app-border bg-app-card px-4 py-2.5 text-sm font-semibold text-app-text hover:bg-app-elevated"
+        aria-busy={pending}
+        className={`flex items-center gap-2 rounded-full border border-app-border bg-app-card px-4 py-2.5 text-sm font-semibold text-app-text hover:bg-app-elevated ${
+          pending ? "opacity-60" : ""
+        }`}
       >
         {current.label}
         <svg
@@ -54,7 +61,7 @@ export default function PeriodPicker({ days }: { days: number }) {
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className={`text-app-muted transition-transform ${open ? "rotate-180" : ""}`}
+          className={`text-app-muted transition-transform ${pending ? "animate-spin" : open ? "rotate-180" : ""}`}
           aria-hidden
         >
           <path d="m6 9.5 6 6 6-6" />

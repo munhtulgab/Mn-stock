@@ -81,7 +81,11 @@ export default async function AdminUsersPage({
               {users.map((u) => (
                 <tr key={u.id} className="rowlink border-b border-app-divider last:border-0">
                   <td className="py-3 pr-4 pl-5">
-                    <Link href={`/admin/users/${u.id}`} className="flex items-center gap-2.5">
+                    <Link
+                      href={`/admin/users/${u.id}`}
+                      prefetch={false}
+                      className="flex items-center gap-2.5"
+                    >
                       <Avatar src={u.avatar ?? ""} name={u.fullName || u.username} size={32} />
                       <span className="min-w-0">
                         <span className="block truncate text-[13px] font-semibold text-app-text">
@@ -118,6 +122,7 @@ export default async function AdminUsersPage({
               <Link
                 key={u.id}
                 href={`/admin/users/${u.id}`}
+                prefetch={false}
                 className="rowlink flex items-center gap-3 px-5 py-3"
               >
                 <Avatar src={u.avatar ?? ""} name={u.fullName || u.username} size={36} />

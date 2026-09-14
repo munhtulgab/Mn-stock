@@ -205,6 +205,7 @@ export default async function AdminOverviewPage({
                       <Td>
                         <Link
                           href={`/admin/users/${t.userId}`}
+                          prefetch={false}
                           className="font-semibold text-app-text"
                         >
                           @{t.username}
@@ -237,6 +238,7 @@ export default async function AdminOverviewPage({
                   <Link
                     key={t.id}
                     href={`/admin/users/${t.userId}`}
+                    prefetch={false}
                     className="rowlink flex items-center gap-3 px-5 py-3"
                   >
                     <span className="min-w-0 flex-1">
@@ -270,6 +272,7 @@ export default async function AdminOverviewPage({
                 <Link
                   key={u.id}
                   href={`/admin/users/${u.id}`}
+                  prefetch={false}
                   className="rowlink flex items-baseline justify-between gap-3 px-5 py-3"
                 >
                   <span className="min-w-0">
