@@ -72,7 +72,11 @@ export default async function AdminUserPage({
         </div>
       </div>
 
-      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      {/* Stretched, not topped out: the two cards sit side by side and the
+          summary was a hundred pixels shorter than the form, which left a
+          step cut out of the band. Both now take the row's height and
+          whichever has more in it sets it. */}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <AdminUserForm user={user} />
         <AccountSummary user={user} />
       </div>
