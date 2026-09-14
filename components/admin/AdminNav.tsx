@@ -94,8 +94,20 @@ export default function AdminNav({
   );
 
   return (
-    <header className="flex flex-wrap items-center gap-3 px-4 py-3.5 md:px-6 md:py-4">
-      <Link href="/admin" className="flex min-w-0 shrink-0 items-center gap-2.5">
+    // Three columns from the laptop up, the outer two equal, so the sections
+    // sit on the middle of the screen rather than on the middle of whatever
+    // the mark and the account left over. `mx-auto` inside a flex row centres
+    // within the remaining space, which with a wide right-hand group pushed
+    // the pills visibly left of centre.
+    //
+    // `minmax(0,1fr)` rather than `1fr`: a bare `1fr` will not shrink a track
+    // below the width of what is in it, so on a narrow laptop the account
+    // group widened its own column and carried the middle ten pixels with it.
+    // Both sides may now be narrower than their contents, and both contents
+    // truncate. Still a wrapping flex row below md, where the sections take a
+    // line of their own.
+    <header className="flex flex-wrap items-center gap-3 px-4 py-3.5 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:px-6 md:py-4">
+      <Link href="/admin" className="flex min-w-0 shrink-0 items-center gap-2.5 overflow-hidden">
         <span
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
           style={{
@@ -106,29 +118,32 @@ export default function AdminNav({
             <path d="M4 19V6.5M4 19h16M8 19v-6M13 19V9M18 19v-9.5" />
           </svg>
         </span>
-        <span className="text-[17px] font-semibold tracking-[-0.02em] text-app-text">
+        <span className="truncate text-[17px] font-semibold tracking-[-0.02em] text-app-text">
           Удирдлага
         </span>
       </Link>
 
       {/* Centred on a wide screen, on its own line below one. */}
-      <div className="order-3 w-full overflow-x-auto md:order-none md:mx-auto md:w-auto md:overflow-visible">
+      <div className="order-3 w-full overflow-x-auto md:order-none md:w-auto md:overflow-visible">
         {sections}
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
-        {/* Two round buttons and then who you are, which is where every
-            application of this shape puts them. Both go somewhere real —
-            there is no bell here, because this side of the app has nothing
-            to notify an administrator about. */}
-        <CircleLink href="/admin/settings" label="Тохиргоо">
-          {/* A cog with a body, not the app's ring-and-eight-spokes: at 17px
-              inside a circle that one reads as a small sun. */}
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12.9 2.4h-1.8a1.6 1.6 0 0 0-1.6 1.6v.3a1.6 1.6 0 0 1-.8 1.4l-.6.35a1.6 1.6 0 0 1-1.6 0l-.26-.15a1.6 1.6 0 0 0-2.19.59l-.9 1.56a1.6 1.6 0 0 0 .59 2.19l.26.15a1.6 1.6 0 0 1 .8 1.38v.7a1.6 1.6 0 0 1-.8 1.39l-.26.15a1.6 1.6 0 0 0-.59 2.19l.9 1.56a1.6 1.6 0 0 0 2.19.58l.26-.15a1.6 1.6 0 0 1 1.6 0l.6.35a1.6 1.6 0 0 1 .8 1.39V20a1.6 1.6 0 0 0 1.6 1.6h1.8a1.6 1.6 0 0 0 1.6-1.6v-.3a1.6 1.6 0 0 1 .8-1.39l.6-.35a1.6 1.6 0 0 1 1.6 0l.26.15a1.6 1.6 0 0 0 2.19-.58l.9-1.56a1.6 1.6 0 0 0-.59-2.19l-.26-.15a1.6 1.6 0 0 1-.8-1.39v-.7a1.6 1.6 0 0 1 .8-1.38l.26-.15a1.6 1.6 0 0 0 .59-2.19l-.9-1.56a1.6 1.6 0 0 0-2.19-.59l-.26.15a1.6 1.6 0 0 1-1.6 0l-.6-.35a1.6 1.6 0 0 1-.8-1.4V4a1.6 1.6 0 0 0-1.6-1.6Z" />
-            <circle cx="12" cy="12" r="2.7" />
-          </svg>
-        </CircleLink>
+      {/* Who you are, and then the way out — in that order, because the
+          button acts on the account named beside it and a control reads as
+          belonging to what it follows.
+
+          The cog that used to lead this group is gone. It went to
+          /admin/settings, which is Систем in the middle of this same bar:
+          two controls a thumb apart doing one thing, and the round one
+          saying less about where it goes. */}
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 md:ml-0 md:justify-self-end">
+        <Identity
+          username={username}
+          email={email}
+          avatar={avatar}
+          serviceAdmin={serviceAdmin}
+          accountHref={accountHref}
+        />
 
         {serviceAdmin ? (
           // The administration-only account has nowhere to go but out: the
@@ -138,7 +153,7 @@ export default function AdminNav({
             disabled={leaving}
             aria-label="Гарах"
             title="Гарах"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-app-border text-app-muted hover:text-app-negative disabled:opacity-60"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-app-border text-app-muted hover:text-app-negative disabled:opacity-60"
           >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 5.5H6.5v13H14M17 12H10m4.5-3 3 3-3 3" />
@@ -152,14 +167,6 @@ export default function AdminNav({
             </svg>
           </CircleLink>
         )}
-
-        <Identity
-          username={username}
-          email={email}
-          avatar={avatar}
-          serviceAdmin={serviceAdmin}
-          accountHref={accountHref}
-        />
       </div>
     </header>
   );
