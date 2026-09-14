@@ -160,7 +160,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
   return (
     <form
       onSubmit={submit}
-      className="space-y-4 rounded-2xl border border-app-border bg-app-card p-5"
+      className="h-full space-y-4 rounded-2xl border border-app-border bg-app-card p-5"
     >
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-app-text">

@@ -41,8 +41,13 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
   const tone = up ? "positive" : down ? "negative" : "flat";
 
   return (
-    <Panel title="Дансны хураангуй">
-      <div className="grid grid-cols-2 gap-2.5">
+    <Panel title="Дансны хураангуй" fill>
+      {/* `h-full` so the six tiles share whatever height the registration
+          form beside them sets, rather than leaving it as a gap under the
+          last row. Three rows of tiles a little taller reads as the panel's
+          own proportions; a hundred pixels of nothing at the bottom reads as
+          a mistake. */}
+      <div className="grid h-full grid-cols-2 gap-2.5">
         <StatTile
           icon={<WalletGlyph />}
           label="Нийт үнэ цэн"
