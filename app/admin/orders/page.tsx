@@ -6,7 +6,8 @@ import { listOrders } from "@/lib/adminUsers";
 import { ulaanbaatarDateTime } from "@/lib/day";
 import Num from "@/components/Num";
 import PageHead from "@/components/admin/PageHead";
-import { SearchIcon } from "@/components/icons";
+import FilterBar from "@/components/admin/FilterBar";
+import { ORDER_MARKS, ORDER_SIDES, RANGES, pick } from "@/lib/adminFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -25,19 +26,33 @@ export const dynamic = "force-dynamic";
 export default async function AdminOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; symbol?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    q?: string;
+    side?: string;
+    days?: string;
+    mark?: string;
+  }>;
 }) {
   const db = await getDb();
   await requireAdminPage(db);
   const params = await searchParams;
-  const symbol = params.symbol?.trim().toUpperCase() || undefined;
+  const q = params.q?.trim() ?? "";
+  const side = pick(params.side, ORDER_SIDES);
+  const days = pick(params.days, RANGES);
+  const mark = pick(params.mark, ORDER_MARKS);
+  const filtered = Boolean(q || side || days || mark);
   const wanted = Number(params.page);
   const page = Number.isInteger(wanted) && wanted > 0 ? wanted : 1;
-  const list = await listOrders(db, { page, symbol });
+  const list = await listOrders(db, { page, q: q || undefined, side, days, mark });
 
+  // The pager carries the filters with it, or page two would be page two of
+  // a different list.
   const href = (n: number) => {
     const query = new URLSearchParams();
-    if (symbol) query.set("symbol", symbol);
+    for (const [key, value] of Object.entries({ q, side, days, mark })) {
+      if (value) query.set(key, value);
+    }
     if (n > 1) query.set("page", String(n));
     const search = query.toString();
     return search ? `/admin/orders?${search}` : "/admin/orders";
@@ -48,40 +63,30 @@ export default async function AdminOrdersPage({
       <PageHead
         title="Захиалгууд"
         sub={
-          symbol
-            ? `${symbol} — ${list.total.toLocaleString("mn-MN")} захиалга`
+          filtered
+            ? `${list.total.toLocaleString("mn-MN")} илэрц`
             : `Нийт ${list.total.toLocaleString("mn-MN")} захиалга`
         }
       />
 
-      <form className="flex gap-2">
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-app-muted">
-            <SearchIcon size={16} />
-          </span>
-          <input
-            name="symbol"
-            defaultValue={symbol ?? ""}
-            placeholder="Хувьцааны богино нэрээр шүүх, ж.нь QPAY"
-            className="w-full rounded-full border border-app-border bg-app-card py-2.5 pr-4 pl-9 text-sm text-app-text placeholder:text-app-muted"
-          />
-        </div>
-        <button className="rounded-full border border-app-border bg-app-card px-5 py-2.5 text-sm font-semibold text-app-text hover:bg-app-elevated">
-          Шүүх
-        </button>
-        {symbol && (
-          <Link
-            href="/admin/orders"
-            className="flex items-center rounded-full border border-app-border bg-app-card px-5 py-2.5 text-sm font-semibold text-app-muted hover:bg-app-elevated"
-          >
-            Цэвэрлэх
-          </Link>
-        )}
-      </form>
+      <FilterBar
+        action="/admin/orders"
+        search={{
+          name: "q",
+          label: "Хайх",
+          placeholder: "Хувьцаа эсвэл хэрэглэгч, ж.нь QPAY",
+          value: q,
+        }}
+        selects={[
+          { name: "side", label: "Төрөл", value: side, options: ORDER_SIDES, icon: "swap" },
+          { name: "mark", label: "Эх үүсвэр", value: mark, options: ORDER_MARKS, icon: "tag" },
+          { name: "days", label: "Огноо", value: days, options: RANGES, icon: "calendar" },
+        ]}
+      />
 
       {list.rows.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-app-border p-8 text-center text-sm text-app-muted">
-          {symbol ? `${symbol}-ийн захиалга олдсонгүй.` : "Захиалга алга."}
+          {filtered ? "Энэ шүүлтэд тохирох захиалга алга." : "Захиалга алга."}
         </p>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-app-border bg-app-card">
@@ -119,7 +124,7 @@ export default async function AdminOrdersPage({
                   <Td>
                     <span className="flex items-center gap-2">
                       <Link
-                        href={`/admin/orders?symbol=${t.symbol}`}
+                        href={`/admin/orders?q=${t.symbol}`}
                         prefetch={false}
                         className="font-semibold text-app-text"
                       >

@@ -116,6 +116,20 @@ const MONTHS = [
 const WEEKDAYS = ["Ням", "Даваа", "Мягмар", "Лхагва", "Пүрэв", "Баасан", "Бямба"];
 
 /**
+ * A weekday in two letters: "Пү".
+ *
+ * For an axis with seven of them side by side, where the full name is four
+ * times the width of the column it labels. Read off the digits in UTC — these
+ * are already Ulaanbaatar days, and handing one to a local Date would move a
+ * few of them to the wrong weekday.
+ */
+export function weekdayShort(date: string): string {
+  const [y, m, d] = date.slice(0, 10).split("-").map(Number);
+  const at = new Date(Date.UTC(y, m - 1, d));
+  return Number.isNaN(at.getTime()) ? "" : (WEEKDAYS[at.getUTCDay()]?.slice(0, 2) ?? "");
+}
+
+/**
  * Heading for a day of items: "Өнөөдөр", "Өчигдөр", else "Лхагва, 8 сарын 5".
  * Built from the digits rather than through the reader's locale, for the same
  * reason the day itself is.

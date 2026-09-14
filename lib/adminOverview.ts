@@ -63,6 +63,26 @@ export interface AdminOverview {
     sessions: number[];
     orders: number[];
     alerts: number[];
+    /** What changed hands on each of those days, in tögrög. */
+    turnover: number[];
+    /**
+     * Orders over the seven days before this week.
+     *
+     * The digest card states its week against something, and "against the
+     * week before" is the only comparison that does not need a target nobody
+     * has set.
+     */
+    previousOrders: number;
+    /** What changed hands over those same seven earlier days. */
+    previousTurnover: number;
+    /**
+     * Accounts that placed at least one order this week.
+     *
+     * Counted from the orders rather than from sign-ins: an account that
+     * opened the app and left is not what anybody means by an active one on a
+     * page about trading.
+     */
+    activeUsers: number;
   };
   latestOrders: RecentOrder[];
   latestUsers: { id: string; username: string; fullName: string | null; createdAt: Date | null }[];
@@ -95,6 +115,26 @@ export function alignDays(
   counts: ReadonlyMap<string, number>,
 ): number[] {
   return days.map((day) => counts.get(day) ?? 0);
+}
+
+/**
+ * The orders and the turnover of a run of days.
+ *
+ * Takes the run rather than a from/to pair, because `daily` is already every
+ * day in order with the quiet ones filled in — so "this week" is its last
+ * seven entries and "the week before" the seven before those, and neither has
+ * to be recomputed against a calendar that has already been applied once.
+ */
+export function sumDays(
+  days: readonly DailyOrders[],
+): { orders: number; turnover: number } {
+  let orders = 0;
+  let turnover = 0;
+  for (const day of days) {
+    orders += day.count;
+    turnover += day.turnover;
+  }
+  return { orders, turnover };
 }
 
 /**
@@ -175,6 +215,7 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
     dailyRows,
     userDays,
     sessionDays,
+    activeTraders,
   ] = await Promise.all([
     db.collection<User>("users").countDocuments({}),
     db.collection<User>("users").countDocuments({ role: "admin" }),
@@ -240,6 +281,13 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
     // produced them.
     dayCounts(db, "users", WEEK_DAYS),
     dayCounts(db, "sessions", WEEK_DAYS),
+    // Who traded this week, rather than how often. `distinct` returns the
+    // ids themselves and the digest only wants how many there are, but the
+    // alternative is a group-and-count pipeline for the same answer over a
+    // set this small.
+    db
+      .collection<Transaction>("transactions")
+      .distinct("userId", { createdAt: { $gte: new Date(Date.now() - WEEK_DAYS * DAY_MS) } }),
   ]);
 
   // Every day in the window, including the quiet ones — a strip with gaps in
@@ -261,7 +309,10 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
   );
   const alertsByDay = new Map(alertDays.map((r) => [r.day, r.n]));
   const ordersByDay = new Map(daily.map((d) => [d.day, d.count]));
+  const turnoverByDay = new Map(daily.map((d) => [d.day, d.turnover]));
   const alerts = countTally(alertDays, ulaanbaatarDay(since));
+  // The week the digest card draws, and the one it compares it with.
+  const lastWeek = sumDays(daily.slice(-2 * WEEK_DAYS, -WEEK_DAYS));
 
   // The names for the recent orders, asked for once rather than per row.
   const owners = await db
@@ -299,6 +350,10 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
       sessions: alignDays(weekDays, sessionDays),
       orders: alignDays(weekDays, ordersByDay),
       alerts: alignDays(weekDays, alertsByDay),
+      turnover: alignDays(weekDays, turnoverByDay),
+      previousOrders: lastWeek.orders,
+      previousTurnover: lastWeek.turnover,
+      activeUsers: activeTraders.length,
     },
     system: {
       aiKeys: apiKeys,

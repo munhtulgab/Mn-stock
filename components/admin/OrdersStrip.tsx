@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Num from "@/components/Num";
+import { compactTugrug } from "@/lib/tugrug";
 import type { DailyOrders } from "@/lib/adminOverview";
 
 /**
@@ -33,8 +34,8 @@ import type { DailyOrders } from "@/lib/adminOverview";
  * A library would ship more code than the page it sits on.
  */
 const PLOT = 168;
-/** Left of the plot, wide enough for "12.4 тэрбум₮" at 10px. */
-const AXIS = "w-[58px]";
+/** Left of the plot, wide enough for "12.4 тэрбум ₮" at 10px. */
+const AXIS = "w-[62px]";
 
 export default function OrdersStrip({ days }: { days: DailyOrders[] }) {
   const [hover, setHover] = useState<string | null>(null);
@@ -145,7 +146,7 @@ function Tick({ at, value }: { at: number; value: number }) {
       className="absolute right-0 -translate-y-1/2 text-[10px] whitespace-nowrap text-app-muted tabular-nums"
       style={{ top: `${at}%` }}
     >
-      {round(value)}
+      {compactTugrug(value)}
     </span>
   );
 }
@@ -242,14 +243,3 @@ function shortDay(day: string): string {
   return day.slice(5).replace("-", ".");
 }
 
-/**
- * An axis figure, short enough to sit in a gutter: сая at a million, тэрбум
- * at a thousand million. Written out rather than as "3.3M", because the
- * page it is on is in Mongolian and M is not a Mongolian abbreviation.
- */
-function round(value: number): string {
-  if (value >= 1e9) return `${(value / 1e9).toFixed(1)} тэрбум₮`;
-  if (value >= 1e6) return `${(value / 1e6).toFixed(1)} сая₮`;
-  if (value >= 1e3) return `${Math.round(value / 1e3)} мянга₮`;
-  return `${Math.round(value)}₮`;
-}

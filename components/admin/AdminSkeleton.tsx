@@ -91,3 +91,43 @@ export function TableSkeleton({ rows = 8 }: { rows?: number }) {
     </div>
   );
 }
+
+/**
+ * The filter bar above a list.
+ *
+ * Worth drawing rather than skipping: it is a hundred and forty pixels tall
+ * and sits between the heading and the table, so a placeholder without it
+ * puts the rows where they are not going to be and then drops them when the
+ * real page lands.
+ */
+export function FilterBarSkeleton() {
+  return (
+    <div className="rounded-2xl border border-app-border bg-app-card">
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3 sm:px-5">
+        <SkeletonBox className="h-9 w-9 rounded-xl" />
+        <SkeletonBox className="h-4 w-24" />
+        <SkeletonBox className="ml-auto h-10 w-24 rounded-full" />
+      </div>
+      <div className="grid gap-3 px-4 pb-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i}>
+            <SkeletonBox className="h-3 w-16" />
+            <SkeletonBox className="mt-1.5 h-[42px] rounded-xl" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The weekly digest card, at the height it lands at.
+ *
+ * Taller on a phone than on a laptop, because the ring and the curve sit side
+ * by side from `sm` up and stack below it — a single height would be wrong at
+ * one of the two widths, and this block is what everything below it is
+ * resting on.
+ */
+export function WeekDigestSkeleton() {
+  return <SkeletonBox className="h-[640px] rounded-2xl sm:h-[480px]" />;
+}
