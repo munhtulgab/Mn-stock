@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ROW_LINK } from "@/components/admin/rowLink";
+import RowLink from "@/components/admin/RowLink";
 import { getDb } from "@/lib/mongodb";
 import { requireAdminPage } from "@/lib/roles";
 import { listUsers, type AdminUserRow } from "@/lib/adminUsers";
@@ -80,25 +80,19 @@ export default async function AdminUsersPage({
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr
+                <RowLink
                   key={u.id}
-                  className="rowlink relative border-b border-app-divider last:border-0"
+                  href={`/admin/users/${u.id}`}
+                  className="rowlink cursor-pointer border-b border-app-divider last:border-0"
                 >
                   <td className="py-3 pr-4 pl-5">
-                    {/* The whole row, not the name. The row already lights up
-                        under the pointer, so all of it says it can be clicked
-                        — and only a fifth of it could: the link was the name
-                        cell, 238 pixels of an 1,190-pixel row, and a click on
-                        the orders or the balance did nothing at all.
-
-                        Stretched rather than made a click handler: it is
-                        still one real link, so it opens in a new tab, it has
-                        an address in the status bar, and the keyboard reaches
-                        it the way it always did. */}
+                    {/* Still the real link: the keyboard reaches it, it
+                        opens in a new tab, it has an address. The rest of the
+                        row is handled by RowLink around it. */}
                     <Link
                       href={`/admin/users/${u.id}`}
                       prefetch={false}
-                      className={`flex items-center gap-2.5 ${ROW_LINK}`}
+                      className="flex items-center gap-2.5"
                     >
                       <Avatar src={u.avatar ?? ""} name={u.fullName || u.username} size={32} />
                       <span className="min-w-0">
@@ -126,7 +120,7 @@ export default async function AdminUsersPage({
                       {u.createdAt ? ulaanbaatarDateTime(u.createdAt) : "—"}
                     </span>
                   </Td>
-                </tr>
+                </RowLink>
               ))}
             </tbody>
           </table>
