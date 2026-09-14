@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ROW_LINK } from "@/components/admin/rowLink";
+import RowLink from "@/components/admin/RowLink";
 import { getDb } from "@/lib/mongodb";
 import { requireAdminPage } from "@/lib/roles";
 import { getAdminOverview } from "@/lib/adminOverview";
@@ -202,17 +202,16 @@ export default async function AdminOverviewPage({
                 </thead>
                 <tbody>
                   {o.latestOrders.map((t) => (
-                    <tr
+                    <RowLink
                       key={t.id}
-                      className="rowlink relative border-b border-app-divider last:border-0"
+                      href={`/admin/users/${t.userId}`}
+                      className="rowlink cursor-pointer border-b border-app-divider last:border-0"
                     >
                       <Td>
-                        {/* Stretched over the row: it highlights as one, so
-                            it has to answer as one. See the users table. */}
                         <Link
                           href={`/admin/users/${t.userId}`}
                           prefetch={false}
-                          className={`font-semibold text-app-text ${ROW_LINK}`}
+                          className="font-semibold text-app-text"
                         >
                           @{t.username}
                         </Link>
@@ -234,7 +233,7 @@ export default async function AdminOverviewPage({
                           {ulaanbaatarDateTime(t.createdAt)}
                         </span>
                       </Td>
-                    </tr>
+                    </RowLink>
                   ))}
                 </tbody>
               </table>

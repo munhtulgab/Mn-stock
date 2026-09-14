@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ROW_LINK, ROW_LINK_ABOVE } from "@/components/admin/rowLink";
+import RowLink from "@/components/admin/RowLink";
 import { getDb } from "@/lib/mongodb";
 import { requireAdminPage } from "@/lib/roles";
 import { listOrders } from "@/lib/adminUsers";
@@ -99,19 +99,19 @@ export default async function AdminOrdersPage({
             </thead>
             <tbody>
               {list.rows.map((t) => (
-                <tr
+                <RowLink
                   key={t.id}
-                  className="rowlink relative border-b border-app-divider last:border-0"
+                  href={`/admin/users/${t.userId}`}
+                  className="rowlink cursor-pointer border-b border-app-divider last:border-0"
                 >
                   <Td>
-                    {/* The account is where the row goes, so it is the one
-                        stretched over it. The ticker beside it filters this
-                        list instead and has to stay reachable through the
-                        sheet — see `ROW_LINK_ABOVE`. */}
+                    {/* The account is where the row goes. The ticker beside it
+                        filters this list instead, and RowLink leaves any
+                        anchor in the row to answer for itself. */}
                     <Link
                       href={`/admin/users/${t.userId}`}
                       prefetch={false}
-                      className={`font-semibold text-app-text ${ROW_LINK}`}
+                      className="font-semibold text-app-text"
                     >
                       @{t.username}
                     </Link>
@@ -121,7 +121,7 @@ export default async function AdminOrdersPage({
                       <Link
                         href={`/admin/orders?symbol=${t.symbol}`}
                         prefetch={false}
-                        className={`font-semibold text-app-text ${ROW_LINK_ABOVE}`}
+                        className="font-semibold text-app-text"
                       >
                         {t.symbol}
                       </Link>
@@ -147,7 +147,7 @@ export default async function AdminOrdersPage({
                       {ulaanbaatarDateTime(t.createdAt)}
                     </span>
                   </Td>
-                </tr>
+                </RowLink>
               ))}
             </tbody>
           </table>
