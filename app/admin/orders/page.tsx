@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ROW_LINK, ROW_LINK_ABOVE } from "@/components/admin/rowLink";
 import { getDb } from "@/lib/mongodb";
 import { requireAdminPage } from "@/lib/roles";
 import { listOrders } from "@/lib/adminUsers";
@@ -98,12 +99,19 @@ export default async function AdminOrdersPage({
             </thead>
             <tbody>
               {list.rows.map((t) => (
-                <tr key={t.id} className="rowlink border-b border-app-divider last:border-0">
+                <tr
+                  key={t.id}
+                  className="rowlink relative border-b border-app-divider last:border-0"
+                >
                   <Td>
+                    {/* The account is where the row goes, so it is the one
+                        stretched over it. The ticker beside it filters this
+                        list instead and has to stay reachable through the
+                        sheet — see `ROW_LINK_ABOVE`. */}
                     <Link
                       href={`/admin/users/${t.userId}`}
                       prefetch={false}
-                      className="font-semibold text-app-text"
+                      className={`font-semibold text-app-text ${ROW_LINK}`}
                     >
                       @{t.username}
                     </Link>
@@ -113,7 +121,7 @@ export default async function AdminOrdersPage({
                       <Link
                         href={`/admin/orders?symbol=${t.symbol}`}
                         prefetch={false}
-                        className="font-semibold text-app-text"
+                        className={`font-semibold text-app-text ${ROW_LINK_ABOVE}`}
                       >
                         {t.symbol}
                       </Link>
