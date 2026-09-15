@@ -3,16 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
-import Num from "@/components/Num";
+import { ulaanbaatarDateTime } from "@/lib/day";
 import { EditIcon, EyeIcon, SaveIcon, TrashIcon } from "@/components/icons";
 import {
   UserIcon,
   BadgeIcon,
   MailIcon,
   PhoneIcon,
-  CashIcon,
   ShieldIcon,
-  DeviceIcon,
+  CalendarIcon,
 } from "@/components/admin/lineIcons";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import type { AdminUserDetail } from "@/lib/adminUsers";
@@ -158,9 +157,14 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
   }
 
   return (
+    // A column rather than a stack of margins, because this panel is now the
+    // shorter of the pair and `h-full` hands it the difference: as a stack
+    // that slack piled up under the last control, which reads as the card
+    // having been cut off. As a column it goes above Засварлах instead, and
+    // the button sits on the foot of the card where an action belongs.
     <form
       onSubmit={submit}
-      className="h-full space-y-4 rounded-2xl border border-app-border bg-app-card p-5"
+      className="flex h-full flex-col gap-4 rounded-2xl border border-app-border bg-app-card p-5"
     >
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-app-text">
@@ -310,9 +314,6 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
             <Line label="Утас" icon={<PhoneIcon />} muted={!user.phone}>
               {user.phone || "оруулаагүй"}
             </Line>
-            <Line label="Мөнгөн үлдэгдэл" icon={<CashIcon />}>
-              <Num value={user.cash} digits={0} suffix="₮" />
-            </Line>
             <Line label="Эрх" icon={<ShieldIcon />}>
               {user.role === "admin"
                 ? user.founder
@@ -320,15 +321,19 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
                   : "Админ"
                 : "Хэрэглэгч"}
             </Line>
-            <Line label="Нэвтэрсэн тоо" icon={<DeviceIcon />}>
-              {user.sessions.toLocaleString("mn-MN")}
+            {/* Last, because it is the one line here nobody can change: the
+                five above it are what this panel exists to edit, and a fact
+                that is only ever read belongs under them rather than among
+                them. */}
+            <Line label="Бүртгүүлсэн" icon={<CalendarIcon />} muted={!user.createdAt}>
+              {user.createdAt ? ulaanbaatarDateTime(user.createdAt) : "тодорхойгүй"}
             </Line>
           </dl>
 
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-app-border px-3 py-2.5 text-sm font-semibold text-app-text hover:bg-app-elevated"
+            className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl border border-app-border px-3 py-2.5 text-sm font-semibold text-app-text hover:bg-app-elevated"
           >
             <EditIcon />
             Засварлах

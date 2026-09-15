@@ -72,3 +72,12 @@ export function DeviceIcon() {
     </svg>
   );
 }
+
+export function CalendarIcon() {
+  return (
+    <svg {...LINE}>
+      <rect x="3.4" y="5.2" width="17.2" height="15.4" rx="2.4" />
+      <path d="M3.4 9.8h17.2M8.2 3.4v3.6M15.8 3.4v3.6" />
+    </svg>
+  );
+}

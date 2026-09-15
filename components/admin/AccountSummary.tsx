@@ -1,7 +1,9 @@
 import Num from "@/components/Num";
 import Panel from "@/components/admin/Panel";
 import StatTile, {
+  CashGlyph,
   DepositGlyph,
+  DeviceGlyph,
   OrderGlyph,
   PercentGlyph,
   StackGlyph,
@@ -20,14 +22,23 @@ import type { AdminUserDetail } from "@/lib/adminUsers";
  * and a rounding error on a hundred-million one, and neither figure says so
  * alone.
  *
- * Захиалга and Хувьцаа sit beside them as the same kind of tile rather than
- * as a smaller list underneath — a count is answered as quickly as a figure
- * is, and a page that puts one below the other implies an order of
- * importance neither has. Мөнгөн үлдэгдэл and Хувьцааны үнэ цэн are not
- * repeated here: Нийт үнэ цэн is already their sum, and the account form
- * beside this panel has the cash figure on its own. Нэвтэрсэн сешн moved
- * there too, next to Эрх, since a session count is a fact about who can get
- * in rather than about what the account is worth.
+ * Under them, the four plain counts: the cash on its own, how many companies
+ * are held, how many orders have been placed, and how many sessions are open.
+ * They are the same kind of tile rather than a smaller list underneath —
+ * a count is answered as quickly as a figure is, and a page that puts one
+ * below the other implies an order of importance neither has.
+ *
+ * Мөнгөн үлдэгдэл is here rather than on the form beside this panel, where it
+ * used to be read out, for the reason the whole panel exists: it is one of
+ * the numbers this account *is*, and the form is where they are changed. The
+ * form still has the field — setting a balance by hand is how a drifted one
+ * is fixed — but stating it belongs with the rest of the figures, next to the
+ * Нийт үнэ цэн it is half of. Нэвтэрсэн тоо came across with it; it was on
+ * the form only because it had nowhere else to be.
+ *
+ * The counts say so in their labels. "Хувьцаа" beside a column of tögrög
+ * figures reads as what the shares are worth, which is a different number and
+ * one that is also on this panel; "Хувьцааны тоо" cannot be read that way.
  *
  * The valuation is the account holder's own, from the same function behind
  * their portfolio page, so an administrator reading this and the reader
@@ -42,11 +53,10 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
 
   return (
     <Panel title="Дансны хураангуй" fill>
-      {/* `h-full` so the six tiles share whatever height the registration
-          form beside them sets, rather than leaving it as a gap under the
-          last row. Three rows of tiles a little taller reads as the panel's
-          own proportions; a hundred pixels of nothing at the bottom reads as
-          a mistake. */}
+      {/* `h-full` so the tiles share whatever height the row settles on
+          rather than leaving the difference as a gap under the last of them.
+          Rows a little taller read as the panel's own proportions; a hundred
+          pixels of nothing at the bottom reads as a mistake. */}
       <div className="grid h-full grid-cols-2 gap-2.5">
         <StatTile
           icon={<WalletGlyph />}
@@ -87,14 +97,25 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
           }
         />
         <StatTile
-          icon={<OrderGlyph />}
-          label="Захиалга"
-          value={user.orderCount.toLocaleString("mn-MN")}
+          icon={<CashGlyph />}
+          label="Мөнгөн үлдэгдэл"
+          value={<Num value={user.cash} digits={0} suffix="₮" />}
+          note="арилжаанд бэлэн"
         />
         <StatTile
           icon={<StackGlyph />}
-          label="Хувьцаа"
+          label="Хувьцааны тоо"
           value={user.positionCount.toLocaleString("mn-MN")}
+        />
+        <StatTile
+          icon={<OrderGlyph />}
+          label="Захиалгын тоо"
+          value={user.orderCount.toLocaleString("mn-MN")}
+        />
+        <StatTile
+          icon={<DeviceGlyph />}
+          label="Нэвтэрсэн тоо"
+          value={user.sessions.toLocaleString("mn-MN")}
         />
       </div>
     </Panel>
