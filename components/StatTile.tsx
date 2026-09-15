@@ -167,3 +167,16 @@ export function StackGlyph() {
     </svg>
   );
 }
+
+/**
+ * A screen somebody is signed in on. A session is not a thing the account
+ * holds, it is a place it is open, and the mark says so.
+ */
+export function DeviceGlyph() {
+  return (
+    <svg {...TILE}>
+      <rect x="2.8" y="4.4" width="18.4" height="12.2" rx="2.2" />
+      <path d="M8.2 20.2h7.6" />
+    </svg>
+  );
+}
