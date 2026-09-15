@@ -49,6 +49,10 @@ import type { DailyOrders } from "@/lib/adminOverview";
  * Deliberately not a charting library: one series, two figures, no legend. A
  * library would ship more code than the page it sits on.
  */
+/**
+ * The shortest the plot is allowed to be. It grows past this to fill whatever
+ * height the panel is given, which beside a taller card is most of the time.
+ */
 const PLOT = 168;
 /** Left of the plot, wide enough for a four-figure count at 10px. */
 const AXIS = "w-[34px]";
@@ -72,7 +76,11 @@ export default function OrdersStrip({ days }: { days: DailyOrders[] }) {
   const shown = traded.find((d) => d.day === hover);
 
   return (
-    <div>
+    // A column that fills its panel, so the plot can take whatever height the
+    // row settles on. Beside a taller card the strip used to sit at its own
+    // 168px with the slack left under it; now the chart grows into it, which
+    // is the one part of this panel that is worth more when it is taller.
+    <div className="flex h-full flex-col">
       {/* Its own line above the plot, always the same height. A readout that
           appears on hover and takes its space with it makes the chart jump
           under the pointer that is reading it. */}
@@ -96,14 +104,13 @@ export default function OrdersStrip({ days }: { days: DailyOrders[] }) {
         )}
       </div>
 
-      <div className="flex gap-2">
-        <div className={`relative shrink-0 ${AXIS}`} style={{ height: PLOT }}>
+      <div className="flex min-h-0 flex-1 gap-2" style={{ minHeight: PLOT }}>
+        <div className={`relative h-full shrink-0 ${AXIS}`}>
           <Tick at={0} value={peak} />
           <Tick at={50} value={peak / 2} />
         </div>
         <div
-          className="relative min-w-0 flex-1"
-          style={{ height: PLOT }}
+          className="relative h-full min-w-0 flex-1"
           onMouseLeave={() => setHover(null)}
         >
           <div className="absolute inset-0 flex items-end gap-px">

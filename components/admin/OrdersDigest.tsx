@@ -51,7 +51,10 @@ export default function OrdersDigest({
   const busiest = week.indexOf(Math.max(...week));
 
   return (
-    <section className="rounded-2xl border border-app-border bg-app-card p-4 sm:p-5">
+    // A column filling its half of the row, so that when the strip beside it
+    // is the taller of the two the difference goes above the three tiles
+    // rather than under them, where it would read as the card stopping short.
+    <section className="flex h-full flex-col rounded-2xl border border-app-border bg-app-card p-4 sm:p-5">
       <div className="flex items-center gap-3">
         <Tile size={42}>
           <TrendGlyph />
@@ -131,7 +134,7 @@ export default function OrdersDigest({
         <DayBars counts={week} />
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3 lg:mt-auto lg:pt-3">
         <Fact label="Захиалга" tone="brand" icon={<OrderGlyph />}>
           {orders.toLocaleString("mn-MN")}
         </Fact>

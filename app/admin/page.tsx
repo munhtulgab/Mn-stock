@@ -131,66 +131,29 @@ export default async function AdminOverviewPage({
         />
       </section>
 
-      <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Panel title="Арилжааны идэвх" icon={<ChartMark />} note="Сүүлийн 90 хоног">
+      {/* The same ninety days read two ways, side by side and half each.
+
+          They were stacked, which put a chart of the window directly above a
+          summary of it and made the second look like a footnote to the first.
+          Level with each other they read as what they are: one asks which
+          days, the other how much and which way. Half and half rather than
+          weighted, because neither is the other's sidebar.
+
+          Both stretch to the taller of the two — the strip's plot grows into
+          whatever it is given — so the row is one band rather than a card
+          with a step cut out of its side. */}
+      <section className="grid gap-3 lg:grid-cols-2">
+        <Panel title="Арилжааны идэвх" icon={<ChartMark />} note="Сүүлийн 90 хоног" fill>
           <OrdersStrip days={o.daily} />
         </Panel>
 
-        <Panel title="Системийн байдал" icon={<PulseMark />}>
-          <dl className="text-sm">
-            <Row label="Сүүлийн синк" icon={<SyncGlyph />}>
-              {o.system.lastSecuritiesSyncAt
-                ? ulaanbaatarDateTime(o.system.lastSecuritiesSyncAt)
-                : "—"}
-            </Row>
-            <Row label="Мэдээллийн эх сурвалж" icon={<GlobeGlyph />}>
-              {o.system.newsSources}
-            </Row>
-            <Row label="Push мэдэгдэл" icon={<BellGlyph />}>
-              <State on={o.system.pushEnabled} />
-            </Row>
-            <Row label="SMS" icon={<ChatGlyph />}>
-              <State on={o.system.smsEnabled} />
-            </Row>
-          </dl>
-
-          <div className="mt-4 rounded-xl bg-app-elevated p-3.5">
-            <div className="flex items-baseline justify-between text-[13px]">
-              <span className="flex items-center gap-2 text-app-muted">
-                <KeyGlyph />
-                AI түлхүүр
-              </span>
-              <span className="font-semibold tabular-nums">
-                {o.system.aiKeys} / {o.system.aiKeysPossible}
-              </span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
-              <span
-                className="block h-full rounded-full"
-                style={{
-                  width: `${Math.round((o.system.aiKeys / o.system.aiKeysPossible) * 100)}%`,
-                  background:
-                    "linear-gradient(90deg, var(--admin-fill-from), var(--admin-fill-to))",
-                }}
-              />
-            </div>
-          </div>
-        </Panel>
+        <OrdersDigest
+          days={o.daily}
+          buys={o.quarter.buys}
+          sells={o.quarter.sells}
+          previousTurnover={o.quarter.previousTurnover}
+        />
       </section>
-
-      {/* The quarter's orders, between the strip above them and the rows
-          below.
-
-          Full width rather than in a column beside Шинэ бүртгэл: it is three
-          readings of one window and the narrow column is not wide enough for
-          any of them — the ring and the curve would sit one above the other
-          at half size, and seven day-columns in 300px are a texture. */}
-      <OrdersDigest
-        days={o.daily}
-        buys={o.quarter.buys}
-        sells={o.quarter.sells}
-        previousTurnover={o.quarter.previousTurnover}
-      />
 
       <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Panel
@@ -290,34 +253,82 @@ export default async function AdminOverviewPage({
           )}
         </Panel>
 
-        <Panel title="Шинэ бүртгэл" icon={<UserPlusMark />} flush>
-          {o.latestUsers.length === 0 ? (
-            <p className="px-5 pb-5 text-sm text-app-muted">Бүртгэл алга.</p>
-          ) : (
-            <div className="divide-y divide-app-divider">
-              {o.latestUsers.map((u) => (
-                <Link
-                  key={u.id}
-                  href={`/admin/users/${u.id}`}
-                  prefetch={false}
-                  className="rowlink flex items-baseline justify-between gap-3 px-5 py-3"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-semibold">
-                      @{u.username}
-                    </span>
-                    <span className="block truncate text-[11px] text-app-muted">
-                      {u.fullName || "нэр оруулаагүй"}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[11px] text-app-muted">
-                    {u.createdAt ? ulaanbaatarDateTime(u.createdAt) : "—"}
-                  </span>
-                </Link>
-              ))}
+        {/* Two panels in this column, the machinery above the people.
+            Системийн байдал moved here from beside the chart: it is a
+            checklist of settings rather than a reading of the market, and it
+            belongs with the other short panel rather than beside the widest
+            thing on the page. */}
+        <div className="space-y-3">
+          <Panel title="Системийн байдал" icon={<PulseMark />}>
+            <dl className="text-sm">
+              <Row label="Сүүлийн синк" icon={<SyncGlyph />}>
+                {o.system.lastSecuritiesSyncAt
+                  ? ulaanbaatarDateTime(o.system.lastSecuritiesSyncAt)
+                  : "—"}
+              </Row>
+              <Row label="Мэдээллийн эх сурвалж" icon={<GlobeGlyph />}>
+                {o.system.newsSources}
+              </Row>
+              <Row label="Push мэдэгдэл" icon={<BellGlyph />}>
+                <State on={o.system.pushEnabled} />
+              </Row>
+              <Row label="SMS" icon={<ChatGlyph />}>
+                <State on={o.system.smsEnabled} />
+              </Row>
+            </dl>
+
+            <div className="mt-4 rounded-xl bg-app-elevated p-3.5">
+              <div className="flex items-baseline justify-between text-[13px]">
+                <span className="flex items-center gap-2 text-app-muted">
+                  <KeyGlyph />
+                  AI түлхүүр
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {o.system.aiKeys} / {o.system.aiKeysPossible}
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+                <span
+                  className="block h-full rounded-full"
+                  style={{
+                    width: `${Math.round((o.system.aiKeys / o.system.aiKeysPossible) * 100)}%`,
+                    background:
+                      "linear-gradient(90deg, var(--admin-fill-from), var(--admin-fill-to))",
+                  }}
+                />
+              </div>
             </div>
-          )}
-        </Panel>
+          </Panel>
+
+          <Panel title="Шинэ бүртгэл" icon={<UserPlusMark />} flush>
+            {o.latestUsers.length === 0 ? (
+              <p className="px-5 pb-5 text-sm text-app-muted">Бүртгэл алга.</p>
+            ) : (
+              <div className="divide-y divide-app-divider">
+                {o.latestUsers.map((u) => (
+                  <Link
+                    key={u.id}
+                    href={`/admin/users/${u.id}`}
+                    prefetch={false}
+                    className="rowlink flex items-baseline justify-between gap-3 px-5 py-3"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold">
+                        @{u.username}
+                      </span>
+                      <span className="block truncate text-[11px] text-app-muted">
+                        {u.fullName || "нэр оруулаагүй"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[11px] text-app-muted">
+                      {u.createdAt ? ulaanbaatarDateTime(u.createdAt) : "—"}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Panel>
+        </div>
       </section>
     </div>
   );
