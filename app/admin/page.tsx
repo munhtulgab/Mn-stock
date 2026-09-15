@@ -13,6 +13,12 @@ import OrdersStrip from "@/components/admin/OrdersStrip";
 import OrdersDigest from "@/components/admin/OrdersDigest";
 import PeriodPicker from "@/components/admin/PeriodPicker";
 import { periodFrom } from "@/lib/adminPeriod";
+import {
+  ChartMark,
+  PulseMark,
+  ReceiptMark,
+  UserPlusMark,
+} from "@/components/admin/lineIcons";
 
 export const dynamic = "force-dynamic";
 
@@ -62,9 +68,9 @@ export default async function AdminOverviewPage({
         <SyncButton />
       </PageHead>
 
-      {/* A colour each. Four identical cards are four cards nobody learns
-          the position of; after a week the blue one is where the orders are,
-          before the word is read.
+      {/* A colour each, all four of them green. Four identical cards are
+          four cards nobody learns the position of; after a week the olive one
+          is where the alerts are, before the word is read.
 
           One row from the laptop up. Four across is the whole point of the
           row — it is read in one sweep, and the moment it folds into two-by-two
@@ -77,7 +83,7 @@ export default async function AdminOverviewPage({
           morning. The week says which. */}
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          tone="brand"
+          tone="emerald"
           icon="users"
           trend={o.week.users}
           trendDays={o.week.days}
@@ -88,7 +94,7 @@ export default async function AdminOverviewPage({
           previous={`${o.windowDays} хоногийн өмнө: ${users.before.toLocaleString("mn-MN")}`}
         />
         <StatCard
-          tone="slate"
+          tone="teal"
           icon="sessions"
           trend={o.week.sessions}
           trendDays={o.week.days}
@@ -98,7 +104,7 @@ export default async function AdminOverviewPage({
           previous="Хугацаа нь дуусаагүй"
         />
         <StatCard
-          tone="blue"
+          tone="green"
           icon="orders"
           trend={o.week.orders}
           trendDays={o.week.days}
@@ -109,7 +115,7 @@ export default async function AdminOverviewPage({
           previous={`${o.orders.buys.toLocaleString("mn-MN")} авсан · ${o.orders.sells.toLocaleString("mn-MN")} зарсан`}
         />
         <StatCard
-          tone="violet"
+          tone="olive"
           icon="alerts"
           trend={o.week.alerts}
           trendDays={o.week.days}
@@ -126,11 +132,11 @@ export default async function AdminOverviewPage({
       </section>
 
       <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Panel title="Арилжааны идэвх" note="Сүүлийн 90 хоног">
+        <Panel title="Арилжааны идэвх" icon={<ChartMark />} note="Сүүлийн 90 хоног">
           <OrdersStrip days={o.daily} />
         </Panel>
 
-        <Panel title="Системийн байдал">
+        <Panel title="Системийн байдал" icon={<PulseMark />}>
           <dl className="text-sm">
             <Row label="Сүүлийн синк" icon={<SyncGlyph />}>
               {o.system.lastSecuritiesSyncAt
@@ -189,6 +195,7 @@ export default async function AdminOverviewPage({
       <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Panel
           title="Сүүлийн захиалгууд"
+          icon={<ReceiptMark />}
           note={
             <Link href="/admin/orders" className="font-semibold text-brand">
               Бүгд →
@@ -283,7 +290,7 @@ export default async function AdminOverviewPage({
           )}
         </Panel>
 
-        <Panel title="Шинэ бүртгэл" flush>
+        <Panel title="Шинэ бүртгэл" icon={<UserPlusMark />} flush>
           {o.latestUsers.length === 0 ? (
             <p className="px-5 pb-5 text-sm text-app-muted">Бүртгэл алга.</p>
           ) : (

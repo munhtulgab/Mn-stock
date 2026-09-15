@@ -2,27 +2,42 @@ export type StatIcon = "users" | "sessions" | "orders" | "alerts";
 export type StatTone = keyof typeof TONES;
 
 /**
- * The four faces of the row.
+ * The four faces of the row, all of them green.
  *
  * A colour each, because four identical cards are four cards nobody learns
  * the position of — the eye goes back to read the label every time, and a
  * dashboard whose whole job is to be glanced at is being read instead. After
- * a week the blue one is where the orders are, before the word is read.
+ * a week the olive one is where the alerts are, before the word is read.
+ *
+ * One family rather than four, so the row reads as this product's row and not
+ * as four things that happened to be coloured. Green all the way across is a
+ * narrower brief than blue-and-violet was, and it is met by moving along the
+ * hue rather than only down the lightness: teal-green at one end, olive at
+ * the other, with the brand's own emerald and a true green between them. Four
+ * greens that differ only in how dark they are would be a gradient, and a
+ * gradient is not four identities.
+ *
+ * Lightness still varies — the teal is a full stop darker than the rest — so
+ * the row is not sorted by hue alone, which is the one cue a reader with
+ * green-weak vision does not have. The mark behind each figure and the label
+ * on it are what carry the identity for them; the colour is the shortcut, not
+ * the statement.
+ *
+ * Every face clears 4.5:1 against white at its lightest point, which is where
+ * the 13px label sits. The brand green this row used to open with did not —
+ * it measured 3.64:1, passing for the 32px figure and failing for the word
+ * above it — so the emerald here is a step deeper than the one on the buttons.
  *
  * The colour is identity, not judgement. Nothing on this page is good or bad
  * news — a count of alerts is neither — so none of these is red. Red means
  * exactly one thing in this section, which is a confirmation that something
  * is about to be destroyed.
- *
- * Green leads because it is the product's own; the rest are the reference's
- * family, held to one lightness so the row reads as a set rather than as four
- * things that happened to be coloured.
  */
 const TONES = {
-  brand: { from: "#06996a", to: "#047a55" },
-  slate: { from: "#3c4a5d", to: "#26303e" },
-  blue: { from: "#3b82f6", to: "#1d5fd0" },
-  violet: { from: "#8b5cf6", to: "#6d33d4" },
+  emerald: { from: "#047857", to: "#065f46" },
+  teal: { from: "#115e59", to: "#134e4a" },
+  green: { from: "#15803d", to: "#166534" },
+  olive: { from: "#4d7c0f", to: "#3f6212" },
 } as const;
 
 /**
