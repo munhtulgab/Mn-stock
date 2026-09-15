@@ -1,6 +1,6 @@
 import type { Db } from "mongodb";
 import { getSettings } from "@/lib/settings";
-import { ulaanbaatarDay, ulaanbaatarDaysAgo } from "@/lib/day";
+import { ulaanbaatarDay, ulaanbaatarDaysAgo, weekdayIndex } from "@/lib/day";
 import { notificationTally } from "@/lib/notifications";
 import { PROVIDER_NAMES } from "@/lib/ai/providers/catalog";
 import type { AppNotification, Session, Transaction, User } from "@/lib/types";
@@ -63,26 +63,26 @@ export interface AdminOverview {
     sessions: number[];
     orders: number[];
     alerts: number[];
-    /** What changed hands on each of those days, in tögrög. */
-    turnover: number[];
+  };
+  /**
+   * The same window `daily` covers, summed — what the orders digest states.
+   *
+   * Kept beside `daily` rather than derived from it because two of these
+   * cannot be: which side an order was on is not in a day's total, and the
+   * quarter before this one is not in the window at all.
+   */
+  quarter: {
+    /** How many days the figures cover, so the card can say so. */
+    days: number;
+    buys: number;
+    sells: number;
     /**
-     * Orders over the seven days before this week.
-     *
-     * The digest card states its week against something, and "against the
-     * week before" is the only comparison that does not need a target nobody
-     * has set.
+     * What the orders over the window came to, and what the ninety days
+     * before them came to — which is what the change beside the figure is
+     * measured against.
      */
-    previousOrders: number;
-    /** What changed hands over those same seven earlier days. */
+    turnover: number;
     previousTurnover: number;
-    /**
-     * Accounts that placed at least one order this week.
-     *
-     * Counted from the orders rather than from sign-ins: an account that
-     * opened the app and left is not what anybody means by an active one on a
-     * page about trading.
-     */
-    activeUsers: number;
   };
   latestOrders: RecentOrder[];
   latestUsers: { id: string; username: string; fullName: string | null; createdAt: Date | null }[];
@@ -98,7 +98,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * that a single busy Tuesday is still a column you can point at.
  */
 const STRIP_DAYS = 90;
-const STRIP_MS = STRIP_DAYS * DAY_MS;
+/**
+ * Twice the window is fetched, so the quarter has something to be a change
+ * from. Only the newer half is plotted; the older half is summed and thrown
+ * away, which is one `$match` range wider on a pipeline that was already
+ * grouping by day rather than a second query.
+ */
+const STRIP_MS = 2 * STRIP_DAYS * DAY_MS;
 
 /** How many days the sparkline behind each KPI covers. */
 const WEEK_DAYS = 7;
@@ -135,6 +141,26 @@ export function sumDays(
     turnover += day.turnover;
   }
   return { orders, turnover };
+}
+
+/**
+ * Orders on each weekday of a run of days, Monday first.
+ *
+ * A quarter laid over one week. Ninety columns say what happened; seven say
+ * what happens — that Thursday is the day this installation trades on and
+ * Sunday is not a day at all — and the second is the question a profile like
+ * this is being asked. Which is also why it is a sum over the whole window
+ * and not the last seven days: one week of seven bars is seven days, and a
+ * Tuesday that happened to be quiet would read as "Tuesdays are quiet".
+ *
+ * Monday first because that is where a Mongolian week starts. The array is
+ * indexed the way it is drawn, so nothing downstream has to know that
+ * `Date` counts from Sunday.
+ */
+export function byWeekday(days: readonly DailyOrders[]): number[] {
+  const week = [0, 0, 0, 0, 0, 0, 0];
+  for (const day of days) week[weekdayIndex(day.day)] += day.count;
+  return week;
 }
 
 /**
@@ -215,7 +241,6 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
     dailyRows,
     userDays,
     sessionDays,
-    activeTraders,
   ] = await Promise.all([
     db.collection<User>("users").countDocuments({}),
     db.collection<User>("users").countDocuments({ role: "admin" }),
@@ -255,18 +280,28 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
     // Grouped by the Ulaanbaatar day rather than the server's: an order
     // filled at nine in the morning belongs to that trading day wherever the
     // database happens to be running.
+    //
+    // By side as well, so the digest's ring and its Захиалга tile are folded
+    // out of one result over one window. Counted separately they were not:
+    // this `$match` is ninety times twenty-four hours before *now* and lands
+    // partway through a day, while the plotted window starts at the top of
+    // one — so a split asked for on its own included a few orders the strip
+    // beside it did not, and three tiles that should have added up did not.
     db
       .collection<Transaction>("transactions")
-      .aggregate<{ _id: string; n: number; sum: number }>([
+      .aggregate<{ _id: { day: string; side: "BUY" | "SELL" }; n: number; sum: number }>([
         { $match: { createdAt: { $gte: new Date(Date.now() - STRIP_MS) } } },
         {
           $group: {
             _id: {
-              $dateToString: {
-                date: "$createdAt",
-                format: "%Y-%m-%d",
-                timezone: "Asia/Ulaanbaatar",
+              day: {
+                $dateToString: {
+                  date: "$createdAt",
+                  format: "%Y-%m-%d",
+                  timezone: "Asia/Ulaanbaatar",
+                },
               },
+              side: "$side",
             },
             n: { $sum: 1 },
             sum: { $sum: "$total" },
@@ -281,13 +316,6 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
     // produced them.
     dayCounts(db, "users", WEEK_DAYS),
     dayCounts(db, "sessions", WEEK_DAYS),
-    // Who traded this week, rather than how often. `distinct` returns the
-    // ids themselves and the digest only wants how many there are, but the
-    // alternative is a group-and-count pipeline for the same answer over a
-    // set this small.
-    db
-      .collection<Transaction>("transactions")
-      .distinct("userId", { createdAt: { $gte: new Date(Date.now() - WEEK_DAYS * DAY_MS) } }),
   ]);
 
   // Every day in the window, including the quiet ones — a strip with gaps in
@@ -295,12 +323,33 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
   // is shut two days in seven and on every public holiday, so a good third of
   // the window is legitimately empty and the shape depends on those blanks
   // being drawn.
-  const byDay = new Map(dailyRows.map((r) => [r._id, r]));
-  const daily: DailyOrders[] = Array.from({ length: STRIP_DAYS }, (_, i) => {
-    const day = ulaanbaatarDaysAgo(STRIP_DAYS - 1 - i);
+  const byDay = new Map<string, { n: number; sum: number }>();
+  for (const row of dailyRows) {
+    const day = byDay.get(row._id.day) ?? { n: 0, sum: 0 };
+    day.n += row.n;
+    day.sum += row.sum;
+    byDay.set(row._id.day, day);
+  }
+  const filled: DailyOrders[] = Array.from({ length: 2 * STRIP_DAYS }, (_, i) => {
+    const day = ulaanbaatarDaysAgo(2 * STRIP_DAYS - 1 - i);
     const row = byDay.get(day);
     return { day, count: row?.n ?? 0, turnover: row?.sum ?? 0 };
   });
+  // The quarter that is drawn, and the one behind it that only the change
+  // beside the figure ever sees.
+  const daily = filled.slice(STRIP_DAYS);
+  const thisQuarter = sumDays(daily);
+  const lastQuarter = sumDays(filled.slice(0, STRIP_DAYS));
+
+  // The split, over exactly the days that are drawn.
+  const plotted = new Set(daily.map((d) => d.day));
+  let quarterBuys = 0;
+  let quarterSells = 0;
+  for (const row of dailyRows) {
+    if (!plotted.has(row._id.day)) continue;
+    if (row._id.side === "BUY") quarterBuys += row.n;
+    else if (row._id.side === "SELL") quarterSells += row.n;
+  }
 
   // The same seven days for every tile, so one row of labels describes all
   // four sparklines and a card never has to know which day a bar is.
@@ -309,10 +358,7 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
   );
   const alertsByDay = new Map(alertDays.map((r) => [r.day, r.n]));
   const ordersByDay = new Map(daily.map((d) => [d.day, d.count]));
-  const turnoverByDay = new Map(daily.map((d) => [d.day, d.turnover]));
   const alerts = countTally(alertDays, ulaanbaatarDay(since));
-  // The week the digest card draws, and the one it compares it with.
-  const lastWeek = sumDays(daily.slice(-2 * WEEK_DAYS, -WEEK_DAYS));
 
   // The names for the recent orders, asked for once rather than per row.
   const owners = await db
@@ -350,10 +396,13 @@ export async function getAdminOverview(db: Db, windowDays = 7): Promise<AdminOve
       sessions: alignDays(weekDays, sessionDays),
       orders: alignDays(weekDays, ordersByDay),
       alerts: alignDays(weekDays, alertsByDay),
-      turnover: alignDays(weekDays, turnoverByDay),
-      previousOrders: lastWeek.orders,
-      previousTurnover: lastWeek.turnover,
-      activeUsers: activeTraders.length,
+    },
+    quarter: {
+      days: STRIP_DAYS,
+      buys: quarterBuys,
+      sells: quarterSells,
+      turnover: thisQuarter.turnover,
+      previousTurnover: lastQuarter.turnover,
     },
     system: {
       aiKeys: apiKeys,

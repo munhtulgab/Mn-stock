@@ -121,13 +121,13 @@ export function FilterBarSkeleton() {
 }
 
 /**
- * The weekly digest card, at the height it lands at.
+ * The orders digest card, at the height it lands at.
  *
  * Taller on a phone than on a laptop, because the ring and the curve sit side
  * by side from `sm` up and stack below it — a single height would be wrong at
  * one of the two widths, and this block is what everything below it is
  * resting on.
  */
-export function WeekDigestSkeleton() {
+export function OrdersDigestSkeleton() {
   return <SkeletonBox className="h-[640px] rounded-2xl sm:h-[480px]" />;
 }

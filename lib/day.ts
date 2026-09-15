@@ -116,17 +116,30 @@ const MONTHS = [
 const WEEKDAYS = ["Ням", "Даваа", "Мягмар", "Лхагва", "Пүрэв", "Баасан", "Бямба"];
 
 /**
- * A weekday in two letters: "Пү".
+ * The weekdays in three letters, Monday first.
  *
- * For an axis with seven of them side by side, where the full name is four
- * times the width of the column it labels. Read off the digits in UTC — these
- * are already Ulaanbaatar days, and handing one to a local Date would move a
- * few of them to the wrong weekday.
+ * For an axis with seven of them side by side, where the full name is three
+ * times the width of the column it labels. Three letters rather than two
+ * because "Ба" and "Бя" differ by one character and are read as each other
+ * at 11px, while "Баа" and "Бям" do not.
+ *
+ * Monday first because that is where a Mongolian week starts, and because an
+ * axis that begins wherever today happens to fall shows a different week
+ * every day and can be compared with nothing.
  */
-export function weekdayShort(date: string): string {
+export const WEEKDAYS_SHORT = ["Дав", "Мяг", "Лха", "Пүр", "Баа", "Бям", "Ням"];
+
+/**
+ * Which of those a `YYYY-MM-DD` falls on: 0 is Monday, 6 is Sunday.
+ *
+ * Read off the digits in UTC — these are already Ulaanbaatar days, and
+ * handing one to a local Date would move a few of them to the wrong weekday.
+ * `getUTCDay` counts from Sunday, which is the shift the modulo undoes.
+ */
+export function weekdayIndex(date: string): number {
   const [y, m, d] = date.slice(0, 10).split("-").map(Number);
   const at = new Date(Date.UTC(y, m - 1, d));
-  return Number.isNaN(at.getTime()) ? "" : (WEEKDAYS[at.getUTCDay()]?.slice(0, 2) ?? "");
+  return Number.isNaN(at.getTime()) ? 0 : (at.getUTCDay() + 6) % 7;
 }
 
 /**
