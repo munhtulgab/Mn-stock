@@ -81,3 +81,85 @@ export function CalendarIcon() {
     </svg>
   );
 }
+
+/**
+ * The same drawing, without a colour of its own.
+ *
+ * `LINE` paints itself `text-app-muted`, which is right for a label in a list
+ * of details and wrong everywhere the mark is meant to take the colour of
+ * what it sits in — a panel heading's brand-tinted tile, or a figure that is
+ * green when it is a gain. These inherit instead.
+ */
+const MARK = { ...LINE, className: "shrink-0" };
+
+/** Bars: a chart, or the activity one is drawn from. */
+export function ChartMark() {
+  return (
+    <svg {...MARK}>
+      <path d="M6.5 17.5v-5M12 17.5v-11M17.5 17.5v-7" />
+    </svg>
+  );
+}
+
+/** A heartbeat over a box: the installation, and whether it is running. */
+export function PulseMark() {
+  return (
+    <svg {...MARK}>
+      <rect x="3" y="4.6" width="18" height="14.8" rx="2.6" />
+      <path d="M6.6 12.4h2.6l1.5-3 2.3 6 1.8-3h2.6" />
+    </svg>
+  );
+}
+
+/** A docket: one order, and by extension a list of them. */
+export function ReceiptMark() {
+  return (
+    <svg {...MARK}>
+      <path d="M5.8 3.8h12.4v16.4l-3.1-1.9-3.1 1.9-3.1-1.9-3.1 1.9z" />
+      <path d="M9 8.6h6M9 12.2h3.6" />
+    </svg>
+  );
+}
+
+/** A person with a plus: an account that has just been opened. */
+export function UserPlusMark() {
+  return (
+    <svg {...MARK}>
+      <circle cx="10" cy="8.2" r="3.4" />
+      <path d="M3.8 19.2c1-3.3 3.4-4.9 6.2-4.9" />
+      <path d="M16.6 13.6v6M13.6 16.6h6" />
+    </svg>
+  );
+}
+
+/** A stack of coins: an amount of money rather than a count of things. */
+export function CoinMark() {
+  return (
+    <svg {...MARK}>
+      <ellipse cx="9" cy="7" rx="5.6" ry="2.6" />
+      <path d="M3.4 7v3.4c0 1.4 2.5 2.6 5.6 2.6s5.6-1.2 5.6-2.6V7" />
+      <path d="M14.6 10.6c2.7.3 4.6 1.4 4.6 2.6 0 1.4-2.5 2.6-5.6 2.6-1 0-2-.1-2.8-.4" />
+      <path d="M8 16.3v.5c0 1.4 2.5 2.6 5.6 2.6s5.6-1.2 5.6-2.6v-3.6" />
+    </svg>
+  );
+}
+
+/** A day on a calendar. */
+export function CalendarMark() {
+  return (
+    <svg {...MARK}>
+      <rect x="3.4" y="5.2" width="17.2" height="15.4" rx="2.4" />
+      <path d="M3.4 9.8h17.2M8.2 3.4v3.6M15.8 3.4v3.6" />
+    </svg>
+  );
+}
+
+/** A peak: the highest of whatever is being compared. */
+export function PeakMark() {
+  return (
+    <svg {...MARK}>
+      <path d="M3.4 18.6 9 9l3.6 4.4L20.6 4" />
+      <path d="M15.4 4h5.2v5.2" />
+    </svg>
+  );
+}

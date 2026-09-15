@@ -14,10 +14,17 @@
  * band rather than as a card with a step cut out of its right-hand side. Off
  * by default, because a panel in a column of panels should be as tall as what
  * is in it and no taller.
+ *
+ * `icon` puts a mark in front of the name. On a page of four panels stacked
+ * two by two, the titles are the only thing telling them apart and they are
+ * all the same weight, size and colour; a mark is found before a word is
+ * read. In a tinted tile rather than bare, so it reads as the panel's badge
+ * rather than as a bullet the title has been indented past.
  */
 export default function Panel({
   title,
   note,
+  icon,
   flush,
   fill,
   children,
@@ -25,6 +32,8 @@ export default function Panel({
   title: string;
   /** Right of the title: a pill control, a link, a count. */
   note?: React.ReactNode;
+  /** A mark in front of the name, so the panel is found before it is read. */
+  icon?: React.ReactNode;
   flush?: boolean;
   /** Take the whole row's height and give the extra to the body. */
   fill?: boolean;
@@ -41,9 +50,16 @@ export default function Panel({
           flush ? "pb-4" : "pb-0"
         }`}
       >
-        <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-app-text">
-          {title}
-        </h2>
+        <div className="flex min-w-0 items-center gap-2.5">
+          {icon && (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-brand-light text-brand">
+              {icon}
+            </span>
+          )}
+          <h2 className="truncate text-[17px] font-semibold tracking-[-0.015em] text-app-text">
+            {title}
+          </h2>
+        </div>
         {note && <span className="shrink-0 text-[13px] text-app-muted">{note}</span>}
       </div>
       <div className={`${flush ? "" : "px-5 pt-4 pb-5"} ${fill ? "flex-1" : ""}`}>
