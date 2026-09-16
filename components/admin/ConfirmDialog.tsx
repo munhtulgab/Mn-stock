@@ -125,11 +125,36 @@ export default function ConfirmDialog({
               danger ? "bg-app-negative text-white" : "bg-brand"
             }`}
           >
-            {busy ? "…" : confirmLabel}
+            {busy ? (
+              <span className="flex items-center justify-center gap-2">
+                <Spinner />
+                Уншиж байна…
+              </span>
+            ) : (
+              confirmLabel
+            )}
           </button>
         </div>
       </div>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * What the confirming button says while it is working.
+ *
+ * It used to say "…", which is a button that has gone quiet rather than a
+ * button that is busy: three dots is what a menu looks like, and there was no
+ * way to tell a request in flight from one that had failed silently. A moving
+ * ring and the words say both things — something is happening, and it has not
+ * finished.
+ */
+function Spinner() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="animate-spin" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2.6" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+    </svg>
   );
 }
