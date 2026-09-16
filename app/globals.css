@@ -174,19 +174,38 @@ body {
 }
 
 /*
- * The confirmation banner drops in from off the top edge rather than
- * appearing outright, so the eye is drawn by the movement instead of having
- * to notice a rectangle. It comes from the direction it lives in, which is
- * what makes it read as having arrived rather than as having been there.
+ * Where the confirmation banners sit: the bottom corner, clear of the
+ * safe area — and, on the pages that carry the floating tab bar, clear of
+ * that too. The bar is about ninety pixels of fade, pill and safe-area
+ * strip, and a banner under it would be half a banner.
+ *
+ * Asked with `:has()` rather than plumbed through as a prop, because the
+ * provider is mounted once at the root of the whole application and does not
+ * know which of the two shells is below it. The tab bar is the fact; this
+ * reads it.
+ */
+.toast-dock {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
+}
+
+body:has(nav[data-tabbar]) .toast-dock {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 6.5rem);
+}
+
+/*
+ * The banner slides in from the edge it lives against rather than appearing
+ * outright, so the eye is drawn by the movement instead of having to notice
+ * a rectangle. It comes from the direction it lives in, which is what makes
+ * it read as having arrived rather than as having been there.
  */
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(-14px) scale(0.97);
+    transform: translateX(18px) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(0) scale(1);
   }
 }
 

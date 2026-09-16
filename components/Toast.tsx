@@ -12,9 +12,12 @@ import { AlertIcon, CheckIcon, CloseIcon, InfoIcon } from "./icons";
  * reader dead — a trade is confirmed and the next thing they are asked to do
  * is dismiss the confirmation before they can look at anything.
  *
- * This is the middle of those two: a banner across the top, wide enough and
- * loud enough to be read without being looked for, over the page rather than
- * in front of it. Three things carry it:
+ * This is the middle of those two: a banner in the bottom corner, wide enough
+ * and loud enough to be read without being looked for, over the page rather
+ * than in front of it. The corner rather than the middle of an edge because
+ * that is the one part of a page nothing is ever laid out in, so a banner
+ * there covers a margin instead of covering the thing the reader just acted
+ * on. Three things carry it:
  *
  *  - The mark. A tick, a warning, an "i" — which of the three it is, is read
  *    before a single word of it is.
@@ -24,10 +27,11 @@ import { AlertIcon, CheckIcon, CloseIcon, InfoIcon } from "./icons";
  *    roughly when, which is what stops somebody reaching for the ✕ out of
  *    doubt that it ever will.
  *
- * Several can be up at once now, newest at the top. The card in the middle
- * could only ever say one thing, so a page raising two — a save and the
- * refresh that followed it — queued the second behind the first and showed it
- * to a reader who had moved on. Banners stack, so both are simply there.
+ * Several can be up at once now, the newest nearest the corner. The card in
+ * the middle could only ever say one thing, so a page raising two — a save
+ * and the refresh that followed it — queued the second behind the first and
+ * showed it to a reader who had moved on. Banners stack, so both are simply
+ * there.
  */
 
 export type ToastVariant = "success" | "error" | "info";
@@ -205,12 +209,12 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
         // Fixed and centred, and transparent to the pointer except where a
         // banner actually is — the strip is the width of a reading column, and
         // the page under the empty half of it must stay clickable.
-        <div
-          className="pointer-events-none fixed inset-x-0 z-50 flex flex-col items-center gap-2 px-3"
-          style={{ top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)" }}
-        >
-          {[...queue].reverse().map((toast) => (
-            <div key={toast.id} className="pointer-events-none w-full max-w-[30rem]">
+        // The strip is transparent to the pointer except where a banner
+        // actually is, and it clears the tab bar on the pages that have one —
+        // see `.toast-dock` in globals.css.
+        <div className="toast-dock pointer-events-none fixed inset-x-0 z-50 flex flex-col items-end gap-2 px-3">
+          {queue.map((toast) => (
+            <div key={toast.id} className="pointer-events-none w-full max-w-[26rem]">
               <ToastCard toast={toast} onClose={() => dismiss(toast.id)} />
             </div>
           ))}
