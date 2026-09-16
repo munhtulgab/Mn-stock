@@ -184,6 +184,23 @@ export interface AdminUserDetail extends AdminUserRow {
   valuation: AdminValuation;
 }
 
+/**
+ * Longest an account page waits on the live feed.
+ *
+ * It used to wait as long as the feed was given, which on a bad day is the
+ * quote budget and then a second, unbounded ask of the exchange's own board
+ * — twenty seconds and more of an administrator looking at a skeleton where
+ * the positions should be. Nothing on this page is about the running price:
+ * it says what an account holds and what it is worth, and the last stored
+ * close answers that to the nearest session.
+ *
+ * Giving up on the answer does not throw it away. The feed holds what it
+ * fetched in a module-level cache, so the request this render abandoned is
+ * usually what the next render is served from — the figures are live within
+ * a refresh even when the first look at an account was not.
+ */
+const ADMIN_QUOTE_WAIT_MS = 2_000;
+
 /** One account in full: who they are, what they hold, what they have traded. */
 export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail | null> {
   const user = await db.collection<User>("users").findOne({ _id: id } as never);
@@ -207,7 +224,9 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
   ]);
 
   const cash = portfolio?.cashBalance ?? 0;
-  const valued = await valuePortfolio(db, holdings, cash);
+  const valued = await valuePortfolio(db, holdings, cash, {
+    quoteWaitMs: ADMIN_QUOTE_WAIT_MS,
+  });
   const valuedByCode = new Map(valued.holdings.map((h) => [h.companyCode, h]));
 
   // Which orders have already been undone, so the page can say so and not

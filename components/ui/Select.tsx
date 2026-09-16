@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Glyph, { type GlyphName } from "./Glyph";
+import { useAnchoredPanel } from "./useAnchoredPanel";
 
 export interface SelectOption {
   value: string;
@@ -38,7 +39,8 @@ export interface SelectOption {
  * Because a portal renders into `<body>`, outside the element that makes the
  * administration sheet light, the panel copies the surface class off the
  * nearest ancestor that has one — otherwise a white bar would open a dark
- * list.
+ * list. Where it is drawn is `useAnchoredPanel`'s job, which re-measures
+ * rather than remembering — see the note there.
  */
 export default function Select({
   name,
@@ -69,82 +71,50 @@ export default function Select({
   className?: string;
   id?: string;
 }) {
-  const [at, setAt] = useState<{
-    top: number;
-    left: number;
-    width: number;
-    /** The palette class the list has to carry out through the portal. */
-    surface: string;
-    /** Where the button was when this opened, to tell a real scroll from a late one. */
-    anchor: { top: number; left: number };
-  } | null>(null);
+  const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const listId = useId();
+  const at = useAnchoredPanel({ open, anchor: button, panel });
 
   const chosen = options.find((o) => o.value === value) ?? options[0];
-  const open = at !== null;
   // A list where nothing carries a mark — the months of a year, say — gets no
   // icon column at all, rather than the same placeholder twelve times.
   const marked = options.some((o) => o.icon);
 
-  const anchor = at?.anchor;
+  // Focus once the list has been placed, not the moment it is mounted: it is
+  // `visibility: hidden` until `useAnchoredPanel` has measured it, and a
+  // hidden element cannot take focus — the keys would then still be going to
+  // the button, where an arrow does nothing and Enter shuts the list again.
+  // `placed` is a boolean, so this runs once per opening and not on every
+  // scroll that re-places it.
+  const placed = at !== null;
   useEffect(() => {
-    if (!open || !anchor) return;
-    panel.current?.focus();
+    if (placed) panel.current?.focus();
+  }, [placed]);
+
+  useEffect(() => {
+    if (!open) return;
     const away = (event: MouseEvent) => {
       const target = event.target as Node;
       if (!panel.current?.contains(target) && !button.current?.contains(target)) {
-        setAt(null);
+        setOpen(false);
       }
     };
-    // A scroll closes it, but only once the button has really moved. Clicking
-    // a control near the foot of the screen focuses it, the browser scrolls it
-    // into view, and that scroll is delivered on the next frame — after the
-    // list has opened. Closing on the event itself would make such a control
-    // impossible to open at all.
-    const moved = () => {
-      const box = button.current?.getBoundingClientRect();
-      if (!box || Math.abs(box.top - anchor.top) > 1 || Math.abs(box.left - anchor.left) > 1) {
-        setAt(null);
-      }
-    };
-    const gone = () => setAt(null);
     document.addEventListener("mousedown", away);
-    // Capture, so a scroll inside any container counts and not only the page.
-    window.addEventListener("scroll", moved, true);
-    window.addEventListener("resize", gone);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      window.removeEventListener("scroll", moved, true);
-      window.removeEventListener("resize", gone);
-    };
-  }, [open, anchor]);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open]);
 
-  function place() {
-    const box = button.current?.getBoundingClientRect();
-    if (!box) return;
-    // Worked out from the row count rather than measured, because the list
-    // does not exist yet at the moment this has to decide which way to open.
-    const height = Math.min(options.length, 7) * 44 + 12;
-    const below = box.bottom + 6;
+  function show() {
     setActive(Math.max(0, options.findIndex((o) => o.value === value)));
-    setAt({
-      top: below + height > window.innerHeight - 8 ? Math.max(8, box.top - height - 6) : below,
-      left: Math.min(box.left, Math.max(8, window.innerWidth - box.width - 8)),
-      width: box.width,
-      // Read here rather than while rendering the list: by then the list is
-      // in `<body>` and the button's surroundings are no longer above it.
-      surface: button.current?.closest(".admin-surface") ? "admin-surface " : "",
-      anchor: { top: box.top, left: box.left },
-    });
+    setOpen(true);
   }
 
   function choose(index: number) {
     const option = options[index];
     if (!option) return;
-    setAt(null);
+    setOpen(false);
     button.current?.focus();
     if (option.value !== value) onChange(option.value);
   }
@@ -164,7 +134,7 @@ export default function Select({
       event.preventDefault();
       choose(active);
     } else if (event.key === "Escape" || event.key === "Tab") {
-      setAt(null);
+      setOpen(false);
       button.current?.focus();
     }
   }
@@ -181,11 +151,11 @@ export default function Select({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-label={label}
-        onClick={() => (open ? setAt(null) : place())}
+        onClick={() => (open ? setOpen(false) : show())}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            if (!open) place();
+            if (!open) show();
           }
         }}
         className={`flex w-full items-center rounded-xl border bg-app-card text-left text-sm font-medium text-app-text ${
@@ -215,8 +185,16 @@ export default function Select({
             aria-label={label}
             tabIndex={-1}
             onKeyDown={onListKey}
-            style={{ top: at.top, left: at.left, minWidth: at.width }}
-            className={`${at.surface}fixed z-50 max-h-[19rem] overflow-y-auto overscroll-contain rounded-2xl border border-app-border bg-app-card py-1.5 shadow-[0_18px_44px_-12px_rgba(16,24,40,0.3)] outline-none`}
+            style={{
+              top: at?.top ?? 0,
+              left: at?.left ?? 0,
+              minWidth: at?.anchorWidth,
+              // Hidden until it has been measured and placed, which happens
+              // before the browser paints. Not `display:none` — the panel has
+              // to be laid out for its height to be known.
+              visibility: at ? "visible" : "hidden",
+            }}
+            className={`${at?.surface ?? ""}fixed z-50 max-h-[19rem] overflow-y-auto overscroll-contain rounded-2xl border border-app-border bg-app-card py-1.5 shadow-[0_18px_44px_-12px_rgba(16,24,40,0.3)] outline-none`}
           >
             {options.map((option, index) => {
               const picked = option.value === value;
