@@ -174,17 +174,34 @@ body {
 }
 
 /*
- * The confirmation card grows into place rather than appearing outright, so
- * the eye is drawn to the movement instead of having to notice a rectangle.
+ * The confirmation banner drops in from off the top edge rather than
+ * appearing outright, so the eye is drawn by the movement instead of having
+ * to notice a rectangle. It comes from the direction it lives in, which is
+ * what makes it read as having arrived rather than as having been there.
  */
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.94);
+    transform: translateY(-14px) scale(0.97);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/*
+ * How long the banner has left, as a bar running out. Scaled rather than
+ * animated on width: a transform is composited, so a strip counting down for
+ * seven seconds costs no layout work while the reader is doing something
+ * else on the page.
+ */
+@keyframes toast-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
   }
 }
 

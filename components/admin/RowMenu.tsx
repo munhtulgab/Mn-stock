@@ -34,6 +34,14 @@ export interface RowAction {
  * It closes on anything that would move it: a click elsewhere, Escape, a
  * scroll, a resize. A menu pinned to a rectangle that has since moved is
  * worse than no menu.
+ *
+ * A scroll closes it only if the button has actually moved, which is not the
+ * pedantry it looks like. Tapping a ⋯ that is half off the bottom of the
+ * screen focuses it, and focusing it makes the browser scroll it into view —
+ * and a scroll event is delivered on the next frame, after the menu has
+ * opened. Closing on the event itself meant that button could not be opened
+ * at all: the menu appeared and vanished within a frame. Comparing the
+ * rectangle asks the question that was meant all along.
  */
 export default function RowMenu({
   actions,
@@ -45,7 +53,12 @@ export default function RowMenu({
   label: string;
   className?: string;
 }) {
-  const [at, setAt] = useState<{ top: number; right: number } | null>(null);
+  const [at, setAt] = useState<{
+    top: number;
+    right: number;
+    /** Where the button was when this opened, to tell a real scroll from a late one. */
+    anchor: { top: number; left: number };
+  } | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
@@ -60,16 +73,22 @@ export default function RowMenu({
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") setAt(null);
     };
+    const moved = () => {
+      const box = button.current?.getBoundingClientRect();
+      if (!box || Math.abs(box.top - at.anchor.top) > 1 || Math.abs(box.left - at.anchor.left) > 1) {
+        setAt(null);
+      }
+    };
     const gone = () => setAt(null);
     document.addEventListener("mousedown", away);
     document.addEventListener("keydown", key);
     // Capture, so a scroll inside any container counts and not only the page.
-    window.addEventListener("scroll", gone, true);
+    window.addEventListener("scroll", moved, true);
     window.addEventListener("resize", gone);
     return () => {
       document.removeEventListener("mousedown", away);
       document.removeEventListener("keydown", key);
-      window.removeEventListener("scroll", gone, true);
+      window.removeEventListener("scroll", moved, true);
       window.removeEventListener("resize", gone);
     };
   }, [at]);
@@ -89,6 +108,7 @@ export default function RowMenu({
     setAt({
       top: below + height > window.innerHeight - 8 ? box.top - height - 6 : below,
       right: Math.max(8, window.innerWidth - box.right),
+      anchor: { top: box.top, left: box.left },
     });
   }
 
