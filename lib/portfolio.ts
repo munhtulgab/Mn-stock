@@ -9,7 +9,7 @@ import type {
   WatchlistItem,
 } from "@/lib/types";
 import { STARTING_CASH_BALANCE } from "@/lib/types";
-import { fetchLiveQuotes } from "@/lib/marketinfo/quotes";
+import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 import { priorClose } from "@/lib/priceChange";
 export * from "@/lib/holdings";
 import type { HoldingView } from "@/lib/holdings";
@@ -122,10 +122,24 @@ async function getLatestTwoPricesForMany(
  */
 async function livePricesFor(
   companyCodes: number[],
+  waitMs?: number,
 ): Promise<Map<number, number>> {
   if (companyCodes.length === 0) return new Map();
+  // Kept in one variable so the request survives a caller that gives up on
+  // it: `fetchLiveQuotes` holds the attempt in a module-level cache, so a
+  // page that stops waiting still leaves a warm answer for the next one.
+  const asked = fetchLiveQuotes().catch(() => new Map<number, LiveQuote>());
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const quotes = await fetchLiveQuotes();
+    const quotes =
+      waitMs === undefined
+        ? await asked
+        : await Promise.race([
+            asked,
+            new Promise<Map<number, LiveQuote>>((resolve) => {
+              timer = setTimeout(() => resolve(new Map()), waitMs);
+            }),
+          ]);
     const prices = new Map<number, number>();
     for (const code of companyCodes) {
       const price = quotes.get(code)?.price;
@@ -134,6 +148,8 @@ async function livePricesFor(
     return prices;
   } catch {
     return new Map();
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -165,6 +181,15 @@ export async function valuePortfolio(
   db: Db,
   holdingDocs: Holding[],
   cashBalance: number,
+  options: {
+    /**
+     * Longest this valuation will wait on the live feed before pricing at
+     * the last stored close instead. Left out, it waits as long as the feed
+     * is given — which is right for a page whose subject is the running
+     * price, and wrong for one that merely states what an account is worth.
+     */
+    quoteWaitMs?: number;
+  } = {},
 ): Promise<PortfolioSummary> {
   const companyCodes = holdingDocs.map((h) => h.companyCode);
   const [securities, pricesByCode, livePrices] = await Promise.all([
@@ -173,7 +198,7 @@ export async function valuePortfolio(
       .find({ companyCode: { $in: companyCodes } })
       .toArray(),
     getLatestTwoPricesForMany(db, companyCodes),
-    livePricesFor(companyCodes),
+    livePricesFor(companyCodes, options.quoteWaitMs),
   ]);
   const securityByCode = new Map(securities.map((s) => [s.companyCode, s]));
 

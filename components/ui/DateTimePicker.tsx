@@ -171,7 +171,12 @@ export default function DateTimePicker({
   }));
 
   return (
-    <div className="relative">
+    // A container, because what decides whether the calendar and the clock fit
+    // side by side is the width of this field and not of the window. The
+    // account ledger halves its panel at `lg`, so the edit form on a 1180px
+    // laptop is narrower than the same form on an 800px tablet — and at that
+    // width two columns left the month and the year as "9-р…" and "20…".
+    <div className="@container relative">
       <button
         id={id}
         type="button"
@@ -211,7 +216,7 @@ export default function DateTimePicker({
       </button>
 
       {open && (
-        <div className="mt-2 grid gap-4 rounded-2xl border border-app-border bg-app-card p-4 shadow-[0_18px_44px_-16px_rgba(16,24,40,0.28)] sm:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+        <div className="mt-2 grid gap-4 rounded-2xl border border-app-border bg-app-card p-4 shadow-[0_18px_44px_-16px_rgba(16,24,40,0.28)] @min-[36rem]:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
           {/* The month */}
           <div className="min-w-0">
             {/* Tight: "10-р сар" has to fit in the month box beside a year and
@@ -318,7 +323,7 @@ export default function DateTimePicker({
               type="button"
               onClick={() => setOpen(false)}
               style={{ color: "var(--on-brand)" }}
-              className="mt-2 w-full rounded-xl bg-brand py-3 text-sm font-bold sm:mt-auto"
+              className="mt-2 w-full rounded-xl bg-brand py-3 text-sm font-bold @min-[36rem]:mt-auto"
             >
               Болсон
             </button>

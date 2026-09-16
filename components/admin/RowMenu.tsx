@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useAnchoredPanel } from "@/components/ui/useAnchoredPanel";
 
 export interface RowAction {
   key: string;
@@ -31,17 +32,10 @@ export interface RowAction {
  * administration sheet light, the panel carries `admin-surface` itself — the
  * same reason `ConfirmDialog` does.
  *
- * It closes on anything that would move it: a click elsewhere, Escape, a
- * scroll, a resize. A menu pinned to a rectangle that has since moved is
- * worse than no menu.
- *
- * A scroll closes it only if the button has actually moved, which is not the
- * pedantry it looks like. Tapping a ⋯ that is half off the bottom of the
- * screen focuses it, and focusing it makes the browser scroll it into view —
- * and a scroll event is delivered on the next frame, after the menu has
- * opened. Closing on the event itself meant that button could not be opened
- * at all: the menu appeared and vanished within a frame. Comparing the
- * rectangle asks the question that was meant all along.
+ * It closes on a click elsewhere or on Escape, and otherwise follows its
+ * button: where it is drawn is `useAnchoredPanel`'s job, which re-measures on
+ * every scroll and every move of the visible viewport rather than placing it
+ * once and hoping. See the note there for why one measurement was not enough.
  */
 export default function RowMenu({
   actions,
@@ -53,73 +47,40 @@ export default function RowMenu({
   label: string;
   className?: string;
 }) {
-  const [at, setAt] = useState<{
-    top: number;
-    right: number;
-    /** Where the button was when this opened, to tell a real scroll from a late one. */
-    anchor: { top: number; left: number };
-  } | null>(null);
+  const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  // Right-aligned: the ⋯ is the last thing on the row, so a menu hanging off
+  // its left edge is a menu inside the page rather than off it.
+  const at = useAnchoredPanel({ open, anchor: button, panel, align: "right" });
 
   useEffect(() => {
-    if (!at) return;
+    if (!open) return;
     const away = (event: MouseEvent) => {
       const target = event.target as Node;
       if (!panel.current?.contains(target) && !button.current?.contains(target)) {
-        setAt(null);
+        setOpen(false);
       }
     };
     const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setAt(null);
+      if (event.key === "Escape") setOpen(false);
     };
-    const moved = () => {
-      const box = button.current?.getBoundingClientRect();
-      if (!box || Math.abs(box.top - at.anchor.top) > 1 || Math.abs(box.left - at.anchor.left) > 1) {
-        setAt(null);
-      }
-    };
-    const gone = () => setAt(null);
     document.addEventListener("mousedown", away);
     document.addEventListener("keydown", key);
-    // Capture, so a scroll inside any container counts and not only the page.
-    window.addEventListener("scroll", moved, true);
-    window.addEventListener("resize", gone);
     return () => {
       document.removeEventListener("mousedown", away);
       document.removeEventListener("keydown", key);
-      window.removeEventListener("scroll", moved, true);
-      window.removeEventListener("resize", gone);
     };
-  }, [at]);
-
-  function toggle() {
-    if (at) {
-      setAt(null);
-      return;
-    }
-    const box = button.current?.getBoundingClientRect();
-    if (!box) return;
-    // Below the button unless there is not room, in which case above it. The
-    // height is worked out from the rows rather than measured, because the
-    // panel does not exist yet at the moment this has to decide.
-    const height = actions.length * 40 + 10;
-    const below = box.bottom + 6;
-    setAt({
-      top: below + height > window.innerHeight - 8 ? box.top - height - 6 : below,
-      right: Math.max(8, window.innerWidth - box.right),
-      anchor: { top: box.top, left: box.left },
-    });
-  }
+  }, [open]);
 
   return (
     <>
       <button
         ref={button}
         type="button"
-        onClick={toggle}
+        onClick={() => setOpen((was) => !was)}
         aria-haspopup="menu"
-        aria-expanded={at !== null}
+        aria-expanded={open}
         aria-label={label}
         className={`flex h-11 w-9 shrink-0 items-center justify-center rounded-lg border border-app-border text-app-muted hover:bg-app-elevated hover:text-app-text ${className}`}
       >
@@ -130,14 +91,19 @@ export default function RowMenu({
         </svg>
       </button>
 
-      {at !== null &&
+      {open &&
         typeof document !== "undefined" &&
         createPortal(
           <div
             ref={panel}
             role="menu"
             aria-label={label}
-            style={{ top: at.top, right: at.right }}
+            style={{
+              top: at?.top ?? 0,
+              left: at?.left ?? 0,
+              // Hidden until measured and placed, which happens before paint.
+              visibility: at ? "visible" : "hidden",
+            }}
             className="admin-surface fixed z-50 w-44 overflow-hidden rounded-xl border border-app-border bg-app-card py-1 shadow-[0_16px_40px_-12px_rgba(16,24,40,0.28)]"
           >
             {actions.map((action) => (
@@ -146,7 +112,7 @@ export default function RowMenu({
                 type="button"
                 role="menuitem"
                 onClick={() => {
-                  setAt(null);
+                  setOpen(false);
                   action.onSelect();
                 }}
                 className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-semibold hover:bg-app-elevated ${
