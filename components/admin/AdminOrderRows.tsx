@@ -8,6 +8,7 @@ import StockAvatar from "@/components/StockAvatar";
 import { ulaanbaatarDateTime, ulaanbaatarStamp } from "@/lib/day";
 import { EditIcon, RefreshIcon, TrashIcon } from "@/components/icons";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
+import RowMenu, { type RowAction } from "@/components/admin/RowMenu";
 import type { AdminOrderRow } from "@/lib/adminUsers";
 
 /**
@@ -75,6 +76,44 @@ export default function AdminOrderRows({
     }
   }
 
+  /**
+   * The three corrections an order can take, as data rather than as markup.
+   *
+   * Both renderings — the row laid out in full and the ⋯ menu behind it —
+   * read from this, so neither can quietly end up offering something the
+   * other does not. Буцаах is absent on a row that has already been reversed
+   * or that is itself a reversal: unwinding an unwinding is a knot, not a
+   * correction.
+   */
+  function actionsFor(order: AdminOrderRow): RowAction[] {
+    const undoable = !order.reversedBy && !order.reversalOf;
+    return [
+      {
+        key: "edit",
+        label: "Засах",
+        icon: <EditIcon />,
+        onSelect: () => setPending({ id: order.id, mode: "edit" }),
+      },
+      ...(undoable
+        ? [
+            {
+              key: "reverse",
+              label: "Буцаах",
+              icon: <RefreshIcon size={16} />,
+              onSelect: () => setPending({ id: order.id, mode: "reverse" }),
+            },
+          ]
+        : []),
+      {
+        key: "delete",
+        label: "Устгах",
+        icon: <TrashIcon size={16} />,
+        danger: true,
+        onSelect: () => setPending({ id: order.id, mode: "delete" }),
+      },
+    ];
+  }
+
   if (orders.length === 0) {
     return (
       <p className="px-4 pb-4 text-sm text-app-muted">
@@ -91,17 +130,20 @@ export default function AdminOrderRows({
         const open = pending?.id === order.id;
         return (
           <div key={order.id} className="px-4 py-3" data-order={order.id}>
-            {/* Wraps rather than squeezes. From about 560px of row up it is
-                one line — the company, the figures, then the three actions
-                hard against the right edge. Below that the actions drop to a
-                line of their own and stay right-aligned, because three of
-                them beside a price on a 390px phone would leave the ticker
-                about twenty pixels to live in. `min-w` on the middle column
-                is what makes the row wrap at all: without it that column
-                shrinks to nothing and the symbol truncates away instead. */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {/* A container query, not a media one. What decides whether three
+                labelled controls fit beside a ticker and a price is the width
+                of this row, and that is not a function of the window: the
+                ledger goes two columns at 1024 and halves the panel, so a
+                laptop can have a narrower row than a wide phone held
+                sideways. `@container` asks the row itself.
+
+                From 32rem of row up the three are laid out in full. Below it
+                they go behind a ⋯ — see `RowMenu`. A browser too old for
+                container queries never matches `@lg` and gets the menu
+                everywhere, which is the safe way round. */}
+            <div className="@container flex items-center gap-x-3">
               <StockAvatar symbol={order.symbol} />
-              <div className="min-w-[7.5rem] flex-1">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-sm font-semibold text-app-text">{order.symbol}</span>
                   <span
@@ -132,32 +174,30 @@ export default function AdminOrderRows({
                 </div>
               </div>
 
-              {/* On the right of the row the figures are on, not on a band
-                  under it. `ml-auto` is what holds them to the right edge on
-                  the line they wrap onto. */}
+              {/* On the right of the row the figures are on, either way: laid
+                  out in full where the row is wide enough, and behind one ⋯
+                  where it is not. Named once, so the two cannot drift apart —
+                  and so the menu is never missing the action the wide row
+                  has. */}
               {!open && (
-                <div className="ml-auto flex shrink-0 items-stretch gap-1.5">
-                  <Action
-                    label="Засах"
-                    onClick={() => setPending({ id: order.id, mode: "edit" })}
-                  >
-                    <EditIcon />
-                  </Action>
-                  {!order.reversedBy && !order.reversalOf && (
-                    <Action
-                      label="Буцаах"
-                      onClick={() => setPending({ id: order.id, mode: "reverse" })}
-                    >
-                      <RefreshIcon size={16} />
-                    </Action>
-                  )}
-                  <Action
-                    danger
-                    label="Устгах"
-                    onClick={() => setPending({ id: order.id, mode: "delete" })}
-                  >
-                    <TrashIcon size={16} />
-                  </Action>
+                <div className="flex shrink-0 items-stretch">
+                  <div className="hidden items-stretch gap-1.5 @lg:flex">
+                    {actionsFor(order).map((action) => (
+                      <Action
+                        key={action.key}
+                        label={action.label}
+                        danger={action.danger}
+                        onClick={action.onSelect}
+                      >
+                        {action.icon}
+                      </Action>
+                    ))}
+                  </div>
+                  <RowMenu
+                    className="@lg:hidden"
+                    label={`${order.symbol} захиалгын үйлдэл`}
+                    actions={actionsFor(order)}
+                  />
                 </div>
               )}
             </div>
@@ -423,9 +463,11 @@ const FIELD =
   "mt-1 w-full rounded-lg border border-app-border bg-app-card px-2 py-1.5 text-sm text-app-text";
 
 /**
- * One of the row's actions: the mark above, the word under it.
+ * One of the row's actions where the row is wide enough to lay them out: the
+ * mark above, the word under it. Narrower than that they go behind a ⋯ —
+ * see `RowMenu`.
  *
- * Stacked rather than side by side because the row they now sit on has the
+ * Stacked rather than side by side because the row they sit on has the
  * company at one end and the figures at the other, and three chips laid out
  * lengthways take more of what is left than there is. Two lines of about
  * fifty pixels is the same information in a third of the width.
@@ -433,7 +475,8 @@ const FIELD =
  * The word stays. An icon-only row of three would be narrower still and
  * unreadable: a bin is obvious, a pencil is nearly obvious, and the circling
  * arrow that means "write the mirror of this trade" is a guess. These move
- * somebody's money — none of them should have to be guessed at.
+ * somebody's money — none of them should have to be guessed at. Where there
+ * is no room for three words there is a menu, which has room for all three.
  *
  * All three the same width, set rather than sized to their own labels, so
  * Засах is as big a target as Устгах. The least destructive of the three
