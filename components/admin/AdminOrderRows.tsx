@@ -91,9 +91,17 @@ export default function AdminOrderRows({
         const open = pending?.id === order.id;
         return (
           <div key={order.id} className="px-4 py-3" data-order={order.id}>
-            <div className="flex items-center gap-3">
+            {/* Wraps rather than squeezes. From about 560px of row up it is
+                one line — the company, the figures, then the three actions
+                hard against the right edge. Below that the actions drop to a
+                line of their own and stay right-aligned, because three of
+                them beside a price on a 390px phone would leave the ticker
+                about twenty pixels to live in. `min-w` on the middle column
+                is what makes the row wrap at all: without it that column
+                shrinks to nothing and the symbol truncates away instead. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <StockAvatar symbol={order.symbol} />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-[7.5rem] flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-sm font-semibold text-app-text">{order.symbol}</span>
                   <span
@@ -123,28 +131,36 @@ export default function AdminOrderRows({
                   <Num value={order.total} digits={2} suffix="₮" />
                 </div>
               </div>
-            </div>
 
-            {/* No wrapping: each action takes an equal share of the row
-                instead, so two of them are halves and three are thirds. */}
-            {!open && (
-              <div className="mt-2 flex gap-2">
-                <Action onClick={() => setPending({ id: order.id, mode: "edit" })}>
-                  <EditIcon /> Засах
-                </Action>
-                {!order.reversedBy && !order.reversalOf && (
-                  <Action onClick={() => setPending({ id: order.id, mode: "reverse" })}>
-                    <RefreshIcon size={14} /> Буцаах
+              {/* On the right of the row the figures are on, not on a band
+                  under it. `ml-auto` is what holds them to the right edge on
+                  the line they wrap onto. */}
+              {!open && (
+                <div className="ml-auto flex shrink-0 items-stretch gap-1.5">
+                  <Action
+                    label="Засах"
+                    onClick={() => setPending({ id: order.id, mode: "edit" })}
+                  >
+                    <EditIcon />
                   </Action>
-                )}
-                <Action
-                  danger
-                  onClick={() => setPending({ id: order.id, mode: "delete" })}
-                >
-                  <TrashIcon size={14} /> Устгах
-                </Action>
-              </div>
-            )}
+                  {!order.reversedBy && !order.reversalOf && (
+                    <Action
+                      label="Буцаах"
+                      onClick={() => setPending({ id: order.id, mode: "reverse" })}
+                    >
+                      <RefreshIcon size={16} />
+                    </Action>
+                  )}
+                  <Action
+                    danger
+                    label="Устгах"
+                    onClick={() => setPending({ id: order.id, mode: "delete" })}
+                  >
+                    <TrashIcon size={16} />
+                  </Action>
+                </div>
+              )}
+            </div>
 
             {open && pending.mode === "edit" && (
               <EditForm
@@ -407,31 +423,43 @@ const FIELD =
   "mt-1 w-full rounded-lg border border-app-border bg-app-card px-2 py-1.5 text-sm text-app-text";
 
 /**
- * One of the row's actions, taking an equal share of the row's width.
+ * One of the row's actions: the mark above, the word under it.
  *
- * They were content-width chips before, which left them huddled at the left
- * of a row that is otherwise full-bleed, and gave each a tap target the size
- * of its own word — so Засах, the least destructive of the three, was also
- * the smallest thing to hit. An equal share puts them under the figures they
- * act on and makes them the same size as each other.
+ * Stacked rather than side by side because the row they now sit on has the
+ * company at one end and the figures at the other, and three chips laid out
+ * lengthways take more of what is left than there is. Two lines of about
+ * fifty pixels is the same information in a third of the width.
+ *
+ * The word stays. An icon-only row of three would be narrower still and
+ * unreadable: a bin is obvious, a pencil is nearly obvious, and the circling
+ * arrow that means "write the mirror of this trade" is a guess. These move
+ * somebody's money — none of them should have to be guessed at.
+ *
+ * All three the same width, set rather than sized to their own labels, so
+ * Засах is as big a target as Устгах. The least destructive of the three
+ * should not be the hardest to hit.
  */
 function Action({
   children,
+  label,
   onClick,
   danger,
 }: {
+  /** The mark, at 16px. */
   children: React.ReactNode;
+  label: string;
   onClick: () => void;
   danger?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-app-border px-2.5 py-2 text-xs font-semibold ${
+      className={`flex w-[3.25rem] flex-col items-center justify-center gap-1 rounded-lg border border-app-border py-1.5 text-[10px] leading-none font-semibold ${
         danger ? "text-app-negative" : "text-app-text"
-      }`}
+      } hover:bg-app-elevated`}
     >
       {children}
+      {label}
     </button>
   );
 }
