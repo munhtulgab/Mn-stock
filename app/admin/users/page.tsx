@@ -63,20 +63,18 @@ export default async function AdminUsersPage({
           value: q,
         }}
         selects={[
-          { name: "role", label: "Эрх", value: role, options: USER_ROLES, icon: "shield" },
+          { name: "role", label: "Эрх", value: role, options: USER_ROLES },
           {
             name: "activity",
             label: "Арилжаа",
             value: activity,
             options: USER_ACTIVITY,
-            icon: "receipt",
           },
           {
             name: "joined",
             label: "Бүртгүүлсэн",
             value: joined,
             options: RANGES,
-            icon: "calendar",
           },
         ]}
       />

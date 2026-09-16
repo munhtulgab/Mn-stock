@@ -8,6 +8,8 @@ import StockAvatar from "@/components/StockAvatar";
 import { ulaanbaatarDateTime, ulaanbaatarStamp } from "@/lib/day";
 import { EditIcon, RefreshIcon, TrashIcon } from "@/components/icons";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
+import Select, { type SelectOption } from "@/components/ui/Select";
+import DateTimePicker from "@/components/ui/DateTimePicker";
 import RowMenu, { type RowAction } from "@/components/admin/RowMenu";
 import type { AdminOrderRow } from "@/lib/adminUsers";
 
@@ -55,13 +57,24 @@ export default function AdminOrderRows({
   const router = useRouter();
   const toast = useToast();
 
-  async function send(id: string, path: string, init: RequestInit, done: string) {
+  /**
+   * Two lines on the way back, not one. All three of these move a balance,
+   * and "Захиалга зассан" on its own does not say that anything was moved —
+   * the second line is what tells the reader to expect the figures above to
+   * have changed under them.
+   */
+  async function send(
+    id: string,
+    path: string,
+    init: RequestInit,
+    done: { title: string; body: string },
+  ) {
     setBusy(id);
     try {
       const res = await fetch(`/api/admin/users/${userId}/orders/${id}${path}`, init);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Болсонгүй");
-      toast({ title: done, variant: "success" });
+      toast({ ...done, variant: "success" });
       setPending(null);
       setConfirmEdit(null);
       router.refresh();
@@ -225,7 +238,10 @@ export default function AdminOrderRows({
               busy={busy === order.id}
               onCancel={() => setPending(null)}
               onConfirm={() =>
-                send(order.id, "/reverse", { method: "POST" }, "Захиалга буцаагдлаа")
+                send(order.id, "/reverse", { method: "POST" }, {
+                  title: "Захиалга буцаагдлаа",
+                  body: "Үлдэгдэл өмнөх байдалдаа эргэлээ.",
+                })
               }
             />
 
@@ -250,7 +266,10 @@ export default function AdminOrderRows({
               confirmLabel="Устгах"
               busy={busy === order.id}
               onCancel={() => setPending(null)}
-              onConfirm={() => send(order.id, "", { method: "DELETE" }, "Захиалга устлаа")}
+              onConfirm={() => send(order.id, "", { method: "DELETE" }, {
+                title: "Захиалга устлаа",
+                body: "Мөнгө болон хувьцааны үлдэгдэл сэргээгдлээ.",
+              })}
             />
           </div>
         );
@@ -288,7 +307,10 @@ export default function AdminOrderRows({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(confirmEdit.patch),
             },
-            "Захиалга зассан",
+            {
+              title: "Захиалга зассан",
+              body: "Мөнгө болон хувьцааны үлдэгдэл шинэчлэгдлээ.",
+            },
           )
         }
       />
@@ -390,18 +412,24 @@ function EditForm({
         onSave({ side, quantity: Number(quantity), price: Number(price), createdAt: at });
       }}
     >
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <label className="text-xs text-app-muted">
-          Төрөл
-          <select
-            value={side}
-            onChange={(e) => setSide(e.target.value as "BUY" | "SELL")}
-            className={FIELD}
-          >
-            <option value="BUY">Авсан</option>
-            <option value="SELL">Зарсан</option>
-          </select>
-        </label>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {/* The word sits beside the control rather than wrapping it: a
+            `<label>` around a button is clicked twice by some browsers, and a
+            dropdown that opens and shuts again is not a dropdown. */}
+        <div className="min-w-0">
+          <label htmlFor="edit-side" className="block text-xs text-app-muted">
+            Төрөл
+          </label>
+          <div className="mt-1">
+            <Select
+              id="edit-side"
+              label="Төрөл"
+              value={side}
+              options={SIDES}
+              onChange={(value) => setSide(value as "BUY" | "SELL")}
+            />
+          </div>
+        </div>
         <label className="text-xs text-app-muted">
           Тоо ширхэг
           <input
@@ -424,15 +452,9 @@ function EditForm({
             className={FIELD}
           />
         </label>
-        <label className="text-xs text-app-muted">
-          Огноо (УБ)
-          <input
-            type="datetime-local"
-            value={at}
-            onChange={(e) => setAt(e.target.value)}
-            className={FIELD}
-          />
-        </label>
+      </div>
+      <div className="pt-1.5">
+        <DateTimePicker id="edit-at" label="Огноо ба цаг (УБ)" value={at} onChange={setAt} />
       </div>
       <p className="text-xs text-app-muted">
         Нийт дүн <Num value={total} digits={2} suffix="₮" className="text-app-text" /> — зөрүүгээр
@@ -461,6 +483,12 @@ function EditForm({
 
 const FIELD =
   "mt-1 w-full rounded-lg border border-app-border bg-app-card px-2 py-1.5 text-sm text-app-text";
+
+/** The two an order can be, each with the direction it moves the account in. */
+const SIDES: SelectOption[] = [
+  { value: "BUY", label: "Авсан", icon: "arrowDown" },
+  { value: "SELL", label: "Зарсан", icon: "arrowUp" },
+];
 
 /**
  * One of the row's actions where the row is wide enough to lay them out: the

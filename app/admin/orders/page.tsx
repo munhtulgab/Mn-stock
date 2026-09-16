@@ -78,9 +78,9 @@ export default async function AdminOrdersPage({
           value: q,
         }}
         selects={[
-          { name: "side", label: "Төрөл", value: side, options: ORDER_SIDES, icon: "swap" },
-          { name: "mark", label: "Эх үүсвэр", value: mark, options: ORDER_MARKS, icon: "tag" },
-          { name: "days", label: "Огноо", value: days, options: RANGES, icon: "calendar" },
+          { name: "side", label: "Төрөл", value: side, options: ORDER_SIDES },
+          { name: "mark", label: "Эх үүсвэр", value: mark, options: ORDER_MARKS },
+          { name: "days", label: "Огноо", value: days, options: RANGES },
         ]}
       />
 

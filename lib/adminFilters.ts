@@ -13,10 +13,18 @@
  * about what the list is showing.
  */
 
+import type { GlyphName } from "@/components/ui/Glyph";
+
 export interface FilterOption {
   /** Empty means "no filter", and is never written into the URL. */
   value: string;
   label: string;
+  /**
+   * The mark the dropdown draws beside the choice, named rather than drawn:
+   * this module is read on the server, where JSX for a browser control has
+   * no business being. `components/ui/Glyph` turns the name into the icon.
+   */
+  icon: GlyphName;
 }
 
 /**
@@ -47,11 +55,11 @@ export function labelOf(options: readonly FilterOption[], value: string): string
  * asked about and two separate vocabularies for it would be two.
  */
 export const RANGES: readonly FilterOption[] = [
-  { value: "", label: "Бүх хугацаа" },
-  { value: "1", label: "Сүүлийн 24 цаг" },
-  { value: "7", label: "Сүүлийн 7 хоног" },
-  { value: "30", label: "Сүүлийн 30 хоног" },
-  { value: "90", label: "Сүүлийн 90 хоног" },
+  { value: "", label: "Бүх хугацаа", icon: "infinity" },
+  { value: "1", label: "Сүүлийн 24 цаг", icon: "clock" },
+  { value: "7", label: "Сүүлийн 7 хоног", icon: "history" },
+  { value: "30", label: "Сүүлийн 30 хоног", icon: "calendar" },
+  { value: "90", label: "Сүүлийн 90 хоног", icon: "calendarClock" },
 ];
 
 /** The instant a range starts, or nothing when no range was chosen. */
@@ -61,9 +69,9 @@ export function rangeSince(value: string): Date | undefined {
 }
 
 export const USER_ROLES: readonly FilterOption[] = [
-  { value: "", label: "Бүх эрх" },
-  { value: "admin", label: "Админ" },
-  { value: "user", label: "Хэрэглэгч" },
+  { value: "", label: "Бүх эрх", icon: "users" },
+  { value: "admin", label: "Админ", icon: "shield" },
+  { value: "user", label: "Хэрэглэгч", icon: "user" },
 ];
 
 /**
@@ -73,15 +81,15 @@ export const USER_ROLES: readonly FilterOption[] = [
  * thing this list is asked that a search box cannot answer at all.
  */
 export const USER_ACTIVITY: readonly FilterOption[] = [
-  { value: "", label: "Бүх данс" },
-  { value: "with", label: "Захиалга хийсэн" },
-  { value: "without", label: "Захиалга хийгээгүй" },
+  { value: "", label: "Бүх данс", icon: "users" },
+  { value: "with", label: "Захиалга хийсэн", icon: "receipt" },
+  { value: "without", label: "Захиалга хийгээгүй", icon: "noReceipt" },
 ];
 
 export const ORDER_SIDES: readonly FilterOption[] = [
-  { value: "", label: "Авсан ба зарсан" },
-  { value: "BUY", label: "Авсан" },
-  { value: "SELL", label: "Зарсан" },
+  { value: "", label: "Авсан ба зарсан", icon: "swap" },
+  { value: "BUY", label: "Авсан", icon: "arrowDown" },
+  { value: "SELL", label: "Зарсан", icon: "arrowUp" },
 ];
 
 /**
@@ -89,9 +97,9 @@ export const ORDER_SIDES: readonly FilterOption[] = [
  * is actually looking for.
  */
 export const ORDER_MARKS: readonly FilterOption[] = [
-  { value: "", label: "Бүх захиалга" },
-  { value: "imported", label: "Хуулгаар орсон" },
-  { value: "manual", label: "Аппаас хийсэн" },
-  { value: "reversal", label: "Буцаалт" },
-  { value: "edited", label: "Зассан" },
+  { value: "", label: "Бүх захиалга", icon: "receipt" },
+  { value: "imported", label: "Хуулгаар орсон", icon: "import" },
+  { value: "manual", label: "Аппаас хийсэн", icon: "hand" },
+  { value: "reversal", label: "Буцаалт", icon: "refresh" },
+  { value: "edited", label: "Зассан", icon: "pencil" },
 ];

@@ -1,24 +1,33 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { AlertIcon, CheckIcon, InfoIcon } from "./icons";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { AlertIcon, CheckIcon, CloseIcon, InfoIcon } from "./icons";
 
 /**
  * What the app says back after you ask it for something.
  *
- * This used to be a small card sliding in above the tab bar, which is easy to
- * miss on a phone held at arm's length — a trade is confirmed, and the reader
- * is left looking for the confirmation. It is a card in the middle of the
- * screen now: one thing, said plainly, with a button to carry on. It still
- * clears itself, so nobody is made to dismiss a piece of good news.
+ * It has been two shapes before this one. A small card above the tab bar,
+ * which was missed on a phone held at arm's length; then a card in the middle
+ * of the screen behind a dim, which was certainly not missed but stopped the
+ * reader dead — a trade is confirmed and the next thing they are asked to do
+ * is dismiss the confirmation before they can look at anything.
+ *
+ * This is the middle of those two: a banner across the top, wide enough and
+ * loud enough to be read without being looked for, over the page rather than
+ * in front of it. Three things carry it:
+ *
+ *  - The mark. A tick, a warning, an "i" — which of the three it is, is read
+ *    before a single word of it is.
+ *  - Two lines. What happened in bold, and the detail under it, because
+ *    "Болсонгүй" on its own tells nobody what to do next.
+ *  - A bar that drains. It says both that this will go away by itself and
+ *    roughly when, which is what stops somebody reaching for the ✕ out of
+ *    doubt that it ever will.
+ *
+ * Several can be up at once now, newest at the top. The card in the middle
+ * could only ever say one thing, so a page raising two — a save and the
+ * refresh that followed it — queued the second behind the first and showed it
+ * to a reader who had moved on. Banners stack, so both are simply there.
  */
 
 export type ToastVariant = "success" | "error" | "info";
@@ -47,6 +56,9 @@ const DEFAULT_DURATION: Record<ToastVariant, number> = {
   error: 7_000,
 };
 
+/** At most this many at once; older ones give way rather than filling the page. */
+const MAX_ON_SCREEN = 3;
+
 const ToastContext = createContext<((options: ToastOptions) => void) | null>(null);
 
 /**
@@ -59,112 +71,97 @@ export function useToast(): (options: ToastOptions) => void {
   return useMemo(() => show ?? (() => {}), [show]);
 }
 
-const STYLES: Record<
-  ToastVariant,
-  { card: string; button: string; icon: React.ReactNode; iconColor: string }
-> = {
+/**
+ * The three liveries.
+ *
+ * Written out rather than taken from the palette tokens: this banner is the
+ * same banner on the dark application and on the light administration sheet,
+ * and a success that turned into whatever green the surrounding page happened
+ * to be using would stop reading as a success on one of them. The greens are
+ * dark enough that white sits on them at better than 4.5 to one.
+ */
+const STYLES: Record<ToastVariant, { card: string; accent: string; icon: React.ReactNode }> = {
   success: {
-    card: "from-[#3a9fd8] to-[#37c07a]",
-    button: "text-[#1c7fb8]",
-    icon: <CheckIcon size={34} />,
-    iconColor: "text-[#37c07a]",
+    card: "linear-gradient(100deg, #2c7549 0%, #47915d 100%)",
+    accent: "#2c7549",
+    icon: <CheckIcon size={19} />,
   },
   error: {
-    card: "from-[#e0574a] to-[#b8323f]",
-    button: "text-[#c0392b]",
-    icon: <AlertIcon size={34} />,
-    iconColor: "text-[#c0392b]",
+    card: "linear-gradient(100deg, #a83029 0%, #c8504a 100%)",
+    accent: "#a83029",
+    icon: <AlertIcon size={19} />,
   },
   info: {
-    card: "from-[#3f4a5c] to-[#232a36]",
-    button: "text-[#2f3746]",
-    icon: <InfoIcon size={34} />,
-    iconColor: "text-[#3f4a5c]",
+    card: "linear-gradient(100deg, #2b3340 0%, #44506a 100%)",
+    accent: "#2b3340",
+    icon: <InfoIcon size={19} />,
   },
 };
-
-/**
- * The scalloped disc the check sits in, drawn from a polar rosette rather
- * than assembled out of circles — ten lobes, sampled finely enough that
- * the outline reads as smooth at any size it is shown at.
- */
-const ROSETTE_PATH = (() => {
-  const lobes = 10;
-  const points: string[] = [];
-  for (let i = 0; i <= 360; i++) {
-    const angle = (i / 360) * Math.PI * 2;
-    const radius = 42 + 7 * Math.cos(lobes * angle);
-    const x = 50 + radius * Math.cos(angle);
-    const y = 50 + radius * Math.sin(angle);
-    points.push(`${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`);
-  }
-  return `${points.join(" ")} Z`;
-})();
 
 function ToastCard({ toast, onClose }: { toast: Toast; onClose: () => void }) {
   const style = STYLES[toast.variant];
 
   useEffect(() => {
     const timer = setTimeout(onClose, toast.duration);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => clearTimeout(timer);
   }, [toast.duration, onClose]);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-6 backdrop-blur-[2px]"
-      onClick={onClose}
+      role="status"
+      aria-live={toast.variant === "error" ? "assertive" : "polite"}
+      style={{ backgroundImage: style.card }}
+      className="animate-[toast-in_220ms_ease-out] pointer-events-auto relative flex w-full items-center gap-3.5 overflow-hidden rounded-2xl px-4 py-3.5 text-white shadow-[0_14px_36px_-10px_rgba(0,0,0,0.55)]"
     >
-      <div
-        role="status"
-        aria-live={toast.variant === "error" ? "assertive" : "polite"}
-        onClick={(e) => e.stopPropagation()}
-        className={`animate-[toast-in_200ms_ease-out] relative w-full max-w-xs overflow-hidden rounded-3xl bg-linear-to-br ${style.card} px-6 pb-6 pt-8 text-center text-white shadow-2xl shadow-black/40`}
-      >
-        {/* The lighter disc in the corner, as on the reference. */}
-        <span className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-white/10" />
-
-        <span className="relative mx-auto mb-4 flex h-20 w-20 items-center justify-center">
-          <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full">
-            <path d={ROSETTE_PATH} fill="rgba(255,255,255,0.94)" />
-          </svg>
-          <span className={`relative ${style.iconColor}`}>{style.icon}</span>
+      {/* The disc, ringed: a white circle on a coloured field reads as a
+          badge, and the halo is what keeps it from reading as a hole. */}
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15">
+        <span
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-white"
+          style={{ color: style.accent }}
+        >
+          {style.icon}
         </span>
+      </span>
 
-        <h2 className="relative text-2xl font-bold leading-tight">{toast.title}</h2>
+      <div className="min-w-0 flex-1">
+        <p className="text-[17px] leading-tight font-bold">{toast.title}</p>
         {toast.body && (
-          <p className="relative mt-1.5 text-sm leading-snug text-white/90 break-words">
+          <p className="mt-0.5 text-[13.5px] leading-snug break-words text-white/85">
             {toast.body}
           </p>
         )}
-
-        <div className="relative mt-6 flex flex-col gap-2">
-          {toast.action && (
-            <button
-              onClick={() => {
-                toast.action!.onClick();
-                onClose();
-              }}
-              className="w-full rounded-full bg-white/20 py-3 text-base font-bold text-white active:scale-[0.98] transition-transform"
-            >
-              {toast.action.label}
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            autoFocus
-            className={`w-full rounded-full bg-white py-3 text-base font-bold ${style.button} active:scale-[0.98] transition-transform`}
-          >
-            Үргэлжлүүлэх
-          </button>
-        </div>
       </div>
+
+      {toast.action && (
+        <button
+          type="button"
+          onClick={() => {
+            toast.action!.onClick();
+            onClose();
+          }}
+          className="shrink-0 rounded-full bg-white/20 px-3.5 py-1.5 text-[13px] font-bold text-white active:scale-[0.97]"
+        >
+          {toast.action.label}
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Хаах"
+        className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/85 hover:bg-white/15 hover:text-white"
+      >
+        <CloseIcon size={19} />
+      </button>
+
+      {/* How long is left, and that there is a "left" at all. */}
+      <span className="absolute inset-x-3 bottom-1.5 h-[3px] overflow-hidden rounded-full bg-black/20">
+        <span
+          className="block h-full origin-left rounded-full bg-white/70"
+          style={{ animation: `toast-drain ${toast.duration}ms linear forwards` }}
+        />
+      </span>
     </div>
   );
 }
@@ -183,26 +180,41 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
       duration: options.duration ?? DEFAULT_DURATION[variant],
       action: options.action,
     };
-    // A card in the middle of the screen can only say one thing at a time;
-    // anything raised while it is up waits its turn rather than stacking.
-    setQueue((prev) => [...prev, toast].slice(-3));
+    setQueue((prev) => [...prev, toast].slice(-MAX_ON_SCREEN));
   }, []);
 
   const dismiss = useCallback((id: number) => {
     setQueue((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const current = queue[0];
+  // Escape takes the newest one down, which is the one the reader has just
+  // been shown and the only one they could mean.
+  useEffect(() => {
+    if (queue.length === 0) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setQueue((prev) => prev.slice(0, -1));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [queue.length]);
 
   return (
     <ToastContext.Provider value={show}>
       {children}
-      {current && (
-        <ToastCard
-          key={current.id}
-          toast={current}
-          onClose={() => dismiss(current.id)}
-        />
+      {queue.length > 0 && (
+        // Fixed and centred, and transparent to the pointer except where a
+        // banner actually is — the strip is the width of a reading column, and
+        // the page under the empty half of it must stay clickable.
+        <div
+          className="pointer-events-none fixed inset-x-0 z-50 flex flex-col items-center gap-2 px-3"
+          style={{ top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)" }}
+        >
+          {[...queue].reverse().map((toast) => (
+            <div key={toast.id} className="pointer-events-none w-full max-w-[30rem]">
+              <ToastCard toast={toast} onClose={() => dismiss(toast.id)} />
+            </div>
+          ))}
+        </div>
       )}
     </ToastContext.Provider>
   );
