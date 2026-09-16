@@ -156,8 +156,9 @@ export default function FilterBar({
             <button
               type="button"
               onClick={() => start(() => router.push(action))}
-              className="rounded-full px-3 py-2 text-[13px] font-semibold text-app-muted hover:bg-app-elevated hover:text-app-text"
+              className="flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-semibold text-app-muted hover:bg-app-elevated hover:text-app-text"
             >
+              <Glyph name="close" size={13} />
               Бүгдийг цэвэрлэх
             </button>
           )}
@@ -171,7 +172,7 @@ export default function FilterBar({
                 "linear-gradient(180deg, var(--admin-fill-from), var(--admin-fill-to))",
             }}
           >
-            {pending && <Spinner />}
+            {pending ? <Spinner /> : <Glyph name="search" size={15} />}
             Шүүх
           </button>
         </div>

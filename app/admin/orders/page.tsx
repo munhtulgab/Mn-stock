@@ -7,6 +7,7 @@ import { ulaanbaatarDateTime } from "@/lib/day";
 import Num from "@/components/Num";
 import PageHead from "@/components/admin/PageHead";
 import FilterBar from "@/components/admin/FilterBar";
+import Glyph from "@/components/ui/Glyph";
 import { ORDER_MARKS, ORDER_SIDES, RANGES, pick } from "@/lib/adminFilters";
 
 export const dynamic = "force-dynamic";
@@ -191,13 +192,15 @@ export default async function AdminOrdersPage({
       {list.pages > 1 && (
         <nav className="flex items-center justify-between gap-3">
           <Step href={href(list.page - 1)} disabled={list.page <= 1}>
-            ← Өмнөх
+            <Glyph name="chevronLeft" size={14} />
+            Өмнөх
           </Step>
           <span className="text-[13px] text-app-muted tabular-nums">
             {list.page} / {list.pages}
           </span>
           <Step href={href(list.page + 1)} disabled={list.page >= list.pages}>
-            Дараах →
+            Дараах
+            <Glyph name="chevronRight" size={14} />
           </Step>
         </nav>
       )}
@@ -215,7 +218,7 @@ function Step({
   children: React.ReactNode;
 }) {
   const shell =
-    "rounded-full border border-app-border px-5 py-2.5 text-sm font-semibold";
+    "inline-flex items-center gap-1.5 rounded-full border border-app-border px-5 py-2.5 text-sm font-semibold";
   // A dead end is shown as one rather than removed: a control that vanishes
   // moves the one beside it, and the pair stops being where it was.
   return disabled ? (

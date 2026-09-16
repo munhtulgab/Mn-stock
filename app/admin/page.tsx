@@ -8,6 +8,7 @@ import Num from "@/components/Num";
 import StatCard from "@/components/admin/StatCard";
 import SyncButton from "@/components/admin/SyncButton";
 import PageHead from "@/components/admin/PageHead";
+import Glyph from "@/components/ui/Glyph";
 import Panel from "@/components/admin/Panel";
 import OrdersStrip from "@/components/admin/OrdersStrip";
 import OrdersDigest from "@/components/admin/OrdersDigest";
@@ -160,8 +161,12 @@ export default async function AdminOverviewPage({
           title="Сүүлийн захиалгууд"
           icon={<ReceiptMark />}
           note={
-            <Link href="/admin/orders" className="font-semibold text-brand">
-              Бүгд →
+            <Link
+              href="/admin/orders"
+              className="inline-flex items-center gap-1 font-semibold text-brand"
+            >
+              Бүгд
+              <Glyph name="chevronRight" size={13} />
             </Link>
           }
           flush

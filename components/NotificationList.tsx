@@ -163,8 +163,9 @@ function SwipeRow({
         type="button"
         onClick={onDismiss}
         aria-label={`"${n.title}" мэдэгдлийг устгах`}
-        className="sr-only focus:not-sr-only focus:absolute focus:right-2 focus:top-2 focus:z-10 focus:rounded-full focus:bg-app-negative-bg focus:px-3 focus:py-1 focus:text-xs focus:text-app-negative"
+        className="sr-only focus:not-sr-only focus:absolute focus:right-2 focus:top-2 focus:z-10 focus:inline-flex focus:items-center focus:gap-1 focus:rounded-full focus:bg-app-negative-bg focus:px-3 focus:py-1 focus:text-xs focus:text-app-negative"
       >
+        <TrashIcon size={13} />
         Устгах
       </button>
     </div>

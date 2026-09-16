@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import { ulaanbaatarDateTime } from "@/lib/day";
-import { EditIcon, EyeIcon, SaveIcon, TrashIcon } from "@/components/icons";
+import { CloseIcon, EditIcon, EyeIcon, SaveIcon, TrashIcon } from "@/components/icons";
 import {
   UserIcon,
   BadgeIcon,
@@ -263,7 +263,19 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
             </span>
           </label>
 
+          {/* Болих on the left, Хадгалах on the right. The way out comes
+              first and the thing that acts comes last, which is the order
+              every dialog in the application already puts them in. */}
           <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={stopEditing}
+              disabled={saving}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-app-border px-3 py-2.5 text-sm font-semibold text-app-text disabled:opacity-60"
+            >
+              <CloseIcon size={15} />
+              Болих
+            </button>
             <button
               type="submit"
               disabled={saving}
@@ -272,14 +284,6 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
             >
               <SaveIcon size={15} />
               {saving ? "Хадгалж байна…" : "Хадгалах"}
-            </button>
-            <button
-              type="button"
-              onClick={stopEditing}
-              disabled={saving}
-              className="w-full rounded-xl border border-app-border px-3 py-2.5 text-sm font-semibold text-app-text disabled:opacity-60"
-            >
-              Болих
             </button>
           </div>
 
@@ -356,6 +360,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
           </ul>
         }
         confirmLabel="Хадгалах"
+        confirmIcon={<SaveIcon size={15} />}
         busy={saving}
         onCancel={() => setConfirmingSave(false)}
         onConfirm={() => void save()}
@@ -375,6 +380,7 @@ export default function AdminUserForm({ user }: { user: AdminUserDetail }) {
           </ul>
         }
         confirmLabel="Устгах"
+        confirmIcon={<TrashIcon size={15} />}
         busy={saving}
         onCancel={() => setConfirmingDelete(false)}
         onConfirm={() => void remove()}
