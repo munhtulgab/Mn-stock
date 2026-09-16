@@ -6,7 +6,7 @@ import { useToast } from "@/components/Toast";
 import Num from "@/components/Num";
 import StockAvatar from "@/components/StockAvatar";
 import { ulaanbaatarDateTime, ulaanbaatarStamp } from "@/lib/day";
-import { EditIcon, RefreshIcon, TrashIcon } from "@/components/icons";
+import { CloseIcon, EditIcon, RefreshIcon, SaveIcon, TrashIcon } from "@/components/icons";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import Select, { type SelectOption } from "@/components/ui/Select";
 import DateTimePicker from "@/components/ui/DateTimePicker";
@@ -235,6 +235,7 @@ export default function AdminOrderRows({
               }
               detail={<OrderLine order={order} />}
               confirmLabel="Буцаах"
+              confirmIcon={<RefreshIcon size={15} />}
               busy={busy === order.id}
               onCancel={() => setPending(null)}
               onConfirm={() =>
@@ -264,6 +265,7 @@ export default function AdminOrderRows({
               }
               detail={<OrderLine order={order} />}
               confirmLabel="Устгах"
+              confirmIcon={<TrashIcon size={15} />}
               busy={busy === order.id}
               onCancel={() => setPending(null)}
               onConfirm={() => send(order.id, "", { method: "DELETE" }, {
@@ -295,6 +297,7 @@ export default function AdminOrderRows({
           )
         }
         confirmLabel="Засах"
+        confirmIcon={<SaveIcon size={15} />}
         busy={confirmEdit !== null && busy === confirmEdit.id}
         onCancel={() => setConfirmEdit(null)}
         onConfirm={() =>
@@ -460,21 +463,26 @@ function EditForm({
         Нийт дүн <Num value={total} digits={2} suffix="₮" className="text-app-text" /> — зөрүүгээр
         нь мөнгө болон хувьцааны үлдэгдэл засагдана.
       </p>
+      {/* Болих on the left, Хадгалах on the right — the same order as every
+          other pair in the application, and the order a dialog puts them in:
+          the way out first, the thing that acts last, under the thumb. */}
       <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-app-border px-3 py-2 text-sm font-semibold text-app-text"
+        >
+          <CloseIcon size={15} />
+          Болих
+        </button>
         <button
           type="submit"
           disabled={busy}
           style={{ color: "var(--on-brand)" }}
-          className="flex-1 rounded-xl bg-brand px-3 py-2 text-sm font-semibold disabled:opacity-60"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-sm font-semibold disabled:opacity-60"
         >
+          <SaveIcon size={15} />
           {busy ? "Хадгалж байна…" : "Хадгалах"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 rounded-xl border border-app-border px-3 py-2 text-sm font-semibold text-app-text"
-        >
-          Болих
         </button>
       </div>
     </form>

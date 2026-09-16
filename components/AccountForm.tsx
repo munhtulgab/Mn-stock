@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "./Toast";
 import Avatar from "./Avatar";
-import { CloseIcon, EyeIcon, SaveIcon } from "./icons";
+import { CloseIcon, EyeIcon, SaveIcon, TrashIcon } from "./icons";
 
 function CameraIcon({ size = 16 }: { size?: number }) {
   return (
@@ -218,8 +218,9 @@ export default function AccountForm({
             <button
               type="button"
               onClick={() => setPicture("")}
-              className="font-medium text-app-negative"
+              className="inline-flex items-center gap-1 font-medium text-app-negative"
             >
+              <TrashIcon size={13} />
               Устгах
             </button>
           )}

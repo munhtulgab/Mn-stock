@@ -4,6 +4,7 @@ import { useState } from "react";
 import Num from "@/components/Num";
 import StockAvatar from "@/components/StockAvatar";
 import Panel from "@/components/admin/Panel";
+import Glyph from "@/components/ui/Glyph";
 import AdminOrderRows from "@/components/admin/AdminOrderRows";
 import type { AdminUserDetail } from "@/lib/adminUsers";
 
@@ -113,9 +114,10 @@ export default function AdminAccountLedger({ user }: { user: AdminUserDetail }) 
             <button
               type="button"
               onClick={() => setSymbol(null)}
-              className="font-semibold text-brand"
+              className="inline-flex items-center gap-1 font-semibold text-brand"
             >
-              Бүгд →
+              Бүгд
+              <Glyph name="chevronRight" size={13} />
             </button>
           ) : (
             `${user.orders.length} бичлэг`

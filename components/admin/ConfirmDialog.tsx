@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { AlertIcon } from "@/components/icons";
+import { AlertIcon, CloseIcon } from "@/components/icons";
 
 /**
  * The warning that stands between an administrator and somebody else's data.
@@ -30,6 +30,7 @@ export default function ConfirmDialog({
   body,
   detail,
   confirmLabel,
+  confirmIcon,
   danger,
   busy,
   onConfirm,
@@ -42,6 +43,13 @@ export default function ConfirmDialog({
   /** The figures it will happen to, if there are any worth showing. */
   detail?: React.ReactNode;
   confirmLabel: string;
+  /**
+   * The mark beside that verb. Every button in this application carries one,
+   * and this is the button that carries the most weight of any of them —
+   * a bin, a circling arrow and a disk are three different promises, and the
+   * reader should be able to see which they are agreeing to before reading.
+   */
+  confirmIcon?: React.ReactNode;
   /** Irreversible: the confirming button goes red. */
   danger?: boolean;
   busy?: boolean;
@@ -110,8 +118,9 @@ export default function ConfirmDialog({
             ref={cancelRef}
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl border border-app-border px-3 py-2.5 text-sm font-semibold text-app-text"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-app-border px-3 py-2.5 text-sm font-semibold text-app-text"
           >
+            <CloseIcon size={15} />
             Болих
           </button>
           <button
@@ -121,17 +130,20 @@ export default function ConfirmDialog({
             // White on the daylight green is barely 3:1. The ink token is the
             // one this section defines for text that sits on the brand.
             style={danger ? undefined : { color: "var(--on-brand)" }}
-            className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold disabled:opacity-60 ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-semibold disabled:opacity-60 ${
               danger ? "bg-app-negative text-white" : "bg-brand"
             }`}
           >
             {busy ? (
-              <span className="flex items-center justify-center gap-2">
+              <>
                 <Spinner />
                 Уншиж байна…
-              </span>
+              </>
             ) : (
-              confirmLabel
+              <>
+                {confirmIcon}
+                {confirmLabel}
+              </>
             )}
           </button>
         </div>

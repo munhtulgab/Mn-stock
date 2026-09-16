@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
-import { PlusIcon } from "@/components/icons";
+import { CloseIcon, PlusIcon, UserPlusIcon } from "@/components/icons";
 
 const FIELD =
   "w-full rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text placeholder:text-app-muted";
@@ -111,19 +111,21 @@ export default function NewUserForm() {
       </label>
       <div className="flex gap-2">
         <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm font-semibold text-app-text"
+        >
+          <CloseIcon size={15} />
+          Болих
+        </button>
+        <button
           type="submit"
           disabled={saving}
           style={{ color: "var(--on-brand)" }}
-          className="flex-1 rounded-xl bg-brand px-3 py-2 text-sm font-semibold disabled:opacity-60"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-sm font-semibold disabled:opacity-60"
         >
+          <UserPlusIcon size={15} />
           {saving ? "Үүсгэж байна…" : "Үүсгэх"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="flex-1 rounded-xl border border-app-border bg-app-bg px-3 py-2 text-sm font-semibold text-app-text"
-        >
-          Болих
         </button>
       </div>
     </form>
