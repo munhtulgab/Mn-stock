@@ -12,6 +12,10 @@ import {
 /** The listing as the exchange publishes it: a fund, named after a trust. */
 const ALTT_NAME = "Гоулд Траст Хамтын биржээр арилжаалагддаг хөрөнгө оруулалтын сан";
 
+/** The tech fund's registered name, which none of its coverage prints. */
+const FTI_NAME =
+  "Фьючер Тек Инновэйшн Хамтын биржээр арилжаалагддаг хөрөнгө оруулалтын сан";
+
 function headlinesFrom(titles: string[]): NewsSourceResult[] {
   return [
     {
@@ -103,6 +107,46 @@ test("a fund is searched for its subject before its name", () => {
   const search = companySearchTerms("ALTT", ALTT_NAME);
   assert.deepEqual(search.slice(0, 2), ["алтны үнэ", "алтны нөөц"]);
   assert.ok(search.includes("ALTT"), "the name is still asked about, just later");
+});
+
+test("the tech fund is known by the short names its coverage prints", () => {
+  // Its registered name appears on the exchange's page and nowhere else. The
+  // launch stories, which are the fund's own news, say "FTI ETF" and
+  // "Future Tech Innovation"; the fund's site says "Фьючер Тек Инновэйшн ETF".
+  const found = matches("FTI", FTI_NAME, [
+    "Дэлхийн тэргүүлэх 800 гаруй компанид хөрөнгө оруулах боломжтой “FTI ETF” Монголын хөрөнгийн бирж дээр арилжаалагдаж эхлэв",
+    "“Future Tech Innovation” (FTI) ETF-ийн нэгж эрхийг 1,000 төгрөгөөр авах боломжтой",
+    "Фьючер Тек Инновэйшн ETF-ийн багцад АНУ-ын 17 сан багтжээ",
+    "Фьючер Тек Инновэйшн Индексийн гүйцэтгэл өссөн үзүүлэлттэй гарлаа",
+  ]);
+  assert.equal(found.size, 4, `only matched: ${[...found].join(" | ")}`);
+});
+
+test("a futures contract is not the fund whose name starts the same way", () => {
+  // Why the leading boundary is there: the commodity desks file these every
+  // week, and "фьючерс" opens with the fund's first word.
+  const found = matches("FTI", FTI_NAME, [
+    "Улаанбуудайн фьючерс үнэ сүүлийн 17 сарын доод цэгт хүрэв",
+    "Далианы Таваарын биржид төмрийн хүдрийн фьючерс үнэ 0.5 хувиар өслөө",
+  ]);
+  assert.deepEqual([...found], []);
+});
+
+test("the tech fund is not widened to the sector its index holds", () => {
+  // It tracks seventeen US ETFs. Matched on that theme instead of on its own
+  // name, every story about American technology would file under a Mongolian
+  // listing — which is the failure the subject list exists to avoid.
+  const found = matches("FTI", FTI_NAME, [
+    "Nasdaq 100 индекс шинэ дээд түвшинд хүрлээ",
+    "Хиймэл оюун ухааны компаниудын хувьцаа өссөн долоо хоног",
+  ]);
+  assert.deepEqual([...found], []);
+});
+
+test("the tech fund is searched for the phrases print uses, not its registration", () => {
+  const search = companySearchTerms("FTI", FTI_NAME);
+  assert.deepEqual(search.slice(0, 2), ["FTI ETF", "Future Tech Innovation"]);
+  assert.ok(search.includes("FTI"), "the ticker is still asked about, just later");
 });
 
 test("a company is searched for its own name and nothing else", () => {
