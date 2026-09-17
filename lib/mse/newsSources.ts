@@ -1069,9 +1069,17 @@ function escapeRegExp(text: string): string {
  * on its name alone it had no news at all, while the news that decides its
  * price ran past it every day.
  *
- * Kept to listings whose subject is a commodity rather than a business. A
- * company's own affairs are what its name finds; widening a company to a
- * theme would file the whole sector under it.
+ * The other half of the same problem is a fund the market never calls by
+ * its registered name at all. FTI is "Фьючер Тек Инновэйшн Хамтын биржээр
+ * арилжаалагддаг хөрөнгө оруулалтын сан" on the exchange, and not one
+ * sentence written about it says that: its launch coverage says “FTI ETF”
+ * and "Future Tech Innovation" (FTI) ETF, and the fund's own site says
+ * "Фьючер Тек Инновэйшн ETF". Those are still the fund's own names — the
+ * short forms print uses — rather than a theme it has been widened to.
+ *
+ * Kept to a listing's subject where that subject is a commodity, and to its
+ * own names otherwise. A company's own affairs are what its name finds;
+ * widening a company to a theme would file the whole sector under it.
  */
 interface Subject {
   /**
@@ -1117,6 +1125,32 @@ const SUBJECTS: Record<string, Subject> = {
       /(?<![\p{L}\p{N}])XAU(?![\p{L}\p{N}])/iu,
       // The fund's own short name, which its registered one buries.
       /(?<![\p{L}\p{N}])Гоулд(?![\p{L}\p{N}])/iu,
+    ],
+  },
+
+  // The tech fund, under the names it is actually written about by.
+  //
+  // Names rather than a subject, deliberately. FTI tracks an index of
+  // seventeen US ETFs — Nasdaq 100, semiconductors, defence, copper,
+  // uranium — and matching that theme would file every story about American
+  // technology under a Mongolian listing. What the registration misses here
+  // is narrower than a subject: it is the fund itself, written the way the
+  // market writes it.
+  FTI: {
+    // The ticker is asked about already, as a term of its own. These are the
+    // two phrases the coverage carries: the exchange's registered name is
+    // what nobody prints, so on it alone the fund's own launch stories went
+    // unfound.
+    search: ["FTI ETF", "Future Tech Innovation"],
+    match: [
+      /(?<![\p{L}\p{N}])Future\s+Tech\s+Innovation(?![\p{L}\p{N}])/iu,
+      // Two words deep rather than the whole name. Mongolian glues its
+      // endings onto the last word, so "Фьючер Тек Инновэйшн ETF-ийн" and
+      // "Фьючер Тек Инновэйшн Индексийн" are the same fund written two ways
+      // and only the front of it is constant. The leading boundary is what
+      // keeps out "фьючерс" — the futures contract, which the commodity
+      // desks write about every week.
+      /(?<![\p{L}\p{N}])Фьюч[еэ]р\s+Т[еэ]к(?![\p{L}\p{N}])/iu,
     ],
   },
 };
