@@ -34,6 +34,24 @@ const RANGES: { label: string; days: number | null }[] = [
  */
 const MAX_PLOTTED = 600;
 
+/*
+ * Taken from the theme rather than named here, exactly as the pro chart
+ * takes them.
+ *
+ * SVG attributes read custom properties like any other, so the drawing
+ * follows whichever palette is in force. Written out as hex, this chart was
+ * the dark theme's: a white close line, a near-black grid and a near-black
+ * tooltip. On a white card the line was invisible — the axes, the grid and
+ * the scale all drew, so the card looked like a chart whose price had gone
+ * missing. What was left showing was the green SMA20, which is why a fund
+ * with a month of history appeared to have three days of it.
+ */
+const GRID = "var(--app-divider)";
+const AXIS = "var(--app-muted)";
+const INK = "var(--app-text)";
+const SMA20 = "var(--app-positive)";
+const SMA50 = "var(--app-warn)";
+
 /**
  * Width of the price scale, and of the matching margin on the other side.
  * Wide enough for a short tick label — "100мя" — and no wider, since every
@@ -114,36 +132,38 @@ export default function PriceChart({
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={plotted} margin={{ top: 8, right: Y_GUTTER, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="2 4" stroke="#252932" />
+            <CartesianGrid strokeDasharray="2 4" stroke={GRID} />
             <XAxis
               dataKey="date"
-              tick={{ fontSize: 10, fill: "#8b90a0" }}
+              tick={{ fontSize: 10, fill: AXIS }}
               minTickGap={40}
-              axisLine={{ stroke: "#252932" }}
-              tickLine={{ stroke: "#252932" }}
+              axisLine={{ stroke: GRID }}
+              tickLine={{ stroke: GRID }}
             />
             {/* The price scale's gutter is matched by an equal margin on the
                 right, so the drawing sits square in its card rather than
                 shoved against one edge. Keeping the gutter narrow is what
                 makes that affordable — hence the short tick labels. */}
             <YAxis
-              tick={{ fontSize: 10, fill: "#8b90a0" }}
+              tick={{ fontSize: 10, fill: AXIS }}
               domain={["auto", "auto"]}
               width={Y_GUTTER}
               tickMargin={4}
               tickFormatter={shortNumber}
-              axisLine={{ stroke: "#252932" }}
-              tickLine={{ stroke: "#252932" }}
+              axisLine={{ stroke: GRID }}
+              tickLine={{ stroke: GRID }}
             />
             <Tooltip
               contentStyle={{
-                background: "#171a21",
-                border: "1px solid #252932",
+                background: "var(--app-card)",
+                border: `1px solid ${GRID}`,
                 borderRadius: 12,
                 fontSize: 11,
               }}
-              labelStyle={{ color: "#ffffff", fontWeight: 600 }}
-              itemStyle={{ color: "#00d16c" }}
+              labelStyle={{ color: INK, fontWeight: 600 }}
+              /* No item colour of its own: recharts takes each row's from
+                 the line it belongs to, and this used to paint all three
+                 green — the close, the SMA20 and the SMA50 alike. */
               /* Moving averages carry the full float they were divided into;
                  a tooltip reading 336.03049999999996 is noise, not precision. */
               formatter={(value) =>
@@ -153,7 +173,7 @@ export default function PriceChart({
             <Line
               type="monotone"
               dataKey="close"
-              stroke="#ffffff"
+              stroke={INK}
               strokeWidth={1.5}
               dot={false}
               isAnimationActive={false}
@@ -162,7 +182,7 @@ export default function PriceChart({
             <Line
               type="monotone"
               dataKey="sma20"
-              stroke="#00d16c"
+              stroke={SMA20}
               strokeWidth={1}
               dot={false}
               isAnimationActive={false}
@@ -171,7 +191,7 @@ export default function PriceChart({
             <Line
               type="monotone"
               dataKey="sma50"
-              stroke="#ffb020"
+              stroke={SMA50}
               strokeWidth={1}
               dot={false}
               isAnimationActive={false}
