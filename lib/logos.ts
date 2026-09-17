@@ -19,6 +19,12 @@
  * a metal rather than a company, so it has no mark of its own to take; what
  * identifies it in a list of forty rows is the thing it holds, and a bullion
  * bar says that where four letters do not.
+ *
+ * FTI came from the fund's own lockup, cut down to the mark. The lockup sets
+ * "FTI" beside "Future Tech Innovation" on two lines, and the avatar renders
+ * at forty pixels inside a circle: the words would be a grey smudge there,
+ * while the three letters read at that size and are what the ticker says
+ * anyway.
  */
 const LOGO_SYMBOLS = new Set([
   "AARD",
@@ -43,6 +49,7 @@ const LOGO_SYMBOLS = new Set([
   "CUMN",
   "ERDN",
   "ETR",
+  "FTI",
   "GAZR",
   "GHC",
   "GLMT",
