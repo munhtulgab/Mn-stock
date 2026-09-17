@@ -10,6 +10,7 @@ import {
   fetchMarketOpen,
   sessionEnd,
 } from "@/lib/marketinfo/quotes";
+import { fetchExchangeQuote } from "@/lib/mse/quote";
 import { priorClose, sessionChangePct } from "@/lib/priceChange";
 import { ulaanbaatarDay } from "@/lib/day";
 import type { PricePoint, Security } from "@/lib/types";
@@ -137,6 +138,37 @@ export async function GET(
   // itself a second after the page painted.
   await ensurePricesCurrent(db, security.symbol);
   const { last, prev } = await latestTwo(db, security.companyCode);
+
+  // Asked after the refresh above rather than before it, so the heading is
+  // compared against the newest session the exchange has actually published
+  // — and says nothing when that refresh has just caught up with it.
+  //
+  // This endpoint has to run the same chain as the render for the same
+  // reason it already runs the Datalab top-up: the page painted FTI's 1,019₮
+  // from the exchange's own heading, and this answered a second later with
+  // the 1,022₮ still sitting in the history, which the client then wrote
+  // over the top.
+  const heading = await fetchExchangeQuote(
+    security.symbol,
+    security.companyCode,
+    last?.close ?? null,
+  ).catch(() => null);
+  if (heading?.price != null) {
+    return NextResponse.json({
+      symbol: security.symbol,
+      price: heading.price,
+      changePct: heading.changePct,
+      previousClose: heading.previousClose,
+      date: heading.at?.slice(0, 10) ?? today,
+      // The heading carries no entry time, so there is none to show or to
+      // count the age of. Whether it reads as live is the session's business.
+      at: null,
+      isLive: marketOpen === true,
+      marketOpen,
+      source: "open.mse.mn",
+      checkedAt: new Date().toISOString(),
+    });
+  }
 
   return NextResponse.json({
     symbol: security.symbol,
