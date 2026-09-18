@@ -32,8 +32,24 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const maxMsParam = req.nextUrl.searchParams.get("maxMs");
-  const maxMs = maxMsParam ? Number(maxMsParam) : 45_000;
+  // Three minutes by default, and never more than the ceiling below.
+  //
+  // It was forty-five seconds, which is a sixth of what this function is
+  // allowed and nowhere near a session: the exchange publishes a close for
+  // about fifty securities a day and its pages take two to three seconds
+  // each, so a forty-five second run could not finish a day's trading even
+  // in principle — which is why the store sat behind the market. Measured
+  // after the change, a three-minute run reads around eighty companies.
+  //
+  // The ceiling is not `maxDuration`: a run overshoots its budget by however
+  // long the slowest request still in flight takes, and 240s of budget was
+  // measured finishing at 288s. Two hundred leaves that overshoot a minute
+  // and a half of room before the platform kills the function mid-write.
+  const MAX_BUDGET_MS = 200_000;
+  const maxMsParam = Number(req.nextUrl.searchParams.get("maxMs"));
+  const maxMs = Number.isFinite(maxMsParam) && maxMsParam > 0
+    ? Math.min(maxMsParam, MAX_BUDGET_MS)
+    : 180_000;
 
   try {
     await ensureIndexes();
