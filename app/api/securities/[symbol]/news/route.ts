@@ -26,11 +26,13 @@ const CACHE_MS = 60 * 60 * 1000;
  * name rather than filtered afterwards (v5), and then required a company
  * name to be a word rather than a run of letters inside one (v6), and then
  * let a listing name its subject and be searched for it, which is how a
- * fund holding a metal finds the stories that move it (v7). A row cached
- * under an older version is missing whatever the newer one would have found
- * — or carries what it should not have matched.
+ * fund holding a metal finds the stories that move it (v7), and then knew
+ * the tech fund by the short names its coverage prints rather than by the
+ * registered one nobody writes (v8). A row cached under an older version is
+ * missing whatever the newer one would have found — or carries what it
+ * should not have matched.
  */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 interface NewsSnapshot {
   key: string;

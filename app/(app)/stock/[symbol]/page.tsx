@@ -15,6 +15,7 @@ import {
   fetchMarketOpen,
   sessionEnd,
 } from "@/lib/marketinfo/quotes";
+import { fetchExchangeQuote } from "@/lib/mse/quote";
 import SignalBadge from "@/components/SignalBadge";
 import PriceChart, { type ChartPoint } from "@/components/PriceChart";
 import AiSignalPanel from "@/components/AiSignalPanel";
@@ -104,9 +105,23 @@ export default async function StockDetailPage({
   // is not one of the twenty on the exchange's movers board. Datalab knows
   // the session for any of them, so the page asks about this one rather than
   // quoting a close from before the weekend.
+  //
+  // And when neither answers, the exchange's own page still prints a price.
+  // Both sources above are about a session in progress — marketinfo carries
+  // the securities that traded today and not the funds, and Datalab is only
+  // asked between ten and five, because its figure carries no date. After
+  // the close that left the stored history, which the exchange publishes a
+  // session late: FTI's page read 1,019₮ all evening while this one quoted
+  // the 1,022₮ of the session before. The heading is read only when it is
+  // provably newer than what is stored — see fetchExchangeQuote.
   const live =
     liveQuotes.get(security.companyCode) ??
-    (await fetchFallbackQuote(security.companyCode).catch(() => null));
+    (await fetchFallbackQuote(security.companyCode).catch(() => null)) ??
+    (await fetchExchangeQuote(
+      security.symbol,
+      security.companyCode,
+      priceHistory.at(-1)?.close ?? null,
+    ).catch(() => null));
   const currentPrice = live?.price ?? priceHistory.at(-1)?.close ?? null;
   const today = ulaanbaatarDay(new Date());
 
