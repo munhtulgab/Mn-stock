@@ -79,8 +79,9 @@ export async function notificationTally(
 }
 
 /**
- * Records an alert in the in-app feed. The feed is shared by every user —
- * signal changes are market-wide — and read state is tracked per user.
+ * Records an alert in the in-app feed. Most of the feed is shared by every
+ * user — signal changes and headlines are market-wide — and read state is
+ * tracked per user. An alert with a `userId` is that reader's alone.
  */
 export async function recordNotification(
   db: Db,
@@ -121,28 +122,44 @@ export async function recordNotifications(
   await tally(db, stamped.map((n) => ulaanbaatarDay(n.createdAt)));
 
   // Keep the feed bounded; nobody scrolls past a couple hundred alerts.
-  const total = await collection.countDocuments();
-  if (total > KEEP) {
-    const stale = await collection
-      .find({}, { projection: { _id: 1 } })
-      .sort({ createdAt: -1 })
-      .skip(KEEP)
-      .toArray();
-    if (stale.length > 0) {
-      const ids = stale.map((d) => d._id);
-      await collection.deleteMany({ _id: { $in: ids } });
-      // Readers keep the ids they have opened and dismissed. An id whose
-      // alert no longer exists is a name for nothing, and left alone the two
-      // lists would grow for as long as the account did.
-      const gone = ids.map(String);
-      await db.collection<User>("users").updateMany({}, {
-        $pull: {
-          notificationsRead: { $in: gone },
-          notificationsDismissed: { $in: gone },
-        },
-      } as never);
-    }
+  //
+  // Per audience, not across the collection. The market's alerts and each
+  // reader's own are separate feeds that happen to share a table, and one
+  // cap over all of them let a busy day of somebody else's price alerts push
+  // the market's signal changes out of everybody's view.
+  const audiences = new Set(notifications.map((n) => n.userId ?? null));
+  for (const userId of audiences) {
+    await trim(db, audienceFilter(userId));
   }
+}
+
+/** The rows one audience sees: the market's, or one reader's own. */
+function audienceFilter(userId: string | null): Record<string, unknown> {
+  return userId === null ? { userId: { $exists: false } } : { userId };
+}
+
+async function trim(db: Db, filter: Record<string, unknown>): Promise<void> {
+  const collection = db.collection<AppNotification>("notifications");
+  const total = await collection.countDocuments(filter);
+  if (total <= KEEP) return;
+  const stale = await collection
+    .find(filter, { projection: { _id: 1 } })
+    .sort({ createdAt: -1 })
+    .skip(KEEP)
+    .toArray();
+  if (stale.length === 0) return;
+  const ids = stale.map((d) => d._id);
+  await collection.deleteMany({ _id: { $in: ids } });
+  // Readers keep the ids they have opened and dismissed. An id whose alert no
+  // longer exists is a name for nothing, and left alone the two lists would
+  // grow for as long as the account did.
+  const gone = ids.map(String);
+  await db.collection<User>("users").updateMany({}, {
+    $pull: {
+      notificationsRead: { $in: gone },
+      notificationsDismissed: { $in: gone },
+    },
+  } as never);
 }
 
 /**
@@ -155,13 +172,24 @@ export async function recordNotifications(
  * the count stick at fifty, and the hundred and fifty behind them were
  * unreachable: still stored, never shown.
  */
-async function getNotifications(db: Db): Promise<AppNotification[]> {
+async function getNotifications(db: Db, user: User): Promise<AppNotification[]> {
   return db
     .collection<AppNotification>("notifications")
-    .find({})
+    .find(visibleTo(String(user._id)))
     .sort({ createdAt: -1 })
-    .limit(KEEP)
+    // Both feeds in full: the market's and this reader's own are each kept to
+    // the cap on their own, so together they can be up to twice it.
+    .limit(KEEP * 2)
     .toArray();
+}
+
+/**
+ * What one reader's feed is made of: everything the market was told, and
+ * what was raised for them alone. Somebody else's alert about somebody
+ * else's position is not in it.
+ */
+export function visibleTo(userId: string): Record<string, unknown> {
+  return { $or: [{ userId: { $exists: false } }, { userId }] };
 }
 
 /**
@@ -181,7 +209,7 @@ function isDismissed(user: User, id: string): boolean {
 }
 
 export async function getUnreadCount(db: Db, user: User): Promise<number> {
-  const items = await getNotifications(db);
+  const items = await getNotifications(db, user);
   return items.filter(
     (n) =>
       !isDismissed(user, String(n._id)) &&
@@ -216,7 +244,7 @@ export async function getNotificationFeed(
   db: Db,
   user: User,
 ): Promise<NotificationFeed> {
-  const items = (await getNotifications(db)).filter(
+  const items = (await getNotifications(db, user)).filter(
     (n) => !isDismissed(user, String(n._id)),
   );
   const { today, yesterday } = todayAndYesterday();
@@ -240,6 +268,8 @@ export async function getNotificationFeed(
       symbol: n.symbol,
       signal: n.signal,
       previousSignal: n.previousSignal,
+      mine: n.mine,
+      changePct: n.changePct,
       time: ulaanbaatarTime(createdAt),
       isNew,
     });

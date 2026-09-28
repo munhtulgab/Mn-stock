@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureIndexes } from "@/lib/mongodb";
 import { runSyncBatch } from "@/lib/sync";
 import { checkSignalChangesAndNotify } from "@/lib/signalHistory";
-import { refreshDashboardSnapshot } from "@/lib/data";
+import { getDashboardRows, refreshDashboardSnapshot, tradedSession } from "@/lib/data";
+import { notifyPriceMoves } from "@/lib/personalAlerts";
 import { refreshMarketIndices } from "@/lib/indices";
 import { refreshMarketNews } from "@/lib/marketNews";
 import { isSettingsRequestAuthorized } from "@/lib/settingsAuth";
@@ -100,6 +101,29 @@ async function handle(req: NextRequest) {
       console.error("signal change check failed", err);
     }
 
+    // The session's large moves in companies people follow, from the closes
+    // this run stored. The intraday check only runs while somebody has the
+    // app open; this is what catches the rest, and a move it already told
+    // somebody about is not told twice.
+    let priceAlerts = { announced: 0, readers: 0 };
+    try {
+      const { rows } = await getDashboardRows(db);
+      const session = tradedSession(rows, 10);
+      priceAlerts = await notifyPriceMoves(
+        db,
+        session.rows.map((r) => ({
+          companyCode: r.companyCode,
+          symbol: r.symbol,
+          name: r.name,
+          price: r.lastPrice,
+          changePct: r.changePct,
+          day: r.lastDate ?? session.session ?? "",
+        })),
+      );
+    } catch (err) {
+      console.error("price move alerts failed", err);
+    }
+
     let indexCount = 0;
     try {
       indexCount = await refreshMarketIndices(db);
@@ -120,6 +144,7 @@ async function handle(req: NextRequest) {
       ok: true,
       ...result,
       signalChanges,
+      priceAlerts,
       snapshotRows,
       indexCount,
       newsCount,

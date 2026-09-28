@@ -8,6 +8,7 @@ import {
 import type { FacebookSpend } from "@/lib/mse/facebook";
 import { fetchArticleTimes, fetchExchangeNews } from "@/lib/mse/exchangeNews";
 import { todayAndYesterday, ulaanbaatarDaysAgo, ulaanbaatarTime } from "@/lib/day";
+import { notifyFollowersOfNews } from "@/lib/personalAlerts";
 import { recordNotifications } from "@/lib/notifications";
 import { sendPushToAll } from "@/lib/push";
 import type { Security, User } from "@/lib/types";
@@ -581,6 +582,12 @@ async function announce(
       url: item.url,
       kind: "news" as const,
     })),
+  );
+
+  // Readers whose own tickers are in a headline hear about it on their own
+  // devices. It checks the operator's switch itself.
+  await notifyFollowersOfNews(db, fresh.slice(0, ANNOUNCE_LIMIT)).catch((err) =>
+    console.error("personal news alerts failed", err),
   );
 
   const { notifications } = await getSettings(db);

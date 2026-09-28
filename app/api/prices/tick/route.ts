@@ -5,7 +5,8 @@ import { getSettings } from "@/lib/settings";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 import { refreshDashboardSnapshot } from "@/lib/data";
 import { checkSignalChangesAndNotify } from "@/lib/signalHistory";
-import { ulaanbaatarDateTime } from "@/lib/day";
+import { ulaanbaatarDateTime, ulaanbaatarDay } from "@/lib/day";
+import { notifyPriceMoves } from "@/lib/personalAlerts";
 import { getCurrentUser } from "@/lib/auth";
 
 /**
@@ -153,6 +154,27 @@ async function handle(req: NextRequest) {
     console.error("price tick: signal check failed", err);
   }
 
+  // A large move in somebody's own position is told to them while it is
+  // happening, not at the evening sync. Each move is announced once, however
+  // many ticks see it — see `moveKey`.
+  let priceAlerts = { announced: 0, readers: 0 };
+  try {
+    const today = ulaanbaatarDay(checkedAt);
+    priceAlerts = await notifyPriceMoves(
+      db,
+      [...quotes].map(([companyCode, quote]) => ({
+        companyCode,
+        symbol: quote.symbol,
+        price: quote.price,
+        changePct: quote.changePct,
+        day: quote.at?.slice(0, 10) ?? today,
+      })),
+      checkedAt,
+    );
+  } catch (err) {
+    console.error("price tick: move alerts failed", err);
+  }
+
   return NextResponse.json({
     ok: true,
     at: ulaanbaatarDateTime(checkedAt),
@@ -161,6 +183,7 @@ async function handle(req: NextRequest) {
     recomputed: true,
     snapshotRows,
     signalChanges,
+    priceAlerts,
   });
 }
 

@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/settings";
 import { sendSms } from "@/lib/callpro";
 import { recordNotifications } from "@/lib/notifications";
 import { SIGNAL_LABELS, type Signal } from "@/lib/types";
+import { notifyFollowersOfSignals } from "@/lib/personalAlerts";
 
 /**
  * Which engine produced a stored signal.
@@ -158,6 +159,21 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
       previousSignal: c.from,
     })),
   );
+
+  // Each holder and watcher hears about their own companies, whichever way
+  // they moved — ahead of the operator's filter below, which decides what is
+  // worth interrupting the whole market for, not what an owner needs to know.
+  // A failure here costs the personal pushes and nothing else.
+  const codeOf = new Map(priced.map((r) => [r.symbol, r.companyCode]));
+  await notifyFollowersOfSignals(
+    db,
+    moved.flatMap((c) => {
+      const companyCode = codeOf.get(c.symbol);
+      return companyCode === undefined
+        ? []
+        : [{ companyCode, symbol: c.symbol, name: c.name, from: c.from as Signal, to: c.to }];
+    }),
+  ).catch((err) => console.error("personal signal alerts failed", err));
 
   // Operators pick which transitions are worth interrupting people for.
   const { notifications } = await getSettings(db);

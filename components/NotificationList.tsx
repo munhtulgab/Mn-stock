@@ -194,10 +194,14 @@ function Row({ n }: { n: FeedNotification }) {
             {n.title}
           </div>
           {n.signal && <SignalBadge signal={n.signal} size="sm" />}
+          {typeof n.changePct === "number" && <MoveChip pct={n.changePct} />}
         </div>
         <div className="text-xs text-app-muted mt-0.5 break-words">{n.body}</div>
         <div className="mt-1 flex items-baseline justify-between gap-3 text-[11px]">
-          <span className="text-app-muted">{n.time}</span>
+          <span className="flex items-baseline gap-2 text-app-muted">
+            {n.time}
+            {n.mine && <MineTag mine={n.mine} />}
+          </span>
           {n.url && (
             <span className="text-brand font-medium inline-flex items-center gap-0.5 shrink-0">
               Дэлгэрэнгүй
@@ -207,5 +211,36 @@ function Row({ n }: { n: FeedNotification }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * How far a price alert's company moved, in the colours every price in the
+ * app uses. The title says it too; this is what the eye finds first in a
+ * column of rows.
+ */
+function MoveChip({ pct }: { pct: number }) {
+  const up = pct > 0;
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${
+        up ? "bg-app-positive-bg text-app-positive" : "bg-app-negative-bg text-app-negative"
+      }`}
+    >
+      {up ? "+" : "−"}
+      {Math.abs(pct).toFixed(2)}%
+    </span>
+  );
+}
+
+/**
+ * Why this alert is the reader's own: a company they hold, or one they
+ * watch. Everything without it is the market's, the same for everybody.
+ */
+function MineTag({ mine }: { mine: "holds" | "watches" }) {
+  return (
+    <span className="rounded-full bg-brand-light px-1.5 py-px text-[10px] font-semibold text-brand">
+      {mine === "holds" ? "Таны багц" : "Хяналт"}
+    </span>
   );
 }
