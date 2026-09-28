@@ -1,6 +1,6 @@
 import type { Db } from "mongodb";
 import * as cheerio from "cheerio";
-import { ulaanbaatarStamp } from "@/lib/day";
+import { ulaanbaatarDay, ulaanbaatarStamp, weekdayIndex } from "@/lib/day";
 
 /**
  * Reading a saved Facebook page.
@@ -460,6 +460,71 @@ const APIFY_MAX_AGE_DAYS = 30;
 const APIFY_MAX_CHARGE_USD = 0.04;
 
 /**
+ * How many Facebook pages may be scraped in one day, and on which days.
+ *
+ * Eight pages every weekday is what the free allowance carries: five posts
+ * a page costs about $0.026, and $5 a month is about a hundred and ninety
+ * runs, which is eight pages across the month's twenty-odd trading days with
+ * a little to spare. Before this the only thing holding the spend there was
+ * the outside scheduler calling once a weekday — a second call on the same
+ * day, a retry, a scheduler set up twice, and every page was scraped again.
+ * Apify blocks the whole account when the allowance runs out, and every
+ * source goes down with it.
+ *
+ * So the rule is in the code now:
+ *
+ *  - Monday to Friday only (Ulaanbaatar). The exchange is shut at weekends
+ *    and the pages have nothing worth paying for.
+ *  - Each page once a day. A second run for the same page on the same day
+ *    is served what the first one stored.
+ *  - At most eight different pages a day. A ninth is served its stored posts
+ *    and says why, so a long list of pages cannot outspend the allowance.
+ */
+export const APIFY_PAGES_PER_DAY = 8;
+
+type RunClaim = { _id: string; day: string; pageUrl: string; at: Date };
+
+/**
+ * Takes one of today's runs for this page, or says why it cannot.
+ *
+ * The claim is an insert on `_id` — day and page — which is unique whatever
+ * indexes exist, so two requests arriving together cannot both start a run
+ * for the same page. The day's count is read after the claim is written, and
+ * a claim that turns out to be one too many is taken back: two requests
+ * racing for the last slot may both give theirs up, which spends less than
+ * the cap and never more.
+ */
+async function claimApifyRun(
+  db: Db,
+  pageUrl: string,
+  now: Date = new Date(),
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const day = ulaanbaatarDay(now);
+  if (weekdayIndex(day) > 4) {
+    return { ok: false, reason: "Амралтын өдөр Facebook шинээр татахгүй." };
+  }
+  const runs = db.collection<RunClaim>("apifyRuns");
+  const _id = `${day}:${pageUrl}`;
+  try {
+    await runs.insertOne({ _id, day, pageUrl, at: now });
+  } catch (err) {
+    if ((err as { code?: number }).code === 11000) {
+      return { ok: false, reason: "Энэ хуудсыг өнөөдөр аль хэдийн татсан." };
+    }
+    throw err;
+  }
+  const today = await runs.countDocuments({ day });
+  if (today > APIFY_PAGES_PER_DAY) {
+    await runs.deleteOne({ _id });
+    return {
+      ok: false,
+      reason: `Өдрийн хязгаар (${APIFY_PAGES_PER_DAY} хуудас) хүрсэн — хадгалсан постыг харууллаа.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
  * How recently a finished run must have ended for its dataset to be read
  * back instead of a scrape being started. A little over a day, so the run
  * this is looking for is the last weekday one.
@@ -685,6 +750,17 @@ export async function fetchWithApify(
     return { posts: cached?.posts ?? [] };
   }
 
+  // A billed run from here on, so it has to fit inside today's allowance.
+  // Without a database there is nothing to count against, and an uncounted
+  // run is exactly what this is here to prevent.
+  if (!db) {
+    return { posts: cached?.posts ?? [], error: "Apify: тоолох сангүйгээр татахгүй." };
+  }
+  const claim = await claimApifyRun(db, pageUrl);
+  if (!claim.ok) {
+    return { posts: cached?.posts ?? [], error: claim.reason };
+  }
+
   const since = new Date(Date.now() - APIFY_MAX_AGE_DAYS * 86_400_000)
     .toISOString()
     .slice(0, 10);
@@ -800,4 +876,5 @@ export async function fetchWithToken(
   }
 }
 
-export const __testing = { parseMbasicPosts, toPosts, byNewest, worthRechecking };
+export const __testing = {
+  claimApifyRun, parseMbasicPosts, toPosts, byNewest, worthRechecking };
