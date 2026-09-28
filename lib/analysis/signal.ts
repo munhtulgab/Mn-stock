@@ -73,29 +73,143 @@ function fundamentalScore(ratios: RatioView[]): number | null {
 }
 
 /**
- * Risk as a score, which is never positive.
+ * Where the market's risk figures fall, for measuring one company against.
+ *
+ * Each list is every listed company's figure, sorted ascending. Built from
+ * the whole-market pass (see `buildCombinedSignals`) and stored, so a single
+ * company's page measures against the same market the home list did.
+ */
+export interface RiskBenchmark {
+  volatility: number[];
+  maxDrawdown: number[];
+  sharpe: number[];
+}
+
+/**
+ * Below this many companies with a full three-year reading, the market is
+ * too thin to rank against and the old fixed thresholds are used instead.
+ */
+const MIN_BENCHMARK = 20;
+
+export function buildRiskBenchmark(all: RiskMetrics[]): RiskBenchmark | null {
+  const pick = (f: (r: RiskMetrics) => number | null) =>
+    all
+      .map(f)
+      .filter((v): v is number => v !== null && Number.isFinite(v))
+      .sort((x, y) => x - y);
+  const benchmark = {
+    volatility: pick((r) => r.volatility),
+    maxDrawdown: pick((r) => r.maxDrawdown),
+    sharpe: pick((r) => r.sharpe),
+  };
+  return benchmark.volatility.length >= MIN_BENCHMARK ? benchmark : null;
+}
+
+/**
+ * The share of the market that does better than `value`, from 0 to 1.
+ *
+ * `higherIsWorse` for volatility and drawdown; Sharpe is the other way round.
+ * Ties count as neither better nor worse, so a figure in the middle of a run
+ * of equal ones sits in the middle.
+ */
+export function shareBetter(
+  sorted: number[],
+  value: number,
+  higherIsWorse: boolean,
+): number {
+  if (sorted.length === 0) return 0.5;
+  let below = 0;
+  let equal = 0;
+  for (const v of sorted) {
+    if (v < value) below++;
+    else if (v === value) equal++;
+  }
+  const above = sorted.length - below - equal;
+  const better = higherIsWorse ? below : above;
+  return (better + equal / 2) / sorted.length;
+}
+
+/** How far into the worse half of the market a figure is, as 0 to 100. */
+const penalty = (shareBetterThanIt: number) =>
+  Math.max(0, shareBetterThanIt - 0.5) * 200;
+
+interface RiskReading {
+  score: number | null;
+  /** Figures in the market's worst quarter, for the reasons list. */
+  flagged: { label: string; value: string; share: number }[];
+}
+
+/**
+ * Risk as a score, which is never positive — measured against the market.
  *
  * Low volatility is not a reason to buy a company — it is the absence of a
  * reason not to — so this subtracts and never adds. Treating a placid share
  * as a buy signal is how a screen ends up recommending the securities that
  * do not trade.
+ *
+ * What it subtracts for is being worse than the rest of the exchange:
+ * volatility and the deepest fall above the market's median, Sharpe below
+ * it, each scaled from nothing at the median to the full amount at the very
+ * worst, and averaged. It used to use fixed lines — sixty per cent
+ * volatility, a beta of 1.3, a fifty per cent fall. Measured against 62
+ * listings with three years of trading, the market's median volatility is
+ * 68%, so the line sorted this exchange into "wild" and "exactly zero": a
+ * calm company scored zero however poor its return for the risk taken, and
+ * nothing between the two was told apart. Sharpe was not looked at at all.
+ *
+ * With no benchmark to hand (a market too thin to rank), the fixed lines are
+ * still the fallback.
  */
-function riskScore(risk: RiskMetrics): number | null {
+function riskScore(risk: RiskMetrics, benchmark: RiskBenchmark | null): RiskReading {
   if (risk.volatility === null && risk.beta === null && risk.maxDrawdown === null) {
-    return null;
+    return { score: null, flagged: [] };
   }
 
-  let score = 0;
-  if (risk.volatility !== null && risk.volatility > HIGH_VOLATILITY) {
-    score -= Math.min(40, (risk.volatility - HIGH_VOLATILITY) / 2);
+  if (!benchmark) {
+    let score = 0;
+    if (risk.volatility !== null && risk.volatility > HIGH_VOLATILITY) {
+      score -= Math.min(40, (risk.volatility - HIGH_VOLATILITY) / 2);
+    }
+    if (risk.beta !== null && risk.beta > HIGH_BETA) {
+      score -= Math.min(30, (risk.beta - HIGH_BETA) * 30);
+    }
+    if (risk.maxDrawdown !== null && risk.maxDrawdown > 50) {
+      score -= Math.min(30, risk.maxDrawdown - 50);
+    }
+    return { score, flagged: [] };
   }
-  if (risk.beta !== null && risk.beta > HIGH_BETA) {
-    score -= Math.min(30, (risk.beta - HIGH_BETA) * 30);
+
+  const readings: { label: string; value: string; share: number }[] = [];
+  if (risk.volatility !== null) {
+    readings.push({
+      label: "Хэлбэлзэл",
+      value: `${risk.volatility.toFixed(1)}%`,
+      share: shareBetter(benchmark.volatility, risk.volatility, true),
+    });
   }
-  if (risk.maxDrawdown !== null && risk.maxDrawdown > 50) {
-    score -= Math.min(30, risk.maxDrawdown - 50);
+  if (risk.maxDrawdown !== null) {
+    readings.push({
+      label: "Хамгийн их уналт",
+      value: `${risk.maxDrawdown.toFixed(1)}%`,
+      share: shareBetter(benchmark.maxDrawdown, risk.maxDrawdown, true),
+    });
   }
-  return score;
+  if (risk.sharpe !== null) {
+    readings.push({
+      label: "Sharpe",
+      value: risk.sharpe.toFixed(2),
+      share: shareBetter(benchmark.sharpe, risk.sharpe, false),
+    });
+  }
+  if (readings.length === 0) return { score: null, flagged: [] };
+
+  const average =
+    readings.reduce((sum, r) => sum + penalty(r.share), 0) / readings.length;
+  return {
+    // Never −0: a zero here is "nothing to brake with", and prints as one.
+    score: average === 0 ? 0 : -average,
+    flagged: readings.filter((r) => r.share >= 0.75),
+  };
 }
 
 function describe(
@@ -104,6 +218,8 @@ function describe(
   risk: RiskMetrics,
   sectorLabel: string,
   peerCount: number,
+  /** The market-relative flags, or null where fixed thresholds applied. */
+  flagged: RiskReading["flagged"] | null,
 ): string[] {
   const reasons: string[] = [];
 
@@ -127,20 +243,24 @@ function describe(
     reasons.push(`Салбарын дунджаас хоцорсон: ${weak.join(", ")}.`);
   }
 
-  if (risk.beta !== null && risk.beta > HIGH_BETA) {
-    reasons.push(
-      `Бета ${risk.beta.toFixed(2)} — зах зээлээс хүчтэй хэлбэлздэг.`,
-    );
-  }
-  if (risk.volatility !== null && risk.volatility > HIGH_VOLATILITY) {
-    reasons.push(
-      `Жилийн хэлбэлзэл ${risk.volatility.toFixed(0)}% — эрсдэл өндөр.`,
-    );
-  }
-  if (risk.maxDrawdown !== null && risk.maxDrawdown > 50) {
-    reasons.push(
-      `Сүүлийн жилүүдэд оргилоосоо ${risk.maxDrawdown.toFixed(0)}% хүртэл унаж байсан.`,
-    );
+  if (flagged) {
+    for (const f of flagged) {
+      reasons.push(
+        `${f.label} ${f.value} — зах зээлийн ${Math.round(f.share * 100)}% нь үүнээс сайн.`,
+      );
+    }
+  } else {
+    if (risk.beta !== null && risk.beta > HIGH_BETA) {
+      reasons.push(`Бета ${risk.beta.toFixed(2)} — зах зээлээс хүчтэй хэлбэлздэг.`);
+    }
+    if (risk.volatility !== null && risk.volatility > HIGH_VOLATILITY) {
+      reasons.push(`Жилийн хэлбэлзэл ${risk.volatility.toFixed(0)}% — эрсдэл өндөр.`);
+    }
+    if (risk.maxDrawdown !== null && risk.maxDrawdown > 50) {
+      reasons.push(
+        `Сүүлийн жилүүдэд оргилоосоо ${risk.maxDrawdown.toFixed(0)}% хүртэл унаж байсан.`,
+      );
+    }
   }
 
   if (reasons.length === 0) {
@@ -155,16 +275,20 @@ export function combineSignal({
   risk,
   sectorLabel,
   peerCount,
+  benchmark = null,
 }: {
   scorecard: Scorecard;
   ratios: RatioView[];
   risk: RiskMetrics;
   sectorLabel: string;
   peerCount: number;
+  /** The market's risk figures to rank against; see `RiskBenchmark`. */
+  benchmark?: RiskBenchmark | null;
 }): CombinedSignal {
   const technical = technicalScore(scorecard);
   const fundamental = fundamentalScore(ratios);
-  const riskPenalty = riskScore(risk);
+  const riskReading = riskScore(risk, benchmark);
+  const riskPenalty = riskReading.score;
 
   const parts: [number | null, number][] = [
     [fundamental, WEIGHTS.fundamental],
@@ -177,11 +301,20 @@ export function combineSignal({
   // fundamentals were neutral.
   const present = parts.filter(([value]) => value !== null);
   const weightAvailable = present.reduce((sum, [, weight]) => sum + weight, 0);
+
+  // Risk is a brake and only a brake. A company no riskier than the market's
+  // median has nothing to brake with, and letting its zero take a fifth of
+  // the weight pulled every such score a fifth of the way towards nothing —
+  // 0.45 × 42 + 0.35 × 36 read as 32 rather than 39. So a zero is left out
+  // of the score; it still counts as evidence for the confidence below.
+  const riskPart = parts[2];
+  const scored = riskPenalty === 0 ? present.filter((part) => part !== riskPart) : present;
+  const scoredWeight = scored.reduce((sum, [, weight]) => sum + weight, 0);
   const score =
-    weightAvailable === 0
+    scoredWeight === 0
       ? 0
-      : present.reduce((sum, [value, weight]) => sum + value! * weight, 0) /
-        weightAvailable;
+      : scored.reduce((sum, [value, weight]) => sum + value! * weight, 0) /
+        scoredWeight;
 
   const signal: Signal =
     score >= ACT_THRESHOLD ? "BUY" : score <= -ACT_THRESHOLD ? "SELL" : "HOLD";
@@ -214,6 +347,13 @@ export function combineSignal({
       fundamental: fundamental === null ? null : Math.round(fundamental),
       risk: riskPenalty === null ? null : Math.round(riskPenalty),
     },
-    reasons: describe(scorecard, ratios, risk, sectorLabel, peerCount),
+    reasons: describe(
+      scorecard,
+      ratios,
+      risk,
+      sectorLabel,
+      peerCount,
+      benchmark ? riskReading.flagged : null,
+    ),
   };
 }

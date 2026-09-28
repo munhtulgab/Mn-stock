@@ -19,7 +19,12 @@ import { buildScorecard, type Scorecard } from "./indicators";
 import { computeRisk, RISK_YEARS, type RiskMetrics } from "./risk";
 import { buildGoldBasis, type GoldBasis } from "./goldBasis";
 import { getGoldPrices, tracksGold } from "@/lib/gold";
-import { combineSignal, type CombinedSignal } from "./signal";
+import {
+  buildRiskBenchmark,
+  combineSignal,
+  type CombinedSignal,
+  type RiskBenchmark,
+} from "./signal";
 import { TIMEFRAMES, type Candle, type Timeframe } from "./series";
 import { withLiveCandle } from "@/lib/liveCandle";
 import type { LiveQuote } from "@/lib/marketinfo/quotes";
@@ -269,10 +274,25 @@ export interface MarketContext {
    * per company turned one pass into four hundred squared.
    */
   ratiosByCompany: Map<number, RatioInputs>;
+  /**
+   * The market's risk figures, for ranking one company's against. Measured
+   * in the whole-market pass and stored; null until the first one has run,
+   * in which case the verdict falls back to fixed thresholds.
+   */
+  riskBenchmark: RiskBenchmark | null;
+}
+
+const RISK_BENCHMARK_KEY = "riskBenchmark";
+
+async function readRiskBenchmark(db: Db): Promise<RiskBenchmark | null> {
+  const doc = await db
+    .collection<{ key: string; benchmark: RiskBenchmark }>("marketSnapshots")
+    .findOne({ key: RISK_BENCHMARK_KEY });
+  return doc?.benchmark ?? null;
 }
 
 async function loadMarketContext(db: Db): Promise<MarketContext> {
-  const [financialsByCompany, latestPrices, securities, indices, tdb] =
+  const [financialsByCompany, latestPrices, securities, indices, tdb, riskBenchmark] =
     await Promise.all([
       getFinancialsForPeers(db),
       getLatestPrices(db),
@@ -285,6 +305,7 @@ async function loadMarketContext(db: Db): Promise<MarketContext> {
       getTdbLatest(db).catch(
         () => new Map<number, { latest: TdbYear; previous: TdbYear | null }>(),
       ),
+      readRiskBenchmark(db).catch(() => null),
     ]);
 
   const ratiosByCompany = new Map<number, RatioInputs>();
@@ -307,6 +328,7 @@ async function loadMarketContext(db: Db): Promise<MarketContext> {
     top20:
       (indices as Record<string, { date: string; value: number }[]>).top20 ?? [],
     ratiosByCompany,
+    riskBenchmark,
   };
 }
 
@@ -436,6 +458,7 @@ function analyseCompany(
     risk,
     sectorLabel: resolved.label,
     peerCount: peers.length,
+    benchmark: context.riskBenchmark,
   });
 
   // Ranked by the sector's own valuation so the table reads as a league
@@ -541,12 +564,34 @@ export async function buildCombinedSignals(
     getCandlesForAll(db, from),
   ]);
 
-  const out = new Map<number, CombinedSignal>();
-  for (const security of context.securities) {
-    const candles = withLiveCandle(
+  const candlesFor = (security: Security) =>
+    withLiveCandle(
       candlesByCompany.get(security.companyCode) ?? [],
       live?.get(security.companyCode),
     );
+
+  // The market's risk figures first, so every company is ranked against the
+  // same market — and stored, so a company's own page ranks against it too.
+  const benchmark = buildRiskBenchmark(
+    context.securities.map((s) => computeRisk(candlesFor(s), context.top20, today)),
+  );
+  if (benchmark) {
+    context.riskBenchmark = benchmark;
+    await db
+      .collection<{ key: string; benchmark: RiskBenchmark; computedAt: Date }>(
+        "marketSnapshots",
+      )
+      .updateOne(
+        { key: RISK_BENCHMARK_KEY },
+        { $set: { key: RISK_BENCHMARK_KEY, benchmark, computedAt: new Date() } },
+        { upsert: true },
+      )
+      .catch((err) => console.error("risk benchmark not stored", err));
+  }
+
+  const out = new Map<number, CombinedSignal>();
+  for (const security of context.securities) {
+    const candles = candlesFor(security);
     if (candles.length === 0) continue;
     // The price every ratio is measured against, same as the page: the
     // running quote where there is one, the last close otherwise.
@@ -628,6 +673,7 @@ export async function buildAnalysis(
           risk: goldBasis.risk,
           sectorLabel: analysis.sectorLabel,
           peerCount: analysis.peerCount,
+          benchmark: context.riskBenchmark,
         })
       : analysis.combined,
     riskYears: RISK_YEARS,
