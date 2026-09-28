@@ -302,7 +302,7 @@ const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
  * sync — e.g. the sparkline calendar-window fallback below. A stored
  * snapshot from an older version is treated as stale regardless of age.
  */
-const DASHBOARD_SCHEMA_VERSION = 4;
+const DASHBOARD_SCHEMA_VERSION = 5;
 
 interface MarketSnapshot {
   key: string;
@@ -775,4 +775,4 @@ export async function getStockDetailFresh(
   return getStockDetail(db, symbol, live);
 }
 
-export const __testing = { buildRow };
+export const __testing = { buildRow, DASHBOARD_SCHEMA_VERSION };

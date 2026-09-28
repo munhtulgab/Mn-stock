@@ -11,7 +11,8 @@ import { notifyFollowersOfSignals } from "@/lib/personalAlerts";
  * 1 was the six-indicator rule engine. 2 is the combined analysis — the
  * scorecard, the ratios against the sector and the risk figures — which is
  * what a company's own page has always shown and what the whole app reads
- * now.
+ * now. 3 ranks the risk part against the market instead of fixed lines,
+ * which moves scores across the board without anything having traded.
  *
  * Bump this whenever a change would move verdicts across the market. A
  * signal is only comparable with one from the same engine: measured against
@@ -19,7 +20,7 @@ import { notifyFollowersOfSignals } from "@/lib/personalAlerts";
  * handed a hundred alerts about companies that did nothing. Stored signals
  * from an older engine are re-baselined silently below instead.
  */
-const SIGNAL_ENGINE_VERSION = 2;
+const SIGNAL_ENGINE_VERSION = 3;
 
 interface SignalHistoryDoc {
   companyCode: number;

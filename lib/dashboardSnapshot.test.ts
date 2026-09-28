@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Db } from "mongodb";
-import { getDashboardRows, type DashboardRow } from "./data";
+import { __testing, getDashboardRows, type DashboardRow } from "./data";
 
 /**
  * Whether a reader ever waits for the market list to be rebuilt.
@@ -20,8 +20,8 @@ import { getDashboardRows, type DashboardRow } from "./data";
  */
 
 const ROW = { symbol: "APU", companyCode: 90 } as unknown as DashboardRow;
-/** Must match DASHBOARD_SCHEMA_VERSION in data.ts. */
-const VERSION = 4;
+/** Read from data.ts rather than copied, so a bump there cannot break this. */
+const VERSION = __testing.DASHBOARD_SCHEMA_VERSION;
 const HALF_HOUR = 30 * 60 * 1000;
 
 function dbWith(doc: unknown, onCompute?: () => void): Db {
