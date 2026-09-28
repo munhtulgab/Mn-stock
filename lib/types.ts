@@ -185,8 +185,21 @@ export interface AppNotification {
   title: string;
   body: string;
   url?: string;
-  kind: "signal" | "news" | "system";
+  kind: "signal" | "news" | "system" | "price";
   createdAt: Date;
+  /**
+   * Whose alert this is. Absent — every alert before this field existed, and
+   * every signal change and headline since — means the whole market's, shown
+   * to everybody. Present means it was raised for one reader because it is
+   * about a company they hold or watch, and nobody else sees it: a move in
+   * somebody's own position is theirs to hear about, not the whole
+   * installation's.
+   */
+  userId?: string;
+  /** On a reader's own alert: why it is theirs — they hold it, or watch it. */
+  mine?: "holds" | "watches";
+  /** On a price alert, the move it is about, in percent. */
+  changePct?: number;
   /**
    * Set on signal alerts, so the feed can show the company the way the rest
    * of the app does — logo, ticker, and the badge it moved to — instead of

@@ -5,6 +5,17 @@ export interface PushSubscriptionDoc {
   endpoint: string;
   keys: { p256dh: string; auth: string };
   createdAt: Date;
+  /**
+   * Who is signed in on the device this subscription belongs to.
+   *
+   * A subscription is a device, not a person, and until this existed the app
+   * could only ever speak to all of them at once. That is fine for a signal
+   * change anybody might care about and useless for "a company you hold fell
+   * six per cent" — which is only worth sending to the person who holds it,
+   * and is nobody else's business. Null when the device is signed out, so a
+   * phone that changes hands stops receiving the last owner's alerts.
+   */
+  userId?: string | null;
 }
 
 function isConfigured(): boolean {
@@ -23,6 +34,8 @@ export async function saveSubscription(
   db: Db,
   sub: PushSubscriptionDoc,
 ): Promise<void> {
+  // One upsert by endpoint: the same device re-sends its subscription on
+  // every app open, which is also what re-points it at whoever is signed in.
   await db
     .collection<PushSubscriptionDoc>("pushSubscriptions")
     .updateOne(
@@ -62,18 +75,43 @@ function endpointHost(endpoint: string): string {
   }
 }
 
+export async function sendPushToAll(
+  db: Db,
+  payload: NotificationPayload,
+): Promise<PushResult> {
+  return deliver(db, {}, payload);
+}
+
 /**
- * Sends a push notification to every stored subscription. Subscriptions
- * that the push service reports as gone (404/410 — the user uninstalled
- * the app or revoked permission) are pruned automatically.
+ * Sends to the devices of these readers only.
+ *
+ * For an alert raised because of what one person holds or watches. Devices
+ * that have never told the server who is signed in on them — every one
+ * subscribed before subscriptions carried a reader, until it is next opened —
+ * are not reached; they still get everything market-wide.
+ */
+export async function sendPushToUsers(
+  db: Db,
+  userIds: string[],
+  payload: NotificationPayload,
+): Promise<PushResult> {
+  if (userIds.length === 0) return { sent: 0, pruned: 0, errors: [] };
+  return deliver(db, { userId: { $in: userIds } }, payload);
+}
+
+/**
+ * Sends a push notification to every stored subscription matching `filter`.
+ * Subscriptions that the push service reports as gone (404/410 — the user
+ * uninstalled the app or revoked permission) are pruned automatically.
  *
  * Anything else that goes wrong is returned rather than only logged: a push
  * that never arrives looks identical from the outside whether the keys are
  * mismatched, the payload is too large or the service rejected the request,
  * and the operator has no other way to tell which.
  */
-export async function sendPushToAll(
+async function deliver(
   db: Db,
+  filter: Record<string, unknown>,
   payload: NotificationPayload,
 ): Promise<PushResult> {
   if (!isConfigured()) {
@@ -84,7 +122,7 @@ export async function sendPushToAll(
 
   const subs = await db
     .collection<PushSubscriptionDoc>("pushSubscriptions")
-    .find({})
+    .find(filter)
     .toArray();
 
   let sent = 0;
