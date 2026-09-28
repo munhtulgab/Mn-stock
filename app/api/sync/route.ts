@@ -9,6 +9,27 @@ import { isSettingsRequestAuthorized } from "@/lib/settingsAuth";
 
 export const maxDuration = 300;
 
+/*
+ * Called twice a day by the crons in vercel.json, and by the admin's button.
+ *
+ * 18:00 in Ulaanbaatar (10:00 UTC), five hours after the close: the exchange
+ * publishes a session's closes to its open-data portal some time after the
+ * bell, not at it, so this is the run that stores the day.
+ *
+ * 08:00 (00:00 UTC), two hours before the open: whatever the evening run
+ * missed. Between them there is no way to open the app before a session and
+ * find the one before it on the home page.
+ *
+ * The schedule this replaces was one external call at 13:10, ten minutes
+ * after the close — before the exchange had published the session it was
+ * meant to store. It found the day before, every day, and nothing ran again
+ * until the next 13:10, so every morning showed the session before last.
+ *
+ * Both are daily, which is what the Hobby plan allows a project two of.
+ * Anything more frequent makes the whole deployment invalid; that is how the
+ * price tick came to be driven by open tabs instead (see MarketTicker).
+ */
+
 /**
  * Two callers, one door.
  *
