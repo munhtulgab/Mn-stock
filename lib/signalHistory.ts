@@ -1,10 +1,8 @@
 import type { Db } from "mongodb";
 import { getDashboardRows } from "@/lib/data";
-import { sendPushToAll } from "@/lib/push";
 import { getSettings } from "@/lib/settings";
 import { sendSms } from "@/lib/callpro";
-import { recordNotifications } from "@/lib/notifications";
-import { SIGNAL_LABELS, type Signal } from "@/lib/types";
+import type { Signal } from "@/lib/types";
 import { notifyFollowersOfSignals } from "@/lib/personalAlerts";
 
 /**
@@ -143,29 +141,13 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
     return { changes, notified: false, smsSent: 0 };
   }
 
-  // Every move is written to the in-app feed. The setting below decides what
-  // is worth interrupting someone with — a push, an SMS — not what is worth
-  // recording: a signal that moved to ХҮЛЭЭХ is still something the reader
-  // went looking for and did not find.
-  await recordNotifications(
-    db,
-    moved.map((c) => ({
-      title: `${c.symbol}: ${SIGNAL_LABELS[c.to]} дохио`,
-      body: `${c.name} — ${SIGNAL_LABELS[c.from as Signal]} байснаа ${SIGNAL_LABELS[c.to]} боллоо`,
-      url: `/stock/${c.symbol}`,
-      kind: "signal" as const,
-      symbol: c.symbol,
-      signal: c.to,
-      previousSignal: c.from,
-    })),
-  );
-
-  // Each holder and watcher hears about their own companies, whichever way
-  // they moved — ahead of the operator's filter below, which decides what is
-  // worth interrupting the whole market for, not what an owner needs to know.
-  // A failure here costs the personal pushes and nothing else.
+  // Nobody is told about a company they neither hold nor watch. Each holder
+  // and watcher gets a row in their own feed for every move in their own
+  // companies; the operator's filter decides which of those also interrupt
+  // them with a push — and, separately, which reach the SMS recipients.
+  const { notifications } = await getSettings(db);
   const codeOf = new Map(priced.map((r) => [r.symbol, r.companyCode]));
-  await notifyFollowersOfSignals(
+  const personal = await notifyFollowersOfSignals(
     db,
     moved.flatMap((c) => {
       const companyCode = codeOf.get(c.symbol);
@@ -173,47 +155,33 @@ export async function checkSignalChangesAndNotify(db: Db): Promise<{
         ? []
         : [{ companyCode, symbol: c.symbol, name: c.name, from: c.from as Signal, to: c.to }];
     }),
-  ).catch((err) => console.error("personal signal alerts failed", err));
+    notifications.signals,
+  ).catch((err) => {
+    console.error("personal signal alerts failed", err);
+    return { readers: 0, pushed: 0 };
+  });
 
-  // Operators pick which transitions are worth interrupting people for.
-  const { notifications } = await getSettings(db);
+  // The operator's own SMS line: fixed recipients who asked for the whole
+  // market's changes. Not a reader's notification, and unchanged.
   const alerting = moved.filter((c) => notifications.signals.includes(c.to));
-  if (alerting.length === 0) {
-    return { changes, notified: false, smsSent: 0 };
-  }
-
-  const preview = alerting
-    .slice(0, 5)
-    .map((c) => `${c.symbol} ${c.from}→${c.to}`)
-    .join(", ");
-  const body =
-    alerting.length > 5 ? `${preview} +${alerting.length - 5} бусад` : preview;
-
-  const title = `MSE: ${alerting.length} дохио шинэчлэгдлээ`;
-
-  // The phone gets one banner — nobody wants twelve; the feed above has a
-  // row per company, because a row is something you tap.
-  const [result, smsSent] = await Promise.all([
-    notifications.pushEnabled
-      ? sendPushToAll(db, {
-          title,
-          body,
-          url: "/notifications",
-          tag: "mse-signal-change",
-        })
-      : Promise.resolve({ sent: 0, pruned: 0, errors: ["Push унтраалттай."] }),
-    sendSignalSms(db, `${title}. ${body}`).catch((err) => {
+  let smsSent = 0;
+  if (alerting.length > 0) {
+    const preview = alerting
+      .slice(0, 5)
+      .map((c) => `${c.symbol} ${c.from}→${c.to}`)
+      .join(", ");
+    const body =
+      alerting.length > 5 ? `${preview} +${alerting.length - 5} бусад` : preview;
+    smsSent = await sendSignalSms(
+      db,
+      `MSE: ${alerting.length} дохио шинэчлэгдлээ. ${body}`,
+    ).catch((err) => {
       console.error("signal sms failed", err);
       return 0;
-    }),
-  ]);
+    });
+  }
 
-  return {
-    changes,
-    notified: result.sent > 0,
-    smsSent,
-    pushErrors: result.errors.length > 0 ? result.errors : undefined,
-  };
+  return { changes, notified: personal.pushed > 0, smsSent };
 }
 
 /** How often the market is re-checked for signal changes. */

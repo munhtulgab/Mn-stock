@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
-import { sendPushToAll } from "@/lib/push";
+import { sendPushToUsers } from "@/lib/push";
 import { recordNotification } from "@/lib/notifications";
 
 /**
- * Sends a push to every registered device, on demand.
+ * Sends a push to the signed-in reader's own devices, on demand.
  *
  * Signal alerts only fire when a signal actually changes, which may be days
  * apart — so a device that never buzzes gives no evidence of whether the
@@ -20,7 +20,12 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const subscriptions = await db.collection("pushSubscriptions").countDocuments();
+  // This reader's own devices: the test proves their chain, and nobody else's
+  // phone should buzz because someone pressed a button on their profile.
+  const userId = String(user._id);
+  const subscriptions = await db
+    .collection("pushSubscriptions")
+    .countDocuments({ userId });
   if (subscriptions === 0) {
     return NextResponse.json({
       ok: false,
@@ -41,9 +46,15 @@ export async function POST() {
   // The phone banner and the in-app feed are two separate deliveries, and a
   // test that only exercises one leaves the other unproven — which is exactly
   // how a push could arrive while the Мэдэгдэл page stayed empty.
-  await recordNotification(db, { title, body, url: "/notifications", kind: "system" });
+  await recordNotification(db, {
+    title,
+    body,
+    url: "/notifications",
+    kind: "system",
+    userId,
+  });
 
-  const result = await sendPushToAll(db, {
+  const result = await sendPushToUsers(db, [userId], {
     title,
     body,
     url: "/notifications",

@@ -17,12 +17,14 @@ import { SIGNAL_LABELS, type Holding, type Signal, type WatchlistItem } from "@/
  * never looked at — and a six per cent fall in their own position was not an
  * alert at all.
  *
- * Three things are said to a reader about their own companies:
+ * This is now the only way anybody is notified of anything about a company.
+ * A reader is told about the companies they hold or watch and about nothing
+ * else — no market-wide feed, no push to every device:
  *
- *  - a signal change, whichever way it went — to them it is not market
- *    colour, it is about their money;
+ *  - a signal change: a row in their feed every time, and a push for the
+ *    transitions the operator ticked in the settings;
  *  - a move of five per cent or more in a session, once a day in each
- *    direction, which the market-wide feed never mentioned at all;
+ *    direction;
  *  - a headline that names one of their tickers.
  *
  * "Their" companies are the ones they hold (a position above nothing) and
@@ -138,34 +140,54 @@ export interface FollowedSignalChange {
 }
 
 /**
- * A signal change on a company a reader follows, told to that reader.
+ * A signal change on a company a reader follows, told to that reader — and
+ * to nobody else. This is the only place a signal change is announced.
  *
- * Push only. The change is already in everybody's feed, market-wide, and a
- * second copy of the same row in the holder's would be the same thing twice.
- * What the holder was missing was being interrupted for it — and not only
- * for the transitions the operator picked for the whole market: a signal
- * that leaves АВАХ on somebody's own position is news to them whichever way
- * it went.
+ * Every move goes into the follower's own feed. Which of them also buzz a
+ * phone is the operator's choice (`pushFor`, the transitions ticked in the
+ * settings): a move to ХҮЛЭЭХ is worth a row a reader can find, and not
+ * necessarily worth interrupting them for.
  */
 export async function notifyFollowersOfSignals(
   db: Db,
   changes: FollowedSignalChange[],
-): Promise<number> {
-  if (changes.length === 0) return 0;
+  pushFor: readonly Signal[] = ["BUY", "SELL", "HOLD"],
+): Promise<{ readers: number; pushed: number }> {
+  if (changes.length === 0) return { readers: 0, pushed: 0 };
   const followers = await followersOf(db, changes.map((c) => c.companyCode));
-  const perReader = new Map<string, NotificationPayload>();
+  const perReader = byReader(changes, followers);
+  if (perReader.size === 0) return { readers: 0, pushed: 0 };
 
-  for (const [userId, theirs] of byReader(changes, followers)) {
+  await recordNotifications(
+    db,
+    [...perReader].flatMap(([userId, theirs]) =>
+      theirs.map(({ item: c, relation }) => ({
+        kind: "signal" as const,
+        userId,
+        mine: relation,
+        symbol: c.symbol,
+        signal: c.to,
+        previousSignal: c.from,
+        title: `${c.symbol}: ${SIGNAL_LABELS[c.to]} дохио`,
+        body: `${whose(relation)} ${c.name} — ${SIGNAL_LABELS[c.from]} байснаа ${SIGNAL_LABELS[c.to]} боллоо`,
+        url: `/stock/${c.symbol}`,
+      })),
+    ),
+  );
+
+  const payloads = new Map<string, NotificationPayload>();
+  for (const [userId, all] of perReader) {
+    const theirs = all.filter(({ item }) => pushFor.includes(item.to));
     if (theirs.length === 1) {
       const [{ item: c, relation }] = theirs;
-      perReader.set(userId, {
+      payloads.set(userId, {
         title: `${c.symbol}: ${SIGNAL_LABELS[c.to]} дохио`,
         body: `${whose(relation)} ${c.name} — ${SIGNAL_LABELS[c.from]} байснаа ${SIGNAL_LABELS[c.to]} боллоо`,
         url: `/stock/${c.symbol}`,
         tag: `mine-signal-${c.symbol}`,
       });
-    } else {
-      perReader.set(userId, {
+    } else if (theirs.length > 1) {
+      payloads.set(userId, {
         title: `Таны ${theirs.length} хувьцааны дохио өөрчлөгдлөө`,
         body: theirs
           .slice(0, 5)
@@ -176,7 +198,8 @@ export async function notifyFollowersOfSignals(
       });
     }
   }
-  return pushEach(db, perReader);
+  const pushed = await pushEach(db, payloads);
+  return { readers: perReader.size, pushed };
 }
 
 /* ------------------------------------------------------------ price moves */
@@ -348,9 +371,9 @@ export function tickersIn(text: string, listed: Set<string>): string[] {
 }
 
 /**
- * A headline naming a company a reader follows, pushed to that reader.
- *
- * Push only, like signal changes: the story is already in everybody's feed.
+ * A headline naming a company a reader follows, told to that reader in their
+ * feed and on their devices. The only way a headline becomes a notification:
+ * a story about no company anybody follows interrupts nobody.
  */
 export async function notifyFollowersOfNews(
   db: Db,
@@ -374,8 +397,29 @@ export async function notifyFollowersOfNews(
   if (mentions.length === 0) return 0;
 
   const followers = await followersOf(db, [...new Set(mentions.map((m) => m.companyCode))]);
+  const readers = byReader(mentions, followers);
+
+  // A row in each follower's own feed, one per story however many of their
+  // tickers it names.
+  await recordNotifications(
+    db,
+    [...readers].flatMap(([userId, theirs]) =>
+      [...new Map(theirs.map((t) => [t.item.story.url, t])).values()].map(
+        ({ item: m, relation }) => ({
+          kind: "news" as const,
+          userId,
+          mine: relation,
+          symbol: m.symbol,
+          title: m.story.title,
+          body: `${whose(relation)} ${m.symbol}-ийн тухай мэдээ`,
+          url: m.story.url,
+        }),
+      ),
+    ),
+  );
+
   const perReader = new Map<string, NotificationPayload>();
-  for (const [userId, theirs] of byReader(mentions, followers)) {
+  for (const [userId, theirs] of readers) {
     const stories = [...new Map(theirs.map(({ item }) => [item.story.url, item])).values()];
     if (stories.length === 1) {
       const [m] = stories;

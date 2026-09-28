@@ -9,8 +9,6 @@ import type { FacebookSpend } from "@/lib/mse/facebook";
 import { fetchArticleTimes, fetchExchangeNews } from "@/lib/mse/exchangeNews";
 import { todayAndYesterday, ulaanbaatarDaysAgo, ulaanbaatarTime } from "@/lib/day";
 import { notifyFollowersOfNews } from "@/lib/personalAlerts";
-import { recordNotifications } from "@/lib/notifications";
-import { sendPushToAll } from "@/lib/push";
 import type { Security, User } from "@/lib/types";
 
 /**
@@ -574,38 +572,12 @@ async function announce(
   );
   if (fresh.length === 0) return;
 
-  await recordNotifications(
-    db,
-    fresh.slice(0, ANNOUNCE_LIMIT).map((item) => ({
-      title: item.title,
-      body: `${item.source} · ${item.date.slice(0, 10)}`,
-      url: item.url,
-      kind: "news" as const,
-    })),
-  );
-
-  // Readers whose own tickers are in a headline hear about it on their own
-  // devices. It checks the operator's switch itself.
+  // Only to readers whose own tickers the headline names — in their feed and
+  // on their devices. A story about no company anybody follows is on the news
+  // page for whoever goes looking, and interrupts nobody.
   await notifyFollowersOfNews(db, fresh.slice(0, ANNOUNCE_LIMIT)).catch((err) =>
     console.error("personal news alerts failed", err),
   );
-
-  const { notifications } = await getSettings(db);
-  if (!notifications.pushEnabled) return;
-
-  const [first] = fresh;
-  await sendPushToAll(db, {
-    title:
-      fresh.length === 1
-        ? "Шинэ мэдээ"
-        : `${fresh.length} шинэ мэдээ`,
-    body: first.title.slice(0, 120),
-    url: "/news",
-    tag: "mse-market-news",
-  }).catch((err) => {
-    console.error("news push failed", err);
-    return null;
-  });
 }
 
 /**
