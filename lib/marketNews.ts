@@ -8,7 +8,8 @@ import {
 import type { FacebookSpend } from "@/lib/mse/facebook";
 import { fetchArticleTimes, fetchExchangeNews } from "@/lib/mse/exchangeNews";
 import { todayAndYesterday, ulaanbaatarDaysAgo, ulaanbaatarTime } from "@/lib/day";
-import { notifyFollowersOfNews } from "@/lib/personalAlerts";
+import { recordNotifications } from "@/lib/notifications";
+import { sendPushToAll } from "@/lib/push";
 import type { Security, User } from "@/lib/types";
 
 /**
@@ -572,12 +573,35 @@ async function announce(
   );
   if (fresh.length === 0) return;
 
-  // Only to readers whose own tickers the headline names — in their feed and
-  // on their devices. A story about no company anybody follows is on the news
-  // page for whoever goes looking, and interrupts nobody.
-  await notifyFollowersOfNews(db, fresh.slice(0, ANNOUNCE_LIMIT)).catch((err) =>
-    console.error("personal news alerts failed", err),
+  // Every market story goes to everybody: a row in each reader's feed and a
+  // push to every device. Asked for plainly — the news is market-wide by
+  // nature, unlike a signal or a price move, which are only told to the
+  // people holding or watching that company (see lib/personalAlerts.ts).
+  // One row per story; one push per run, naming the first.
+  const stories = fresh.slice(0, ANNOUNCE_LIMIT);
+  await recordNotifications(
+    db,
+    stories.map((item) => ({
+      title: item.title,
+      body: `${item.source} · ${item.date.slice(0, 10)}`,
+      url: item.url,
+      kind: "news" as const,
+    })),
   );
+
+  const { notifications } = await getSettings(db);
+  if (!notifications.pushEnabled) return;
+
+  const [first] = stories;
+  await sendPushToAll(db, {
+    title: stories.length === 1 ? "Шинэ мэдээ" : `${stories.length} шинэ мэдээ`,
+    body: first.title.slice(0, 120),
+    url: stories.length === 1 ? first.url : "/news",
+    tag: "mse-market-news",
+  }).catch((err) => {
+    console.error("news push failed", err);
+    return null;
+  });
 }
 
 /**
@@ -617,4 +641,5 @@ export const __testing = {
   hostname,
   ANNOUNCE_MAX_AGE_DAYS,
   ANNOUNCED_MEMORY,
+  announce,
 };
