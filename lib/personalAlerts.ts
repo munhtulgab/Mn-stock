@@ -17,15 +17,16 @@ import { SIGNAL_LABELS, type Holding, type Signal, type WatchlistItem } from "@/
  * never looked at — and a six per cent fall in their own position was not an
  * alert at all.
  *
- * This is now the only way anybody is notified of anything about a company.
- * A reader is told about the companies they hold or watch and about nothing
- * else — no market-wide feed, no push to every device:
+ * A company's own news — its signal turning, its price moving hard — is told
+ * only to the readers who hold or watch it:
  *
  *  - a signal change: a row in their feed every time, and a push for the
  *    transitions the operator ticked in the settings;
  *  - a move of five per cent or more in a session, once a day in each
- *    direction;
- *  - a headline that names one of their tickers.
+ *    direction.
+ *
+ * Market news is different and goes to everybody — see `announce` in
+ * lib/marketNews.ts.
  *
  * "Their" companies are the ones they hold (a position above nothing) and
  * the ones on their watchlist. Holding wins where both apply, because it is
@@ -350,93 +351,4 @@ export async function notifyPriceMoves(
   await pushEach(db, payloads);
 
   return { announced: claimed.length, readers: perReader.size };
-}
-
-/* ------------------------------------------------------------------- news */
-
-/**
- * The tickers a headline names, out of the ones actually listed.
- *
- * Tickers only, not company names: "Говь" is a company and also half the
- * country, and a holder told that a story about the Gobi desert was about
- * their shares would stop reading these. A ticker in a Mongolian headline is
- * rare enough to mean something when it is there.
- */
-export function tickersIn(text: string, listed: Set<string>): string[] {
-  const found = new Set<string>();
-  for (const word of text.match(/\b[A-Z]{2,5}\b/g) ?? []) {
-    if (listed.has(word)) found.add(word);
-  }
-  return [...found];
-}
-
-/**
- * A headline naming a company a reader follows, told to that reader in their
- * feed and on their devices. The only way a headline becomes a notification:
- * a story about no company anybody follows interrupts nobody.
- */
-export async function notifyFollowersOfNews(
-  db: Db,
-  stories: { title: string; url: string }[],
-): Promise<number> {
-  if (stories.length === 0) return 0;
-  const listed = await db
-    .collection<{ companyCode: number; symbol: string }>("securities")
-    .find({}, { projection: { _id: 0, companyCode: 1, symbol: 1 } })
-    .toArray();
-  const codeOf = new Map(listed.map((s) => [s.symbol, s.companyCode]));
-  const symbols = new Set(codeOf.keys());
-
-  const mentions = stories.flatMap((story) =>
-    tickersIn(story.title, symbols).map((symbol) => ({
-      companyCode: codeOf.get(symbol)!,
-      symbol,
-      story,
-    })),
-  );
-  if (mentions.length === 0) return 0;
-
-  const followers = await followersOf(db, [...new Set(mentions.map((m) => m.companyCode))]);
-  const readers = byReader(mentions, followers);
-
-  // A row in each follower's own feed, one per story however many of their
-  // tickers it names.
-  await recordNotifications(
-    db,
-    [...readers].flatMap(([userId, theirs]) =>
-      [...new Map(theirs.map((t) => [t.item.story.url, t])).values()].map(
-        ({ item: m, relation }) => ({
-          kind: "news" as const,
-          userId,
-          mine: relation,
-          symbol: m.symbol,
-          title: m.story.title,
-          body: `${whose(relation)} ${m.symbol}-ийн тухай мэдээ`,
-          url: m.story.url,
-        }),
-      ),
-    ),
-  );
-
-  const perReader = new Map<string, NotificationPayload>();
-  for (const [userId, theirs] of readers) {
-    const stories = [...new Map(theirs.map(({ item }) => [item.story.url, item])).values()];
-    if (stories.length === 1) {
-      const [m] = stories;
-      perReader.set(userId, {
-        title: `${m.symbol}: шинэ мэдээ`,
-        body: m.story.title.slice(0, 120),
-        url: m.story.url,
-        tag: `mine-news-${m.symbol}`,
-      });
-    } else {
-      perReader.set(userId, {
-        title: `Таны хувьцааны ${stories.length} шинэ мэдээ`,
-        body: stories[0].story.title.slice(0, 120),
-        url: "/news",
-        tag: "mine-news",
-      });
-    }
-  }
-  return pushEach(db, perReader);
 }

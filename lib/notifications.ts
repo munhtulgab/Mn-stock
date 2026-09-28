@@ -79,9 +79,9 @@ export async function notificationTally(
 }
 
 /**
- * Records an alert in the in-app feed. Every alert now carries the `userId`
- * of the one reader it is for — see `lib/personalAlerts.ts`; rows without one
- * are from before that and are no longer shown.
+ * Records an alert in the in-app feed. A company's signal or price alert
+ * carries the `userId` of the one reader it is for — see
+ * `lib/personalAlerts.ts`. Market news carries none and is everybody's.
  */
 export async function recordNotification(
   db: Db,
@@ -182,17 +182,15 @@ async function getNotifications(db: Db, user: User): Promise<AppNotification[]> 
 }
 
 /**
- * What one reader's feed is made of: what was raised for them alone.
+ * What one reader's feed is made of: what was raised for them alone — a
+ * signal or a large move in a company they hold or watch — and the market's
+ * news, which goes to everybody.
  *
- * It used to be that plus everything the market was told — every signal
- * change and headline, for all four hundred companies. Now a reader is only
- * told about companies they hold or watch, and the market-wide rows written
- * before that are no longer shown either: a feed that said "only yours" and
- * still carried last week's alert about somebody else's company would be
- * saying it wrongly.
+ * Not the market-wide signal rows written before alerts became personal:
+ * those were about companies most readers neither hold nor watch.
  */
 export function visibleTo(userId: string): Record<string, unknown> {
-  return { userId };
+  return { $or: [{ userId }, { userId: { $exists: false }, kind: "news" }] };
 }
 
 /**

@@ -5,7 +5,6 @@ import {
   followersFrom,
   moveKey,
   PRICE_ALERT_PCT,
-  tickersIn,
 } from "./personalAlerts";
 import { visibleTo } from "./notifications";
 
@@ -72,35 +71,11 @@ test("one alert per company, per session, per direction", () => {
   assert.notEqual(moveKey(up), moveKey(other));
 });
 
-/* ------------------------------------------------------------------ news */
-
-const listed = new Set(["APU", "TDB", "GOV", "MSE"]);
-
-test("a listed ticker in a headline is found", () => {
-  assert.deepEqual(tickersIn("APU ХК-ийн ногдол ашгийн мэдэгдэл", listed), ["APU"]);
-});
-
-test("each ticker once, however often it is named", () => {
-  assert.deepEqual(tickersIn("TDB, TDB болон APU", listed).sort(), ["APU", "TDB"]);
-});
-
-test("capitals that are not a listed ticker are ignored", () => {
-  assert.deepEqual(tickersIn("IPO болон USD ханш", listed), []);
-});
-
-test("a ticker inside a longer word is not a mention", () => {
-  // "GOVERNANCE" contains GOV and is not about the company.
-  assert.deepEqual(tickersIn("GOVERNANCE шинэчлэл", listed), []);
-});
-
-test("a company name is not matched, only its ticker", () => {
-  // "Говь" is a company and also half the country.
-  assert.deepEqual(tickersIn("Говь-Алтай аймагт цас орлоо", listed), []);
-});
-
 /* ------------------------------------------------------------------ feed */
 
-test("a reader's feed is their own alerts and nobody else's", () => {
-  // Not the market-wide rows either: only companies they hold or watch.
-  assert.deepEqual(visibleTo("bat"), { userId: "bat" });
+test("a reader's feed is their own alerts plus the market's news", () => {
+  // Not somebody else's, and not the old market-wide signal rows.
+  assert.deepEqual(visibleTo("bat"), {
+    $or: [{ userId: "bat" }, { userId: { $exists: false }, kind: "news" }],
+  });
 });
