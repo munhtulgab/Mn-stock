@@ -775,4 +775,4 @@ export async function getStockDetailFresh(
   return getStockDetail(db, symbol, live);
 }
 
-export const __testing = { buildRow };
+export const __testing = { buildRow, DASHBOARD_SCHEMA_VERSION };
