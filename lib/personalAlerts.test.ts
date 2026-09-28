@@ -100,8 +100,7 @@ test("a company name is not matched, only its ticker", () => {
 
 /* ------------------------------------------------------------------ feed */
 
-test("a reader's feed is the market's alerts and their own", () => {
-  assert.deepEqual(visibleTo("bat"), {
-    $or: [{ userId: { $exists: false } }, { userId: "bat" }],
-  });
+test("a reader's feed is their own alerts and nobody else's", () => {
+  // Not the market-wide rows either: only companies they hold or watch.
+  assert.deepEqual(visibleTo("bat"), { userId: "bat" });
 });
