@@ -4,7 +4,8 @@ import { fetchPriceHistory } from "@/lib/mse/prices";
 import { fetchLatestFinancials } from "@/lib/mse/financials";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 import { syncTdb, tdbIsStale } from "@/lib/tdb/store";
-import { ulaanbaatarDay } from "@/lib/day";
+import { shiftDays, ulaanbaatarDay, ulaanbaatarTime, weekdayIndex } from "@/lib/day";
+import { fetchSecurityQuote } from "@/lib/mse/quote";
 import type { PricePoint } from "@/lib/types";
 
 export interface SyncState {
@@ -65,37 +66,199 @@ async function syncSecuritiesList(db: Db): Promise<number> {
 export async function syncPricesForCompany(
   db: Db,
   companyCode: number,
+  options: {
+    /** Fill in today's close from the page heading; see {@link storeHeadingSession}. */
+    heading?: boolean;
+    now?: Date;
+  } = {},
 ): Promise<number> {
+  const now = options.now ?? new Date();
   const points = await fetchPriceHistory(companyCode);
-  if (points.length === 0) return 0;
 
-  const stored = await db
-    .collection<PricePoint>("prices")
-    .find({ companyCode }, { projection: { _id: 0, date: 1, close: 1, volume: 1 } })
+  const prices = db.collection<PricePoint>("prices");
+  const stored = await prices
+    .find(
+      { companyCode },
+      {
+        projection: {
+          _id: 0,
+          date: 1,
+          close: 1,
+          volume: 1,
+          previousClose: 1,
+          provisional: 1,
+        },
+      },
+    )
     .toArray();
   const known = new Map(stored.map((p) => [p.date, p]));
 
+  // A provisional row is replaced whatever it holds: the table's own figures
+  // are the published ones, even where they happen to match.
   const changed = points.filter((p) => {
     const before = known.get(p.date);
-    return !before || before.close !== p.close || before.volume !== p.volume;
+    return !before || before.provisional || before.close !== p.close || before.volume !== p.volume;
   });
-  if (changed.length === 0) return 0;
 
   const CHUNK = 500;
   for (let i = 0; i < changed.length; i += CHUNK) {
     const chunk = changed.slice(i, i + CHUNK);
-    await db.collection("prices").bulkWrite(
+    await prices.bulkWrite(
       chunk.map((p) => ({
         updateOne: {
           filter: { companyCode: p.companyCode, date: p.date },
-          update: { $set: p },
+          update: { $set: p, $unset: { provisional: "" } },
           upsert: true,
         },
       })),
       { ordered: false },
     );
   }
-  return changed.length;
+
+  const fetched = new Set(points.map((p) => p.date));
+  const published = newestOf([
+    ...points,
+    ...stored.filter((row) => !row.provisional),
+  ]);
+  const pending = stored.filter((row) => row.provisional && !fetched.has(row.date));
+  const stale = pending.filter((row) => !stillPending(row, published));
+
+  let written = changed.length;
+  if (stale.length > 0) {
+    const removed = await prices.deleteMany({
+      companyCode,
+      provisional: true,
+      date: { $in: stale.map((row) => row.date) },
+    });
+    written += removed.deletedCount;
+  }
+
+  if (options.heading) {
+    // What the heading has to follow on from: the newest session known at
+    // all, the table's or one already taken from a heading.
+    const latest = newestOf([
+      ...(published ? [published] : []),
+      ...pending.filter((row) => !stale.includes(row)),
+    ]);
+    if (await storeHeadingSession(db, companyCode, latest, now)) written += 1;
+  }
+  return written;
+}
+
+type Session = Pick<PricePoint, "date" | "close" | "previousClose">;
+
+function newestOf(rows: Session[]): Session | null {
+  let newest: Session | null = null;
+  for (const row of rows) if (!newest || row.date > newest.date) newest = row;
+  return newest;
+}
+
+/**
+ * Whether a provisional session is still waiting for the table.
+ *
+ * Not once the table reaches its date. And not where the table's newest
+ * session turns out to be the same one under an earlier date — the same
+ * close measured from the same previous close. That is a session the
+ * heading was stamped with today's date for when the table was more than a
+ * day behind, and the heading states no date to have said otherwise.
+ */
+function stillPending(row: Session, published: Session | null): boolean {
+  if (!published) return true;
+  if (row.date <= published.date) return false;
+  return !(row.close === published.close && row.previousClose === published.previousClose);
+}
+
+/** The exchange's session, Ulaanbaatar time. */
+const SESSION_OPEN = "10:00";
+const SESSION_CLOSE = "13:00";
+
+/**
+ * The session the page heading is showing, by the clock: today's once the
+ * bell has gone, the last weekday's before the next open and all weekend,
+ * and none while trading is on — the heading is a running price then, not a
+ * close.
+ *
+ * The heading states no date, so this is the date it is filed under. A
+ * weekday the exchange stayed shut is the one case it gets wrong, and
+ * {@link stillPending} takes that row back out once the table shows the
+ * same session under its real date.
+ */
+function headingSessionDay(now: Date): string | null {
+  const today = ulaanbaatarDay(now);
+  const weekday = weekdayIndex(today) <= 4;
+  const time = ulaanbaatarTime(now);
+  if (weekday && time >= SESSION_CLOSE) return today;
+  if (weekday && time >= SESSION_OPEN) return null;
+  let day = shiftDays(today, -1);
+  while (weekdayIndex(day) > 4) day = shiftDays(day, -1);
+  return day;
+}
+
+/**
+ * Stores the close the company page's heading prints, until the trading
+ * table publishes it.
+ *
+ * The table is what this app's history is built from, and the exchange adds
+ * a session to it only after clearing — on the evening of 1 October not one
+ * company's table had reached that day, while every company's page heading
+ * already printed its close. Every list in the app reads stored closes, so
+ * a fund that rose 7.8% that day stood at the previous close in the market
+ * list all evening while its own page showed the new price: the page reads
+ * the heading, the list read the table. The evening sync ran and stored
+ * nothing, because there was nothing in the table to store.
+ *
+ * So the heading's figure goes into the history, marked provisional. It has
+ * no volume and no range, which a close does not need; the table's row
+ * replaces it as soon as a sync reads one for that day.
+ *
+ * Only where the heading follows directly on from the newest session known
+ * — its stated move puts its previous close at exactly that close — whether
+ * the table's or one already taken from a heading while the table runs more
+ * than a day behind. That is what tells a new session from the one already
+ * stored: a company that has not traded since prints the same heading as
+ * last time, measured from the close before.
+ */
+async function storeHeadingSession(
+  db: Db,
+  companyCode: number,
+  newest: Session | null,
+  now: Date,
+): Promise<boolean> {
+  const day = headingSessionDay(now);
+  if (!day || !newest || newest.date >= day) return false;
+
+  const quote = await fetchSecurityQuote(companyCode).catch(() => null);
+  if (!quote || quote.previousClose !== newest.close || quote.price === newest.close) {
+    return false;
+  }
+
+  const open = quote.previousClose;
+  const point: PricePoint = {
+    companyCode,
+    date: day,
+    open,
+    close: quote.price,
+    high: Math.max(open, quote.price),
+    low: Math.min(open, quote.price),
+    vwap: quote.price,
+    volume: 0,
+    turnover: 0,
+    trades: 0,
+    previousClose: quote.previousClose,
+    provisional: true,
+  };
+  // Never over a published row. The filter only matches a provisional one,
+  // so where the table got there between the read above and this write the
+  // upsert's insert meets the unique (company, date) index and stops.
+  try {
+    await db
+      .collection<PricePoint>("prices")
+      .updateOne({ companyCode, date: day, provisional: true }, { $set: point }, { upsert: true });
+  } catch (err) {
+    if ((err as { code?: number }).code === 11000) return false;
+    throw err;
+  }
+  return true;
 }
 
 async function syncFinancialsForCompany(
@@ -410,9 +573,16 @@ export async function runSyncBatch(
   const priceDeadline = pricesFrom + left * PRICE_SHARE;
   const financialsDeadline = start + maxMs;
 
-  const readPrices = async (company: { companyCode: number; symbol: string }) => {
+  // The two phases below are the companies that traded today or lately, so
+  // they also take today's close from the page heading where the trading
+  // table has not published it yet. The rotation does not: it is the dormant
+  // end of the exchange, and a second page load each would halve its reach.
+  const readPrices = async (
+    company: { companyCode: number; symbol: string },
+    heading = true,
+  ) => {
     try {
-      await syncPricesForCompany(db, company.companyCode);
+      await syncPricesForCompany(db, company.companyCode, { heading });
       pricesProcessed.push(company.symbol);
     } catch (err) {
       console.error(`price sync failed for ${company.symbol}`, err);
@@ -445,7 +615,7 @@ export async function runSyncBatch(
     ),
     FETCH_CONCURRENCY,
     recentDeadline,
-    readPrices,
+    (company) => readPrices(company),
   );
 
   // And last the rotation, so the dormant end of the exchange is not left
@@ -463,7 +633,7 @@ export async function runSyncBatch(
     priceDeadline,
     async (company) => {
       if (caughtUp.has(company.symbol)) return;
-      await readPrices(company);
+      await readPrices(company, false);
     },
   );
   if (active.length > 0) {
@@ -522,6 +692,8 @@ export async function runSyncBatch(
 }
 
 export const __testing = {
+  headingSessionDay,
+  stillPending,
   needsCatchUp,
   prune,
   CATCH_UP_SHARE,

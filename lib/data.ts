@@ -207,7 +207,9 @@ function buildRow(
     lastPrice: last?.close ?? null,
     lastDate: last?.date ?? null,
     changePct,
-    volume: last?.volume ?? null,
+    // A close taken from the page heading states no volume; zero would read
+    // as a session nobody traded in.
+    volume: last?.provisional ? null : (last?.volume ?? null),
     signal: combined?.signal ?? null,
     score: combined?.score ?? null,
     sparkline: recentSparkline(prices),
@@ -748,7 +750,8 @@ export async function ensurePricesCurrent(
   if (!shouldRefresh) return;
 
   try {
-    await syncPricesForCompany(db, security.companyCode);
+    const written = await syncPricesForCompany(db, security.companyCode, { heading: true });
+    if (written > 0) await refreshSnapshotRow(db, security);
   } catch (err) {
     console.error(`price refresh failed for ${symbol}`, err);
   }
@@ -761,6 +764,32 @@ export async function ensurePricesCurrent(
       { companyCode: security.companyCode },
       { $set: { pricesSyncedAt: new Date(), pricesSyncedSession: today } },
     );
+}
+
+/**
+ * Brings one company's row in the stored market list up to its stored prices.
+ *
+ * A company's page refreshes its own prices before it renders, and the list
+ * is a snapshot rebuilt on a schedule — so a reader who opened a company and
+ * went back saw the new close on one screen and the old one on the other.
+ * Rebuilding the whole snapshot for one company's price is the full analysis
+ * across every listing; this rewrites the one row's price, change, date,
+ * volume and line, and leaves its verdict to the next rebuild as before.
+ */
+async function refreshSnapshotRow(db: Db, security: Security): Promise<void> {
+  const row = buildRow(security, await getRecentPrices(db, security.companyCode), undefined);
+  await db.collection<MarketSnapshot>("marketSnapshots").updateOne(
+    { key: SNAPSHOT_KEY, "rows.companyCode": security.companyCode },
+    {
+      $set: {
+        "rows.$.lastPrice": row.lastPrice,
+        "rows.$.lastDate": row.lastDate,
+        "rows.$.changePct": row.changePct,
+        "rows.$.volume": row.volume,
+        "rows.$.sparkline": row.sparkline,
+      },
+    },
+  );
 }
 
 /**

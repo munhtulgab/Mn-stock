@@ -64,7 +64,10 @@ export function parseHeadingQuote(html: string): ExchangeQuote | null {
   const pct = toNumber(move.slice(move.indexOf("(") + 1));
   if (change === null || pct === null) return null;
 
-  return { price, change, changePct: pct, previousClose: price - change };
+  // Rounded, because it is compared for equality with a stored close:
+  // 165.31 - 5.65 is 159.66000000000003 in floating point, not 159.66.
+  const previousClose = Math.round((price - change) * 10_000) / 10_000;
+  return { price, change, changePct: pct, previousClose };
 }
 
 /**

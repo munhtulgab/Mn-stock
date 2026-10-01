@@ -84,3 +84,10 @@ test("with nothing stored there is nothing to measure against", () => {
   const quote = parseHeadingQuote(heading("1019₮", "-3 (-0.29%)"));
   assert.equal(headingIsNewer(quote, null, THURSDAY), false);
 });
+
+test("a decimal previous close comes out exact, so it can match the stored one", () => {
+  // 165.31 - 5.65 is 159.66000000000003 in floating point.
+  const quote = parseHeadingQuote(heading("165.31₮", "5.65 (3.53%)", "color-green"));
+  assert.equal(quote?.previousClose, 159.66);
+  assert.ok(headingIsNewer(quote, 159.66, THURSDAY));
+});
