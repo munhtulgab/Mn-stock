@@ -411,17 +411,42 @@ export async function fetchWithCookie(
  */
 const APIFY_ACTOR = "apify~facebook-posts-scraper";
 const APIFY_ACTOR_URL = `https://api.apify.com/v2/acts/${APIFY_ACTOR}`;
-const APIFY_RUN_URL = `${APIFY_ACTOR_URL}/run-sync-get-dataset-items`;
+const APIFY_RUNS_URL = `${APIFY_ACTOR_URL}/runs`;
+const APIFY_RUN_API = "https://api.apify.com/v2/actor-runs";
+const APIFY_DATASET_API = "https://api.apify.com/v2/datasets";
 
 /**
- * A scrape is a real browser run and often outlasts this, which is fine:
- * the run finishes on Apify's side and {@link lastRunPosts} collects it on
- * the next request. What is not fine is holding the news response until it
- * does — every source is fetched together, so a single slow scrape can push
- * the whole request past its limit and lose every other site's headlines
- * along with it.
+ * How long starting a run waits for it to finish, in seconds.
+ *
+ * The run is started and left, not waited on to the end. A scrape is a real
+ * browser run and usually outlasts any wait worth holding the news response
+ * for, and this used to call the endpoint that waits for the dataset with a
+ * twenty-five-second timeout: a run that went past it finished on Apify's
+ * side, was paid for, and its posts were never collected — the only thing
+ * that looked for them afterwards read the account's single latest run, and
+ * only when the stored copy was empty. So a page that already had posts
+ * kept those for good, and Facebook stopped arriving.
+ *
+ * Now the run's id is kept with the day's claim and every refresh after —
+ * the five-minute one included — asks Apify how it went and collects it.
+ * Reading a run and its dataset costs nothing. This wait only spares that
+ * round trip for a run quick enough to finish while the request is open.
  */
-const APIFY_TIMEOUT_MS = 25_000;
+const APIFY_WAIT_S = 20;
+/** The start request: the wait above plus room for Apify to answer. */
+const APIFY_TIMEOUT_MS = 30_000;
+
+/**
+ * Memory for each run, in megabytes.
+ *
+ * The actor defaults to 4096, and a free account may have 16384 running at
+ * once — four runs. The weekday job starts every page together, so the
+ * fifth to eighth were turned away with a 402 that was reported as the
+ * month's allowance being spent, and their day's slot went with them. At
+ * 2048 all eight fit; the actor's own minimum is 1024. A pay-per-post actor
+ * bills by the post, not by the memory, so this changes nothing on the bill.
+ */
+const APIFY_MEMORY_MB = 2048;
 
 /**
  * How much history is worth paying credits for.
@@ -440,13 +465,13 @@ const APIFY_TIMEOUT_MS = 25_000;
  * and the prompt they feed truncates the lot to three thousand characters
  * anyway.
  *
- * The thirty-day window stays as it is. It does not add to the bill — the
- * limit above caps what can be charged — and narrowing it would return
- * nothing at all for a page that posts rarely, which costs a run and gets no
- * posts to cache, so the next request pays to ask again.
+ * No date filter. The actor now bills it as an add-on, $0.002 a post on the
+ * free tier, which took five posts to $0.036 and eight pages a weekday past
+ * the $5 allowance before the month was out. The feed already drops
+ * anything older than its thirty-day window, so the filter bought nothing
+ * that is not done here for free.
  */
 const APIFY_POST_LIMIT = 5;
-const APIFY_MAX_AGE_DAYS = 30;
 
 /**
  * A hard ceiling on one run, in dollars, sent with the request.
@@ -482,17 +507,78 @@ const APIFY_MAX_CHARGE_USD = 0.04;
  */
 export const APIFY_PAGES_PER_DAY = 8;
 
-type RunClaim = { _id: string; day: string; pageUrl: string; at: Date };
+/**
+ * One page's run for one day: claimed, then started, then settled.
+ *
+ * A claim with no `runId` is a run the weekday job authorised and Apify has
+ * not taken yet — it was busy — and any refresh that day may start it. One
+ * with a `runId` and no `settledAt` is under way, and any refresh may collect
+ * it. Settled is done with, posts or not.
+ */
+type RunClaim = {
+  _id: string;
+  day: string;
+  pageUrl: string;
+  at: Date;
+  /** Set by whoever is starting the run, so two refreshes cannot both. */
+  startingAt?: Date;
+  runId?: string;
+  datasetId?: string;
+  startedAt?: Date;
+  settledAt?: Date;
+  /** What went wrong last, in the operator's language. */
+  error?: string;
+};
+
+type DaySlots = { _id: string; used: number };
+
+/**
+ * One of the day's slots, if any are left.
+ *
+ * The update only matches while the count is under the cap; past it, the
+ * upsert tries to insert the day again and hits its own `_id`. The same
+ * duplicate is what two requests opening a new day together see, so on one
+ * the count is read to tell which it was.
+ */
+async function takeSlot(db: Db, day: string): Promise<boolean> {
+  const slots = db.collection<DaySlots>("apifyDays");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await slots.updateOne(
+        { _id: day, used: { $lt: APIFY_PAGES_PER_DAY } },
+        { $inc: { used: 1 } },
+        { upsert: true },
+      );
+      return true;
+    } catch (err) {
+      if ((err as { code?: number }).code !== 11000) throw err;
+      const current = await slots.findOne({ _id: day });
+      if (current && current.used >= APIFY_PAGES_PER_DAY) return false;
+    }
+  }
+  return false;
+}
+
+/** Hands a claim back, slot and all, for a run that was never started. */
+async function releaseClaim(db: Db, claim: RunClaim): Promise<void> {
+  const removed = await db.collection<RunClaim>("apifyRuns").deleteOne({ _id: claim._id });
+  if (removed.deletedCount === 1) {
+    await db
+      .collection<DaySlots>("apifyDays")
+      .updateOne({ _id: claim.day, used: { $gt: 0 } }, { $inc: { used: -1 } });
+  }
+}
 
 /**
  * Takes one of today's runs for this page, or says why it cannot.
  *
  * The claim is an insert on `_id` — day and page — which is unique whatever
  * indexes exist, so two requests arriving together cannot both start a run
- * for the same page. The day's count is read after the claim is written, and
- * a claim that turns out to be one too many is taken back: two requests
- * racing for the last slot may both give theirs up, which spends less than
- * the cap and never more.
+ * for the same page. The day's slot is then taken off a counter that only
+ * goes up while it is under the cap. This used to count the claims after
+ * writing one and take it back if it was one too many, which let two pages
+ * racing for the eighth slot both give it up — the weekday job starts every
+ * page at once, so with nine pages that was the usual case, not a rare one.
  */
 async function claimApifyRun(
   db: Db,
@@ -513,8 +599,7 @@ async function claimApifyRun(
     }
     throw err;
   }
-  const today = await runs.countDocuments({ day });
-  if (today > APIFY_PAGES_PER_DAY) {
+  if (!(await takeSlot(db, day))) {
     await runs.deleteOne({ _id });
     return {
       ok: false,
@@ -642,10 +727,10 @@ function toPosts(items: unknown): FacebookPost[] {
  * Results of the most recent successful run, if it was for this page and
  * recent enough to still be current.
  *
- * A run outlives the request that started it: when a scrape takes longer
- * than the caller can wait, it finishes on Apify's side anyway and the
- * credits are already spent. Reading it back on the next attempt collects
- * results that would otherwise be paid for and thrown away.
+ * The account's latest run, not this page's: runs are tracked by their own
+ * id now (see {@link advanceRun}), and this is what is left for a page with
+ * nothing stored and no run on record — a fresh install, or posts stored
+ * before the hour was kept.
  */
 async function lastRunPosts(
   pageUrl: string,
@@ -688,11 +773,244 @@ async function lastRunPosts(
   }
 }
 
+/** A run as Apify describes it; only what is read here. */
+interface ApifyRun {
+  id: string;
+  status: string;
+  defaultDatasetId?: string;
+}
+
+/** Still going, so worth asking about again on the next refresh. */
+function inProgress(status: string): boolean {
+  return ["READY", "RUNNING", "TIMING-OUT", "ABORTING"].includes(status);
+}
+
+type StartResult =
+  | { kind: "started"; run: ApifyRun }
+  /** Apify could not take it now; nothing was started or billed. */
+  | { kind: "busy"; reason: string }
+  /** Apify will not take it at all; nothing was started or billed. */
+  | { kind: "refused"; reason: string };
+
+const BUSY_NOTE = "Apify завгүй байна — дараагийн шинэчлэлтээр эхлүүлнэ.";
+const RUNNING_NOTE = "Apify татаж байна — дуусмагц дараагийн шинэчлэлтээр гарна.";
+
+/**
+ * Asks Apify to start a run for one page, and waits a little for it.
+ *
+ * Throws when the request itself fails. Whether Apify took the run before the
+ * answer was lost cannot be told from here, which is why the caller treats
+ * that differently from a refusal.
+ */
+async function startRun(pageUrl: string, token: string): Promise<StartResult> {
+  const request = (extras: boolean) => {
+    const url = new URL(APIFY_RUNS_URL);
+    url.searchParams.set("token", token);
+    url.searchParams.set("waitForFinish", String(APIFY_WAIT_S));
+    if (extras) {
+      url.searchParams.set("memory", String(APIFY_MEMORY_MB));
+      url.searchParams.set("maxTotalChargeUsd", String(APIFY_MAX_CHARGE_USD));
+    }
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ startUrls: [{ url: pageUrl }], resultsLimit: APIFY_POST_LIMIT }),
+      signal: AbortSignal.timeout(APIFY_TIMEOUT_MS),
+    });
+  };
+
+  // The memory and the charge cap are both documented on the run endpoint
+  // but could not be tried against a real account here, so a rejection of
+  // the request itself falls back to the same run without them. They are
+  // the second line of defence; they must not become the reason Facebook
+  // stops working.
+  let res = await request(true);
+  if (res.status === 400) res = await request(false);
+
+  const body = (await res.json().catch(() => ({}))) as {
+    data?: ApifyRun;
+    error?: { message?: string; type?: string };
+  };
+  if (res.ok && body.data?.id) return { kind: "started", run: body.data };
+
+  // Out of room for another run just now — memory or concurrency — which is
+  // a 402 like the allowance running out, and was reported as that.
+  const said = `${body.error?.type ?? ""} ${body.error?.message ?? ""}`;
+  if (res.status === 429 || (res.status === 402 && /memory|concurren/i.test(said))) {
+    return { kind: "busy", reason: BUSY_NOTE };
+  }
+  return {
+    kind: "refused",
+    reason:
+      res.status === 401
+        ? "Apify токен буруу байна."
+        : res.status === 402
+          ? "Apify-н үнэгүй эрх дууссан байна — дараа сар шинэчлэгдэнэ."
+          : (body.error?.message ?? `Apify ${res.status}`),
+  };
+}
+
+/** Where a run stands, or "gone" when Apify has no such run. Free. */
+async function readRun(runId: string, token: string): Promise<ApifyRun | "gone" | null> {
+  const res = await fetch(
+    `${APIFY_RUN_API}/${encodeURIComponent(runId)}?token=${encodeURIComponent(token)}`,
+    { signal: AbortSignal.timeout(15_000) },
+  );
+  if (res.status === 404) return "gone";
+  if (!res.ok) return null;
+  return ((await res.json()) as { data?: ApifyRun }).data ?? null;
+}
+
+/** A finished run's posts, or null when the dataset could not be read. Free. */
+async function readRunPosts(datasetId: string, token: string): Promise<FacebookPost[] | null> {
+  const res = await fetch(
+    `${APIFY_DATASET_API}/${encodeURIComponent(datasetId)}/items?clean=true&token=${encodeURIComponent(token)}`,
+    { signal: AbortSignal.timeout(15_000) },
+  );
+  if (!res.ok) return null;
+  return toPosts(await res.json());
+}
+
+/** Long enough for a start and its fallback to have answered or given up. */
+const START_LOCK_MS = 2 * APIFY_TIMEOUT_MS + 10_000;
+
+type RunStep =
+  | { state: "none" }
+  | { state: "waiting"; note: string }
+  | { state: "done"; posts: FacebookPost[] }
+  | { state: "failed"; error: string };
+
+/**
+ * Moves this page's open run one step on: starts it if Apify was busy when
+ * it was authorised, collects it if it has finished since.
+ *
+ * Every refresh calls this, the five-minute one included, and none of it
+ * spends anything beyond the run the weekday job already claimed: reading a
+ * run and its dataset is free, and a run is only ever started against that
+ * day's claim, once.
+ */
+async function advanceRun(
+  db: Db,
+  pageUrl: string,
+  token: string,
+  now: Date = new Date(),
+): Promise<RunStep> {
+  const runs = db.collection<RunClaim>("apifyRuns");
+  const open = await runs.findOne(
+    { pageUrl, settledAt: { $exists: false } },
+    { sort: { at: -1 } },
+  );
+  if (!open) return { state: "none" };
+
+  const settle = (error?: string) =>
+    runs.updateOne(
+      { _id: open._id },
+      error ? { $set: { settledAt: now, error } } : { $set: { settledAt: now }, $unset: { error: "" } },
+    );
+
+  /** Reads a run that has stopped, keeping the claim open if it can't yet. */
+  const collect = async (run: ApifyRun): Promise<RunStep> => {
+    const datasetId = run.defaultDatasetId ?? open.datasetId;
+    // A run that timed out or was stopped has still written — and billed —
+    // whatever posts it got to, so those are read the same way.
+    const posts = datasetId ? await readRunPosts(datasetId, token) : [];
+    if (posts === null) return { state: "waiting", note: RUNNING_NOTE };
+    if (posts.length === 0) {
+      const error =
+        run.status === "SUCCEEDED"
+          ? "Apify хуудаснаас бичвэртэй пост олсонгүй."
+          : `Apify run ${run.status} — пост ирсэнгүй.`;
+      await settle(error);
+      return { state: "failed", error };
+    }
+    await writeCache(db, `apify:${pageUrl}`, posts);
+    await settle();
+    return { state: "done", posts };
+  };
+
+  try {
+    if (open.runId) {
+      const run = await readRun(open.runId, token);
+      if (run === "gone") {
+        const error = "Apify run олдсонгүй.";
+        await settle(error);
+        return { state: "failed", error };
+      }
+      if (!run || inProgress(run.status)) return { state: "waiting", note: RUNNING_NOTE };
+      return await collect(run);
+    }
+
+    // Authorised on a day that has gone. Today's weekday job claims afresh.
+    if (open.day !== ulaanbaatarDay(now)) {
+      await settle("Тэр өдөртөө эхэлж амжаагүй.");
+      return { state: "none" };
+    }
+
+    // Only one refresh starts it, however many arrive together.
+    const lock = await runs.updateOne(
+      {
+        _id: open._id,
+        runId: { $exists: false },
+        $or: [
+          { startingAt: { $exists: false } },
+          { startingAt: { $lt: new Date(now.getTime() - START_LOCK_MS) } },
+        ],
+      },
+      { $set: { startingAt: now } },
+    );
+    if (lock.modifiedCount === 0) return { state: "waiting", note: RUNNING_NOTE };
+
+    let started: StartResult;
+    try {
+      started = await startRun(pageUrl, token);
+    } catch (err) {
+      // The run may have been taken and the answer lost. Keeping the day's
+      // slot spent is the side that can cost a day's posts; giving it back
+      // is the side that can pay for the same page twice.
+      const timeout = err instanceof Error && err.name === "TimeoutError";
+      const error = timeout ? "Apify хугацаа хэтэрлээ." : `Apify: ${(err as Error).message}`;
+      await settle(error);
+      return { state: "failed", error };
+    }
+
+    if (started.kind === "busy") {
+      await runs.updateOne(
+        { _id: open._id },
+        { $set: { error: started.reason }, $unset: { startingAt: "" } },
+      );
+      return { state: "waiting", note: started.reason };
+    }
+    if (started.kind === "refused") {
+      // Nothing was started, so nothing was billed: the slot goes back.
+      await releaseClaim(db, open);
+      return { state: "failed", error: started.reason };
+    }
+
+    const { run } = started;
+    await runs.updateOne(
+      { _id: open._id },
+      {
+        $set: { runId: run.id, datasetId: run.defaultDatasetId, startedAt: now },
+        $unset: { error: "" },
+      },
+    );
+    if (inProgress(run.status)) return { state: "waiting", note: RUNNING_NOTE };
+    return await collect(run);
+  } catch (err) {
+    // Apify or the database did not answer. The claim is left as it is and
+    // the next refresh asks again.
+    return { state: "waiting", note: `Apify: ${(err as Error).message}` };
+  }
+}
+
 /**
  * Whether a Facebook read may scrape.
  *
  * `cached` the default, and what every path in the app gets bar one: never
- *          scrape, whatever state the cache is in.
+ *          claim a run, whatever state the cache is in. It does move on a
+ *          run the weekday job already claimed — collects it, or starts it
+ *          if Apify was too busy to take it then — which spends nothing
+ *          that job had not already decided to.
  * `fresh`  the weekday run at 12:45: spend the credits and take new posts.
  *
  * Two states rather than a scale, because the useful question is not how
@@ -723,108 +1041,44 @@ export async function fetchWithApify(
 ): Promise<FacebookFetch> {
   const key = `apify:${pageUrl}`;
   const cached = db ? await readCache(db, key) : null;
-  // At whatever age it has: the alternative is not a newer answer but no
-  // Facebook in the feed until the next weekday run, and a post does not
-  // stop having been published because the copy of it is a day old.
-  //
-  // Unless it is a copy with no times on it, which is worth one free look
-  // at the finished run before being served — see {@link worthRechecking}.
-  if (spend === "cached" && cached && !worthRechecking(cached)) {
-    return { posts: cached.posts };
+  const stored = cached?.posts ?? [];
+
+  // The weekday job: take this page's run for the day, if there is one to
+  // take. Without a database there is nothing to count against, and an
+  // uncounted run is exactly what the claim is there to prevent.
+  let refusal: string | undefined;
+  if (spend === "fresh") {
+    if (!db) return { posts: stored, error: "Apify: тоолох сангүйгээр татахгүй." };
+    const claim = await claimApifyRun(db, pageUrl);
+    if (!claim.ok) refusal = claim.reason;
   }
 
-  // Free — it reads a finished run's dataset rather than starting one — so
-  // it is worth trying before giving up on a cold cache.
-  const recovered = spend === "fresh" ? null : await lastRunPosts(pageUrl, token);
+  // A run this page is owed or already has under way. Every caller moves it
+  // on — that is how a run which outlasted the weekday request still reaches
+  // the feed, on the five-minute refresh after it finishes.
+  if (db) {
+    const step = await advanceRun(db, pageUrl, token);
+    if (step.state === "done") return { posts: step.posts };
+    // The stored posts stand meanwhile, at whatever age: the alternative is
+    // not a newer answer but no Facebook in the feed at all.
+    if (step.state === "waiting") return { posts: stored, error: step.note };
+    if (step.state === "failed") return { posts: stored, error: step.error };
+  }
+  if (refusal) return { posts: stored, error: refusal };
+
+  // Nothing under way: what is stored — unless it is a copy with no times on
+  // it, or nothing at all, which is worth one free look at the account's
+  // last finished run first. See {@link worthRechecking}.
+  if (cached && stored.length > 0 && !worthRechecking(cached)) {
+    return { posts: stored };
+  }
+  const recovered = await lastRunPosts(pageUrl, token);
   if (recovered) {
     if (db) await writeCache(db, key, recovered);
     return { posts: recovered };
   }
-
-  // Nothing to read back off a finished run. A read that is not allowed to
-  // scrape stops here rather than starting a billed one, on whatever is
-  // stored — which is the posts themselves where the look above was for
-  // their missing times rather than for a cache that was never there.
-  if (spend === "cached") {
-    if (db && cached) await markRechecked(db, key);
-    return { posts: cached?.posts ?? [] };
-  }
-
-  // A billed run from here on, so it has to fit inside today's allowance.
-  // Without a database there is nothing to count against, and an uncounted
-  // run is exactly what this is here to prevent.
-  if (!db) {
-    return { posts: cached?.posts ?? [], error: "Apify: тоолох сангүйгээр татахгүй." };
-  }
-  const claim = await claimApifyRun(db, pageUrl);
-  if (!claim.ok) {
-    return { posts: cached?.posts ?? [], error: claim.reason };
-  }
-
-  const since = new Date(Date.now() - APIFY_MAX_AGE_DAYS * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-
-  try {
-    const start = (capped: boolean) => {
-      const run = new URL(APIFY_RUN_URL);
-      run.searchParams.set("token", token);
-      if (capped) run.searchParams.set("maxTotalChargeUsd", String(APIFY_MAX_CHARGE_USD));
-      return fetch(run, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startUrls: [{ url: pageUrl }],
-          resultsLimit: APIFY_POST_LIMIT,
-          onlyPostsNewerThan: since,
-        }),
-        signal: AbortSignal.timeout(APIFY_TIMEOUT_MS),
-      });
-    };
-
-    // The cap is documented on the run endpoint but could not be tried
-    // against a real account here, so a rejection of the request itself
-    // falls back to the same run without it. The limit above is what keeps
-    // the bill down; this is only the second line of defence, and it must
-    // not become the reason Facebook stops working.
-    let res = await start(true);
-    if (res.status === 400) res = await start(false);
-
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: { message?: string; type?: string };
-      };
-      // 402 is the free allowance being spent, which is worth saying plainly
-      // rather than reporting as a generic failure.
-      const message =
-        res.status === 401
-          ? "Apify токен буруу байна."
-          : res.status === 402
-            ? "Apify-н үнэгүй эрх дууссан байна — дараа сар шинэчлэгдэнэ."
-            : (body.error?.message ?? `Apify ${res.status}`);
-      return { posts: cached?.posts ?? [], error: message, status: res.status };
-    }
-
-    const posts = toPosts(await res.json());
-    if (posts.length === 0) {
-      return {
-        posts: cached?.posts ?? [],
-        error: "Apify хуудаснаас бичвэртэй пост олсонгүй.",
-      };
-    }
-
-    if (db) await writeCache(db, key, posts);
-    return { posts };
-  } catch (err) {
-    const timeout = err instanceof Error && err.name === "TimeoutError";
-    return {
-      // A scrape that ran long doesn't invalidate what it returned last time.
-      posts: cached?.posts ?? [],
-      error: timeout
-        ? "Apify хугацаа хэтэрлээ — дараагийн оролдлогод амжина."
-        : `Apify: ${(err as Error).message}`,
-    };
-  }
+  if (db && cached) await markRechecked(db, key);
+  return { posts: stored };
 }
 
 /**
@@ -877,4 +1131,4 @@ export async function fetchWithToken(
 }
 
 export const __testing = {
-  claimApifyRun, parseMbasicPosts, toPosts, byNewest, worthRechecking };
+  claimApifyRun, advanceRun, fetchWithApify, parseMbasicPosts, toPosts, byNewest, worthRechecking };
