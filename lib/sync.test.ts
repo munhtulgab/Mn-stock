@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { __testing } from "./sync";
 
 const {
+  headingSessionDay,
+  stillPending,
   needsCatchUp,
   prune,
   CATCH_UP_SHARE,
@@ -171,4 +173,32 @@ test("one that throws does not take the rest of the run with it", async () => {
   });
   assert.equal(count, 3);
   assert.deepEqual(seen.sort(), [1, 2, 3]);
+});
+
+/* --------------------------------------------------- provisional sessions */
+
+test("the heading is filed under today after the bell, the last weekday before the open", () => {
+  // 2026-10-01 was a Thursday; 2026-10-05 a Monday.
+  assert.equal(headingSessionDay(new Date("2026-10-01T03:30:00Z")), null, "11:30, trading");
+  assert.equal(headingSessionDay(new Date("2026-10-01T05:00:00Z")), "2026-10-01", "13:00");
+  assert.equal(headingSessionDay(new Date("2026-10-01T15:59:00Z")), "2026-10-01", "23:59");
+  assert.equal(headingSessionDay(new Date("2026-10-02T00:00:00Z")), "2026-10-01", "Fri 08:00");
+  assert.equal(headingSessionDay(new Date("2026-10-03T08:00:00Z")), "2026-10-02", "Saturday");
+  assert.equal(headingSessionDay(new Date("2026-10-05T00:00:00Z")), "2026-10-02", "Mon 08:00");
+  assert.equal(headingSessionDay(new Date("2026-10-05T01:59:00Z")), "2026-10-02", "Mon 09:59");
+  assert.equal(headingSessionDay(new Date("2026-10-05T02:00:00Z")), null, "Mon 10:00");
+});
+
+test("a provisional session waits until the table reaches its day", () => {
+  const prov = { date: "2026-10-01", close: 5275, previousClose: 4894 };
+  assert.equal(stillPending(prov, { date: "2026-09-30", close: 4894, previousClose: 4900 }), true);
+  assert.equal(stillPending(prov, { date: "2026-10-01", close: 5275, previousClose: 4894 }), false);
+  assert.equal(stillPending(prov, { date: "2026-10-02", close: 5300, previousClose: 5275 }), false);
+  assert.equal(stillPending(prov, null), true);
+});
+
+test("a provisional session the table publishes under an earlier date is dropped", () => {
+  // Stamped 1 October while the table was two days behind; it was the 30th.
+  const prov = { date: "2026-10-01", close: 4894, previousClose: 4900 };
+  assert.equal(stillPending(prov, { date: "2026-09-30", close: 4894, previousClose: 4900 }), false);
 });

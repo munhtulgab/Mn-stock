@@ -34,6 +34,12 @@ export interface PricePoint {
   turnover: number;
   trades: number;
   previousClose: number;
+  /**
+   * Taken from the company page's heading because the trading table had not
+   * published the session yet. Replaced by the table's own row on the next
+   * sync that finds one; see `storeHeadingSession` in lib/sync.ts.
+   */
+  provisional?: boolean;
 }
 
 export interface Financials {
