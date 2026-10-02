@@ -1,5 +1,12 @@
 import { ObjectId, type Db, type Document, type Filter } from "mongodb";
-import { editsByOrder, editsForOrders, editsForUser, type OrderEdit } from "@/lib/orderEdits";
+import {
+  cashEditsForUser,
+  editsByOrder,
+  editsForOrders,
+  editsForUser,
+  type CashEdit,
+  type OrderEdit,
+} from "@/lib/orderEdits";
 import { founderId } from "@/lib/roles";
 import { rangeSince } from "@/lib/adminFilters";
 import { valuePortfolio } from "@/lib/portfolio";
@@ -185,6 +192,8 @@ export interface AdminUserDetail extends AdminUserRow {
   orders: AdminOrderRow[];
   /** Orders an administrator deleted, newest first; they have no row left. */
   deletedOrders: OrderEdit[];
+  /** Cash balances an administrator set by hand, newest first. */
+  cashEdits: CashEdit[];
   sessions: number;
   valuation: AdminValuation;
 }
@@ -211,7 +220,8 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
   const user = await db.collection<User>("users").findOne({ _id: id } as never);
   if (!user) return null;
 
-  const [founder, holdings, transactions, portfolio, sessions, edits] = await Promise.all([
+  const [founder, holdings, transactions, portfolio, sessions, edits, cashEdits] =
+    await Promise.all([
     founderId(db),
     db
       .collection<Holding>("holdings")
@@ -227,6 +237,7 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
     db.collection<Portfolio>("portfolios").findOne({ userId: id }),
     db.collection<Session>("sessions").countDocuments({ userId: id }),
     editsForUser(db, id),
+    cashEditsForUser(db, id),
   ]);
   const editsOf = editsByOrder(edits);
 
@@ -295,13 +306,14 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
       edits: editsOf.get(String(tx._id)) ?? [],
     })),
     deletedOrders: edits.filter((edit) => edit.action === "delete"),
+    cashEdits,
   };
 }
 
 /**
  * Everything an account owns, gone with it.
  *
- * Six collections key off the user id and none of them cascade on their own,
+ * Seven collections key off the user id and none of them cascade on their own,
  * so a deleted account otherwise leaves its orders, its positions and — the
  * one that matters — its live sessions behind. Push subscriptions are not
  * among them: those belong to a browser rather than to an account.
@@ -314,6 +326,7 @@ export async function deleteUserEverywhere(db: Db, id: string): Promise<void> {
     db.collection<WatchlistItem>("watchlist").deleteMany({ userId: id }),
     db.collection<Session>("sessions").deleteMany({ userId: id }),
     db.collection("orderEdits").deleteMany({ userId: id }),
+    db.collection("cashEdits").deleteMany({ userId: id }),
   ]);
   await db.collection<User>("users").deleteOne({ _id: id } as never);
 }

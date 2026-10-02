@@ -4,6 +4,7 @@ import { hashPassword, usernameFilter } from "@/lib/auth";
 import { deleteUserEverywhere } from "@/lib/adminUsers";
 import { isFounder, requireAdminRequest } from "@/lib/roles";
 import type { Portfolio, Session, User } from "@/lib/types";
+import { recordCashEdit } from "@/lib/orderEdits";
 
 const MIN_USERNAME = 3;
 const MIN_PASSWORD = 4;
@@ -118,6 +119,9 @@ export async function PATCH(
     });
   }
   if (cashBalance !== undefined) {
+    const before = await db
+      .collection<Portfolio>("portfolios")
+      .findOne({ userId: id }, { projection: { cashBalance: 1 } });
     await db
       .collection<Portfolio>("portfolios")
       .updateOne(
@@ -125,6 +129,20 @@ export async function PATCH(
         { $set: { cashBalance, updatedAt: new Date() }, $setOnInsert: { userId: id } },
         { upsert: true },
       );
+    // The form sends the balance whenever it is saved; only a change is one.
+    // Under half a möngö is not: a balance that has been through a few
+    // hundred orders carries float dust (43,293.45999999999), and saving the
+    // form unchanged would otherwise log a change of nothing.
+    const was = before?.cashBalance ?? 0;
+    if (Math.abs(was - cashBalance) >= 0.005) {
+      await recordCashEdit(db, {
+        userId: id,
+        at: new Date(),
+        by: gate.admin.username,
+        before: was,
+        after: cashBalance,
+      });
+    }
   }
 
   // A password someone else set ends every session on the account. Whoever was
