@@ -15,10 +15,12 @@
  * lettered fallback. To add one by hand, drop a square PNG in and list the
  * symbol here.
  *
- * ALTT is the one that is drawn rather than collected. It is a fund holding
- * a metal rather than a company, so it has no mark of its own to take; what
- * identifies it in a list of forty rows is the thing it holds, and a bullion
- * bar says that where four letters do not.
+ * ALTT is a fund holding a metal rather than a company, so it has no mark
+ * of its own to take; what identifies it in a list of forty rows is the
+ * thing it holds. Its file is TradingView's gold symbol
+ * (s3-symbol-logo.tradingview.com/metal/gold--big.svg), rendered to the same
+ * 128px PNG as the rest and kept here rather than linked, so a list does not
+ * depend on another site to draw a row.
  *
  * FTI came from the fund's own lockup, cut down to the mark. The lockup sets
  * "FTI" beside "Future Tech Innovation" on two lines, and the avatar renders
