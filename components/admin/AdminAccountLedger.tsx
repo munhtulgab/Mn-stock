@@ -6,6 +6,7 @@ import StockAvatar from "@/components/StockAvatar";
 import Panel from "@/components/admin/Panel";
 import Glyph from "@/components/ui/Glyph";
 import AdminOrderRows from "@/components/admin/AdminOrderRows";
+import { DeletedOrderRow } from "@/components/OrderEditNotes";
 import type { AdminUserDetail } from "@/lib/adminUsers";
 
 /**
@@ -28,6 +29,9 @@ import type { AdminUserDetail } from "@/lib/adminUsers";
 export default function AdminAccountLedger({ user }: { user: AdminUserDetail }) {
   const [symbol, setSymbol] = useState<string | null>(null);
   const orders = symbol ? user.orders.filter((o) => o.symbol === symbol) : user.orders;
+  const deleted = symbol
+    ? user.deletedOrders.filter((edit) => edit.symbol === symbol)
+    : user.deletedOrders;
 
   return (
     <div className="grid items-start gap-3 lg:grid-cols-2">
@@ -76,7 +80,7 @@ export default function AdminAccountLedger({ user }: { user: AdminUserDetail }) 
                     </span>
                     <span className="shrink-0 text-right">
                       <span className="block text-sm font-semibold tabular-nums text-app-text">
-                        <Num value={h.marketValue} digits={0} suffix="₮" />
+                        <Num value={h.marketValue} digits={2} suffix="₮" />
                       </span>
                       <span
                         className="block text-[11px] font-semibold tabular-nums"
@@ -88,13 +92,12 @@ export default function AdminAccountLedger({ user }: { user: AdminUserDetail }) 
                               : "var(--app-muted)",
                         }}
                       >
-                        {up && "+"}
-                        <Num value={h.gainLoss} digits={0} suffix="₮" />
+                        <Num value={h.gainLoss} digits={2} suffix="₮" showSign={up} />
                         {h.gainLossPct !== null && (
                           <span className="font-normal">
-                            {" "}
-                            ({up && "+"}
-                            {h.gainLossPct.toFixed(1)}%)
+                            {" ("}
+                            <Num value={h.gainLossPct} digits={2} suffix="%" showSign={up} />
+                            {")"}
                           </span>
                         )}
                       </span>
@@ -145,6 +148,18 @@ export default function AdminAccountLedger({ user }: { user: AdminUserDetail }) 
           </p>
         ) : (
           <AdminOrderRows userId={user.id} orders={orders} />
+        )}
+        {deleted.length > 0 && (
+          <div className="border-t border-app-divider">
+            <p className="px-5 pt-4 pb-1 text-[11px] font-bold uppercase tracking-wide text-app-muted">
+              Устгасан захиалга · {deleted.length}
+            </p>
+            <div className="divide-y divide-app-divider">
+              {deleted.map((edit, i) => (
+                <DeletedOrderRow key={i} edit={edit} showWho />
+              ))}
+            </div>
+          </div>
         )}
       </Panel>
     </div>

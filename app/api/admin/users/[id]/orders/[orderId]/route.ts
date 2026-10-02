@@ -5,6 +5,7 @@ import { applyChange, OrderCorrectionError, type OrderLike } from "@/lib/adminOr
 import { requireAdminRequest } from "@/lib/roles";
 import { fromUlaanbaatarStamp } from "@/lib/day";
 import type { Transaction } from "@/lib/types";
+import { recordOrderEdit, snapshotOf } from "@/lib/orderEdits";
 
 /**
  * One order in someone's history, edited or taken out.
@@ -79,6 +80,17 @@ export async function PATCH(
       },
     },
   );
+  await recordOrderEdit(db, {
+    userId: id,
+    orderId,
+    companyCode: tx.companyCode,
+    symbol: tx.symbol,
+    action: "edit",
+    at: new Date(),
+    by: gate.admin.username,
+    before: snapshotOf(tx),
+    after: snapshotOf({ side, quantity, price, total: after.total, createdAt }),
+  });
   return NextResponse.json({ ok: true });
 }
 
@@ -105,6 +117,18 @@ export async function DELETE(
   await db
     .collection<Transaction>("transactions")
     .deleteOne({ ...orderFilter(orderId), userId: id } as never);
+  // The one correction that leaves no row behind, so the only trace of it.
+  await recordOrderEdit(db, {
+    userId: id,
+    orderId,
+    companyCode: tx.companyCode,
+    symbol: tx.symbol,
+    action: "delete",
+    at: new Date(),
+    by: gate.admin.username,
+    before: snapshotOf(tx),
+    after: null,
+  });
   // A correcting row that pointed at this one now points at nothing, which
   // would leave the page marking an order as undone by an order that is gone.
   await db

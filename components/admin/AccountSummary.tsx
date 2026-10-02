@@ -61,25 +61,20 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
         <StatTile
           icon={<WalletGlyph />}
           label="Нийт үнэ цэн"
-          value={<Num value={v.totalValue} digits={0} suffix="₮" />}
+          value={<Num value={v.totalValue} digits={2} suffix="₮" />}
           note="мөнгө + хувьцаа"
         />
         <StatTile
           icon={<DepositGlyph />}
           label="Нийт хөрөнгө оруулалт"
-          value={<Num value={v.totalCostBasis} digits={0} suffix="₮" />}
+          value={<Num value={v.totalCostBasis} digits={2} suffix="₮" />}
           note="эзэмшиж буй хувьцааны өртөг"
         />
         <StatTile
           icon={<TrendGlyph down={down} />}
           label="Ашиг / алдагдал"
           tone={tone}
-          value={
-            <>
-              {up && "+"}
-              <Num value={v.totalGainLoss} digits={0} suffix="₮" />
-            </>
-          }
+          value={<Num value={v.totalGainLoss} digits={2} suffix="₮" showSign={up} />}
         />
         <StatTile
           icon={<PercentGlyph />}
@@ -89,17 +84,14 @@ export default function AccountSummary({ user }: { user: AdminUserDetail }) {
             v.totalGainLossPct === null ? (
               "—"
             ) : (
-              <>
-                {up && "+"}
-                {v.totalGainLossPct.toFixed(2)}%
-              </>
+              <Num value={v.totalGainLossPct} digits={2} suffix="%" showSign={up} />
             )
           }
         />
         <StatTile
           icon={<CashGlyph />}
           label="Мөнгөн үлдэгдэл"
-          value={<Num value={user.cash} digits={0} suffix="₮" />}
+          value={<Num value={user.cash} digits={2} suffix="₮" />}
           note="арилжаанд бэлэн"
         />
         <StatTile

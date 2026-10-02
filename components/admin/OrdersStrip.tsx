@@ -94,7 +94,7 @@ export default function OrdersStrip({ days }: { days: DailyOrders[] }) {
                 longer it: it is the second question about a day, and this is
                 the only place the two can be seen against each other. */}
             <span className="truncate text-app-muted">
-              {longDay(shown.day)} · <Num value={shown.turnover} digits={0} suffix="₮" />
+              {longDay(shown.day)} · <Num value={shown.turnover} digits={2} suffix="₮" />
             </span>
           </>
         ) : (
@@ -153,7 +153,7 @@ export default function OrdersStrip({ days }: { days: DailyOrders[] }) {
 
       <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 border-t border-app-divider pt-4 sm:grid-cols-4">
         <Fact label="Нийт эргэлт" icon={<CoinMark />}>
-          <Num value={turnover} digits={0} suffix="₮" />
+          <Num value={turnover} digits={2} suffix="₮" />
         </Fact>
         <Fact label="Захиалга" icon={<ReceiptMark />}>
           {orders.toLocaleString("mn-MN")}

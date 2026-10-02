@@ -3,6 +3,7 @@ import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getPortfolioSummary, getTransactions } from "@/lib/portfolio";
 import TransactionList from "@/components/TransactionList";
+import { editsForUser } from "@/lib/orderEdits";
 import HoldingsList from "@/components/HoldingsList";
 import PortfolioAllocation from "@/components/PortfolioAllocation";
 import Num from "@/components/Num";
@@ -25,9 +26,10 @@ export const dynamic = "force-dynamic";
 export default async function PortfolioPage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
-  const [portfolio, transactions] = await Promise.all([
+  const [portfolio, transactions, edits] = await Promise.all([
     getPortfolioSummary(db, user!._id!),
     getTransactions(db, user!._id!),
+    editsForUser(db, String(user!._id)),
   ]);
 
   /**
@@ -163,7 +165,12 @@ export default async function PortfolioPage() {
             Одоогоор арилжаа хийгээгүй байна.
           </div>
         ) : (
-          <TransactionList transactions={transactions.slice(0, RECENT_ORDERS)} />
+          <TransactionList
+            transactions={transactions.slice(0, RECENT_ORDERS)}
+            // Deleted orders stay on the full history page; here they would
+            // push the most recent real ones off a list of a few.
+            edits={edits.filter((edit) => edit.action !== "delete")}
+          />
         )}
       </section>
       </div>

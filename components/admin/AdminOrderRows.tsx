@@ -12,6 +12,7 @@ import Select, { type SelectOption } from "@/components/ui/Select";
 import DateTimePicker from "@/components/ui/DateTimePicker";
 import RowMenu, { type RowAction } from "@/components/admin/RowMenu";
 import type { AdminOrderRow } from "@/lib/adminUsers";
+import OrderEditNotes from "@/components/OrderEditNotes";
 
 /**
  * Somebody's order history, as an administrator may correct it.
@@ -213,6 +214,16 @@ export default function AdminOrderRows({
                   />
                 </div>
               )}
+            </div>
+
+            {/* Who changed this order and what from, so ЗАССАН is not the
+                whole story. The tag stays as the thing a scan finds. */}
+            <div className="pl-[52px]">
+              <OrderEditNotes
+                edits={order.edits}
+                editedAt={order.reversalOf ? null : order.editedAt}
+                showWho
+              />
             </div>
 
             {open && pending.mode === "edit" && (

@@ -3,13 +3,19 @@ import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { getTransactions } from "@/lib/portfolio";
 import TransactionList from "@/components/TransactionList";
+import { editsForUser } from "@/lib/orderEdits";
 
 export const dynamic = "force-dynamic";
 
 export default async function OrdersPage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
-  const transactions = await getTransactions(db, user!._id!);
+  const [transactions, edits] = await Promise.all([
+    getTransactions(db, user!._id!),
+    // What an administrator changed, so the history says so rather than
+    // reading differently from how the orders were placed.
+    editsForUser(db, String(user!._id)),
+  ]);
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-4">
@@ -28,7 +34,7 @@ export default async function OrdersPage() {
           </Link>
         </div>
       ) : (
-        <TransactionList transactions={transactions} />
+        <TransactionList transactions={transactions} edits={edits} />
       )}
     </div>
   );

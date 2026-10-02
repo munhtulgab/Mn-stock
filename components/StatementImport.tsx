@@ -222,7 +222,7 @@ export default function StatementImport() {
             {result.from} — {result.to} · шинээр {result.added}
             {result.kept > 0 && `, өмнөхөөс ${result.kept}`} гүйлгээ · нийт{" "}
             {result.fills} · шимтгэл{" "}
-            <Num value={result.fees} digits={0} suffix="₮" /> · брокерын үлдэгдэлтэй{" "}
+            <Num value={result.fees} digits={2} suffix="₮" /> · брокерын үлдэгдэлтэй{" "}
             {result.reconciledDays} өдөр тулгав
             {result.closed.length > 0 && ` · зарж дуусгасан: ${result.closed.join(", ")}`}
             {result.excluded.length > 0 &&

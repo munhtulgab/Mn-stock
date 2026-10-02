@@ -145,7 +145,7 @@ export default async function AdminOrdersPage({
                   </Td>
                   <Td right>
                     <span className="font-semibold">
-                      <Num value={t.total} digits={0} suffix="₮" />
+                      <Num value={t.total} digits={2} suffix="₮" />
                     </span>
                   </Td>
                   <Td right>
@@ -172,6 +172,7 @@ export default async function AdminOrdersPage({
                     <SidePill side={t.side} />
                     {t.imported && <Tag>ХУУЛГА</Tag>}
                     {t.reversalOf && <Tag>БУЦААЛТ</Tag>}
+                    {t.editedAt && <Tag>ЗАССАН</Tag>}
                   </span>
                   <span className="block truncate text-xs text-app-muted">
                     @{t.username} · {ulaanbaatarDateTime(t.createdAt)}
@@ -179,7 +180,7 @@ export default async function AdminOrdersPage({
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-semibold">
-                    <Num value={t.total} digits={0} suffix="₮" />
+                    <Num value={t.total} digits={2} suffix="₮" />
                   </span>
                   <span className="block text-xs text-app-muted">{t.quantity} ш</span>
                 </span>

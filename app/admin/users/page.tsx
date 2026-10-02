@@ -130,7 +130,7 @@ export default async function AdminUsersPage({
                   <Td>{u.positionCount.toLocaleString("mn-MN")}</Td>
                   <Td>
                     <span className="font-semibold">
-                      <Num value={u.cash} digits={0} suffix="₮" />
+                      <Num value={u.cash} digits={2} suffix="₮" />
                     </span>
                   </Td>
                   <Td>
@@ -163,7 +163,7 @@ export default async function AdminUsersPage({
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-semibold">
-                    <Num value={u.cash} digits={0} suffix="₮" />
+                    <Num value={u.cash} digits={2} suffix="₮" />
                   </span>
                   <span className="block text-xs text-app-muted">
                     {u.orderCount} захиалга

@@ -4,6 +4,7 @@ import { orderFilter } from "@/lib/adminUsers";
 import { applyChange, mirrorOf, OrderCorrectionError } from "@/lib/adminOrders";
 import { requireAdminRequest } from "@/lib/roles";
 import type { Transaction } from "@/lib/types";
+import { recordOrderEdit, snapshotOf } from "@/lib/orderEdits";
 
 /**
  * Cancels an order out without pretending it never happened.
@@ -50,5 +51,16 @@ export async function POST(
   await db
     .collection<Transaction>("transactions")
     .insertOne({ ...mirror, editedBy: gate.admin.username } as never);
+  await recordOrderEdit(db, {
+    userId: id,
+    orderId,
+    companyCode: tx.companyCode,
+    symbol: tx.symbol,
+    action: "reverse",
+    at: new Date(),
+    by: gate.admin.username,
+    before: snapshotOf(tx),
+    after: snapshotOf(mirror),
+  });
   return NextResponse.json({ ok: true });
 }

@@ -215,7 +215,7 @@ export default async function AdminOverviewPage({
                       <Td right>{t.quantity.toLocaleString("mn-MN")}</Td>
                       <Td right>
                         <span className="font-semibold">
-                          <Num value={t.total} digits={0} suffix="₮" />
+                          <Num value={t.total} digits={2} suffix="₮" />
                         </span>
                       </Td>
                       <Td right>
@@ -247,7 +247,7 @@ export default async function AdminOverviewPage({
                     </span>
                     <span className="shrink-0 text-right">
                       <span className="block text-sm font-semibold">
-                        <Num value={t.total} digits={0} suffix="₮" />
+                        <Num value={t.total} digits={2} suffix="₮" />
                       </span>
                       <span className="block text-xs text-app-muted">{t.quantity} ш</span>
                     </span>
