@@ -1,13 +1,14 @@
 import StockAvatar from "./StockAvatar";
 import Num from "./Num";
-import OrderEditNotes, { DeletedOrderRow } from "./OrderEditNotes";
+import OrderEditNotes, { CashEditRow, DeletedOrderRow } from "./OrderEditNotes";
 import type { Transaction } from "@/lib/types";
-import { editsByOrder, type OrderEdit } from "@/lib/orderEdits";
+import { editsByOrder, type CashEdit, type OrderEdit } from "@/lib/orderEdits";
 import { ulaanbaatarDateTime } from "@/lib/day";
 
 type Entry =
   | { kind: "order"; at: number; order: Transaction }
-  | { kind: "deleted"; at: number; edit: OrderEdit };
+  | { kind: "deleted"; at: number; edit: OrderEdit }
+  | { kind: "cash"; at: number; edit: CashEdit };
 
 /**
  * Filled orders, newest first. Shared so the summary under the portfolio's
@@ -15,14 +16,18 @@ type Entry =
  *
  * Given the account's corrections, each order an administrator changed says
  * so underneath, with what was changed, and an order they deleted keeps its
- * place struck through. Without them it is the plain list it always was.
+ * place struck through. Given the balance changes made by hand, those stand
+ * among the orders at the time they were made. Without either it is the
+ * plain list it always was.
  */
 export default function TransactionList({
   transactions,
   edits = [],
+  cashEdits = [],
 }: {
   transactions: Transaction[];
   edits?: OrderEdit[];
+  cashEdits?: CashEdit[];
 }) {
   const byOrder = editsByOrder(edits);
   const reversed = new Set(
@@ -41,12 +46,18 @@ export default function TransactionList({
         at: new Date(edit.before.createdAt).getTime(),
         edit,
       })),
+    ...cashEdits.map((edit) => ({
+      kind: "cash" as const,
+      at: new Date(edit.at).getTime(),
+      edit,
+    })),
   ].sort((a, b) => b.at - a.at);
 
   return (
     <div className="rounded-2xl border border-app-border bg-app-card divide-y divide-app-divider overflow-hidden">
       {entries.map((entry, i) => {
         if (entry.kind === "deleted") return <DeletedOrderRow key={`d${i}`} edit={entry.edit} />;
+        if (entry.kind === "cash") return <CashEditRow key={`c${i}`} edit={entry.edit} />;
         const t = entry.order;
         const id = t._id ? String(t._id) : "";
         return (

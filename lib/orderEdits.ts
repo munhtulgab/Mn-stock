@@ -136,3 +136,37 @@ export function editsByOrder(edits: OrderEdit[]): Map<string, OrderEdit[]> {
   }
   return byOrder;
 }
+
+/**
+ * An administrator setting an account's cash balance by hand.
+ *
+ * The balance moves with every order, so a reader reconciling their account
+ * against their history can account for every change but this one — it came
+ * from the account form, not from a trade, and used to leave no mark at all.
+ * It is written down here and shown in the order history beside the orders,
+ * which is where the reader goes to see why their balance is what it is.
+ */
+export interface CashEdit {
+  userId: string;
+  at: Date;
+  /** The administrator's username. */
+  by: string;
+  before: number;
+  after: number;
+}
+
+const CASH_COLLECTION = "cashEdits";
+
+export async function recordCashEdit(db: Db, edit: CashEdit): Promise<void> {
+  await db.collection<CashEdit>(CASH_COLLECTION).insertOne(edit);
+}
+
+/** An account's balance changes by hand, newest first. */
+export async function cashEditsForUser(db: Db, userId: string, limit = 200): Promise<CashEdit[]> {
+  return db
+    .collection<CashEdit>(CASH_COLLECTION)
+    .find({ userId }, { projection: { _id: 0 } })
+    .sort({ at: -1 })
+    .limit(limit)
+    .toArray();
+}

@@ -6,7 +6,7 @@ import StockAvatar from "@/components/StockAvatar";
 import Panel from "@/components/admin/Panel";
 import Glyph from "@/components/ui/Glyph";
 import AdminOrderRows from "@/components/admin/AdminOrderRows";
-import { DeletedOrderRow } from "@/components/OrderEditNotes";
+import { CashEditRow, DeletedOrderRow } from "@/components/OrderEditNotes";
 import type { AdminUserDetail } from "@/lib/adminUsers";
 
 /**
@@ -148,6 +148,18 @@ export default function AdminAccountLedger({ user }: { user: AdminUserDetail }) 
           </p>
         ) : (
           <AdminOrderRows userId={user.id} orders={orders} />
+        )}
+        {!symbol && user.cashEdits.length > 0 && (
+          <div className="border-t border-app-divider">
+            <p className="px-5 pt-4 pb-1 text-[11px] font-bold uppercase tracking-wide text-app-muted">
+              Мөнгөн үлдэгдлийн өөрчлөлт · {user.cashEdits.length}
+            </p>
+            <div className="divide-y divide-app-divider">
+              {user.cashEdits.map((edit, i) => (
+                <CashEditRow key={i} edit={edit} showWho />
+              ))}
+            </div>
+          </div>
         )}
         {deleted.length > 0 && (
           <div className="border-t border-app-divider">

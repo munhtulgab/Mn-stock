@@ -1,7 +1,7 @@
 import StockAvatar from "./StockAvatar";
 import Num from "./Num";
 import { ulaanbaatarDateTime } from "@/lib/day";
-import { changesOf, type OrderEdit } from "@/lib/orderEdits";
+import { changesOf, type CashEdit, type OrderEdit } from "@/lib/orderEdits";
 
 /**
  * Who corrected an order, when, and what they changed — under the order.
@@ -127,6 +127,60 @@ export function DeletedOrderRow({
         <div className="text-xs">
           <Num value={order.total} digits={2} suffix="₮" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A cash balance an administrator set by hand, in the history with the
+ * orders: the one change to the balance that no order explains.
+ */
+export function CashEditRow({
+  edit,
+  showWho = false,
+  className = "px-4 py-3",
+}: {
+  edit: CashEdit;
+  showWho?: boolean;
+  className?: string;
+}) {
+  const delta = edit.after - edit.before;
+  const up = delta > 0;
+  return (
+    <div className={`flex items-start gap-3 ${className}`}>
+      <span
+        aria-hidden
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-elevated text-base font-bold text-app-muted"
+      >
+        ₮
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-sm font-semibold text-app-text">Мөнгөн үлдэгдэл</span>
+          <span className="rounded-full bg-app-elevated px-2 py-0.5 text-[10px] font-bold tracking-wide text-app-muted">
+            АДМИН ӨӨРЧИЛСӨН
+          </span>
+        </div>
+        <div className="text-xs text-app-muted">
+          {ulaanbaatarDateTime(edit.at)}
+          {showWho ? ` · ${edit.by}` : ""}
+        </div>
+        <div className="mt-1 text-[11px] text-app-muted">
+          <span className="line-through">
+            <Num value={edit.before} digits={2} suffix="₮" />
+          </span>
+          {" → "}
+          <span className="text-app-text">
+            <Num value={edit.after} digits={2} suffix="₮" />
+          </span>
+        </div>
+      </div>
+      <div
+        className="shrink-0 text-right text-sm"
+        style={{ color: up ? "var(--app-positive)" : "var(--app-negative)" }}
+      >
+        <Num value={delta} digits={2} suffix="₮" showSign={up} />
       </div>
     </div>
   );
