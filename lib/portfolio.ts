@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types";
 import { STARTING_CASH_BALANCE } from "@/lib/types";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
+import { headingQuotesFor } from "@/lib/mse/quote";
 import { priorClose } from "@/lib/priceChange";
 export * from "@/lib/holdings";
 import type { HoldingView } from "@/lib/holdings";
@@ -153,6 +154,36 @@ async function livePricesFor(
   }
 }
 
+/**
+ * The running prices, with the exchange's page heading filling in for
+ * whatever the live feed does not carry — the funds, which it has none of.
+ * Without this a fund was valued at the trading table's close, which runs up
+ * to a day behind the price the fund's own page shows.
+ */
+async function currentPricesFor(
+  items: { companyCode: number; symbol: string }[],
+  latest: Map<number, { last: PricePoint | null }>,
+  live: Map<number, number>,
+  waitMs?: number,
+): Promise<Map<number, number>> {
+  const missing = items
+    .filter((item) => !live.has(item.companyCode))
+    .map((item) => ({
+      symbol: item.symbol,
+      companyCode: item.companyCode,
+      newestStoredClose: latest.get(item.companyCode)?.last?.close ?? null,
+    }))
+    .filter((item) => item.newestStoredClose !== null);
+  if (missing.length === 0) return live;
+
+  const headings = await headingQuotesFor(missing, waitMs);
+  const prices = new Map(live);
+  for (const [code, quote] of headings) {
+    if (quote.price !== null) prices.set(code, quote.price);
+  }
+  return prices;
+}
+
 export async function getPortfolioSummary(
   db: Db,
   userId: string,
@@ -192,7 +223,7 @@ export async function valuePortfolio(
   } = {},
 ): Promise<PortfolioSummary> {
   const companyCodes = holdingDocs.map((h) => h.companyCode);
-  const [securities, pricesByCode, livePrices] = await Promise.all([
+  const [securities, pricesByCode, feedPrices] = await Promise.all([
     db
       .collection<Security>("securities")
       .find({ companyCode: { $in: companyCodes } })
@@ -201,6 +232,12 @@ export async function valuePortfolio(
     livePricesFor(companyCodes, options.quoteWaitMs),
   ]);
   const securityByCode = new Map(securities.map((s) => [s.companyCode, s]));
+  const livePrices = await currentPricesFor(
+    holdingDocs,
+    pricesByCode,
+    feedPrices,
+    options.quoteWaitMs,
+  );
 
   let holdingsValue = 0;
   let totalCostBasis = 0;
@@ -435,7 +472,7 @@ export async function getWatchlist(
     .toArray();
 
   const companyCodes = items.map((i) => i.companyCode);
-  const [securities, pricesByCode, livePrices] = await Promise.all([
+  const [securities, pricesByCode, feedPrices] = await Promise.all([
     db
       .collection<Security>("securities")
       .find({ companyCode: { $in: companyCodes } })
@@ -444,6 +481,7 @@ export async function getWatchlist(
     livePricesFor(companyCodes),
   ]);
   const securityByCode = new Map(securities.map((s) => [s.companyCode, s]));
+  const livePrices = await currentPricesFor(items, pricesByCode, feedPrices);
 
   return items.map((item) => {
     const { last, prev } = pricesByCode.get(item.companyCode) ?? {

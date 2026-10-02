@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { headingIsNewer, parseHeadingQuote } from "./quote";
+import { __testing, headingIsNewer, parseHeadingQuote } from "./quote";
 
 /**
  * The exchange's own heading, as open.mse.mn serves it. Taken from the live
@@ -90,4 +90,13 @@ test("a decimal previous close comes out exact, so it can match the stored one",
   const quote = parseHeadingQuote(heading("165.31₮", "5.65 (3.53%)", "color-green"));
   assert.equal(quote?.previousClose, 159.66);
   assert.ok(headingIsNewer(quote, 159.66, THURSDAY));
+});
+
+test("a heading read before the open is dated to the last weekday's close", () => {
+  const { headingStamp } = __testing;
+  // 2026-10-02 was a Friday; 2026-10-05 a Monday.
+  assert.equal(headingStamp(new Date("2026-10-02T08:13:00Z")), "2026-10-02T16:13");
+  assert.equal(headingStamp(new Date("2026-10-02T03:00:00Z")), "2026-10-02T11:00");
+  assert.equal(headingStamp(new Date("2026-10-02T00:30:00Z")), "2026-10-01T13:00");
+  assert.equal(headingStamp(new Date("2026-10-05T00:30:00Z")), "2026-10-02T13:00");
 });

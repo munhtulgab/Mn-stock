@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { fetchMseHtml } from "./client";
-import { ulaanbaatarDay, ulaanbaatarTime } from "@/lib/day";
+import { shiftDays, ulaanbaatarDay, ulaanbaatarTime, weekdayIndex } from "@/lib/day";
 import type { LiveQuote } from "@/lib/marketinfo/quotes";
 
 /**
@@ -173,6 +173,73 @@ export async function fetchExchangeQuote(
     bidVwap: null,
     askVwap: null,
     bookSymbol: null,
-    at: `${ulaanbaatarDay(now)}T${ulaanbaatarTime(now)}`,
+    at: headingStamp(now),
   };
 }
+
+/**
+ * When the heading's price was set, as far as the clock can say.
+ *
+ * During or after today's session, now. Before the open it is still showing
+ * the last weekday's close — the table can run that far behind — and dating
+ * it today would put Thursday's close under Friday.
+ */
+function headingStamp(now: Date): string {
+  const today = ulaanbaatarDay(now);
+  const time = ulaanbaatarTime(now);
+  if (time >= "10:00") return `${today}T${time}`;
+  let day = shiftDays(today, -1);
+  while (weekdayIndex(day) > 4) day = shiftDays(day, -1);
+  return `${day}T13:00`;
+}
+
+/** Long enough for a page or two from the exchange, short enough for a render. */
+const HEADING_WAIT_MS = 3_000;
+
+/**
+ * Heading quotes for securities the live feed does not carry, keyed by
+ * company code, for whatever answers inside the wait.
+ *
+ * The live feed is marketinfo's, and it has none of the funds. Everything
+ * that valued a holding or listed a price from that feed fell back on the
+ * stored close for them, which is the trading table's — and the table runs
+ * up to a day behind. ALTT fell 10% on 2 October; its own page said 4,730₮
+ * that afternoon while the portfolio valued nine units at the previous
+ * day's 5,275₮, 4,905₮ more than the account held.
+ *
+ * Each item carries the newest close stored for it, which is what decides
+ * whether the heading is a session the store does not have; see
+ * {@link headingIsNewer}. Cached a minute per security, like the page's own
+ * poll.
+ */
+export async function headingQuotesFor(
+  items: { symbol: string; companyCode: number; newestStoredClose: number | null }[],
+  waitMs = HEADING_WAIT_MS,
+): Promise<Map<number, LiveQuote>> {
+  const found = new Map<number, LiveQuote>();
+  if (items.length === 0) return found;
+
+  const work = Promise.all(
+    items.map(async (item) => {
+      const quote = await fetchExchangeQuote(
+        item.symbol,
+        item.companyCode,
+        item.newestStoredClose,
+      ).catch(() => null);
+      if (quote) found.set(item.companyCode, quote);
+    }),
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    work,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, waitMs);
+    }),
+  ]);
+  clearTimeout(timer);
+  // A copy, so a page that arrives after the wait cannot change an answer
+  // already handed out.
+  return new Map(found);
+}
+
+export const __testing = { headingStamp };
