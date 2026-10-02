@@ -1,4 +1,5 @@
 import { ObjectId, type Db, type Document, type Filter } from "mongodb";
+import { editsByOrder, editsForOrders, editsForUser, type OrderEdit } from "@/lib/orderEdits";
 import { founderId } from "@/lib/roles";
 import { rangeSince } from "@/lib/adminFilters";
 import { valuePortfolio } from "@/lib/portfolio";
@@ -175,11 +176,15 @@ export interface AdminOrderRow {
   /** This row has already been cancelled out by a later one. */
   reversedBy: string | null;
   editedAt: Date | null;
+  /** What administrators changed on this order, newest first. */
+  edits: OrderEdit[];
 }
 
 export interface AdminUserDetail extends AdminUserRow {
   holdings: AdminHoldingRow[];
   orders: AdminOrderRow[];
+  /** Orders an administrator deleted, newest first; they have no row left. */
+  deletedOrders: OrderEdit[];
   sessions: number;
   valuation: AdminValuation;
 }
@@ -206,7 +211,7 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
   const user = await db.collection<User>("users").findOne({ _id: id } as never);
   if (!user) return null;
 
-  const [founder, holdings, transactions, portfolio, sessions] = await Promise.all([
+  const [founder, holdings, transactions, portfolio, sessions, edits] = await Promise.all([
     founderId(db),
     db
       .collection<Holding>("holdings")
@@ -221,7 +226,9 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
       .toArray(),
     db.collection<Portfolio>("portfolios").findOne({ userId: id }),
     db.collection<Session>("sessions").countDocuments({ userId: id }),
+    editsForUser(db, id),
   ]);
+  const editsOf = editsByOrder(edits);
 
   const cash = portfolio?.cashBalance ?? 0;
   const valued = await valuePortfolio(db, holdings, cash, {
@@ -285,14 +292,16 @@ export async function getUserDetail(db: Db, id: string): Promise<AdminUserDetail
       reversalOf: tx.reversalOf ?? null,
       reversedBy: reversedBy.get(String(tx._id)) ?? null,
       editedAt: tx.editedAt ?? null,
+      edits: editsOf.get(String(tx._id)) ?? [],
     })),
+    deletedOrders: edits.filter((edit) => edit.action === "delete"),
   };
 }
 
 /**
  * Everything an account owns, gone with it.
  *
- * Five collections key off the user id and none of them cascade on their own,
+ * Six collections key off the user id and none of them cascade on their own,
  * so a deleted account otherwise leaves its orders, its positions and — the
  * one that matters — its live sessions behind. Push subscriptions are not
  * among them: those belong to a browser rather than to an account.
@@ -304,6 +313,7 @@ export async function deleteUserEverywhere(db: Db, id: string): Promise<void> {
     db.collection<Portfolio>("portfolios").deleteMany({ userId: id }),
     db.collection<WatchlistItem>("watchlist").deleteMany({ userId: id }),
     db.collection<Session>("sessions").deleteMany({ userId: id }),
+    db.collection("orderEdits").deleteMany({ userId: id }),
   ]);
   await db.collection<User>("users").deleteOne({ _id: id } as never);
 }
@@ -434,6 +444,7 @@ export async function listOrders(
     })
     .toArray();
   const nameById = new Map(owners.map((u) => [String(u._id), u.username]));
+  const editsOf = editsByOrder(await editsForOrders(db, docs.map((t) => String(t._id))));
 
   return {
     total,
@@ -457,6 +468,7 @@ export async function listOrders(
       reversalOf: tx.reversalOf ?? null,
       reversedBy: null,
       editedAt: tx.editedAt ?? null,
+      edits: editsOf.get(String(tx._id)) ?? [],
     })),
   };
 }

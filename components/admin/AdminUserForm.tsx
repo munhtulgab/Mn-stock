@@ -419,4 +419,4 @@ function Line({
 }
 
 const money = (value: number) =>
-  `${value.toLocaleString("mn-MN", { maximumFractionDigits: 0 })}₮`;
+  `${value.toLocaleString("mn-MN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}₮`;

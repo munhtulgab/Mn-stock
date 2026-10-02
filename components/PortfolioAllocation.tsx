@@ -208,7 +208,7 @@ export default function PortfolioAllocation({
                 {slice.quantity.toLocaleString("mn-MN")} ш
               </span>
               <span className="flex-1 text-right tabular-nums text-app-muted">
-                <Num value={slice.value} digits={0} suffix="₮" />
+                <Num value={slice.value} digits={2} suffix="₮" />
               </span>
               <span className="w-14 text-right tabular-nums font-semibold text-app-text">
                 {slice.pct.toFixed(2)}%

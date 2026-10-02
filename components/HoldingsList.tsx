@@ -109,7 +109,7 @@ export default function HoldingsList({ holdings }: { holdings: HoldingView[] }) 
                     h.gainLoss >= 0 ? "text-app-positive" : "text-app-negative"
                   }`}
                 >
-                  <Num value={h.gainLoss} digits={0} suffix="₮" showSign />
+                  <Num value={h.gainLoss} digits={2} suffix="₮" showSign />
                 </span>
                 <Pct value={h.gainLossPct} />
               </div>
