@@ -2,6 +2,7 @@ import type { Db } from "mongodb";
 import { computeRecommendation } from "@/lib/recommendation";
 import { syncPricesForCompany } from "@/lib/sync";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
+import { headingQuotesFor } from "@/lib/mse/quote";
 import { fetchExchangeMovers, type ExchangeMovers } from "@/lib/mse/movers";
 import { sessionChangePct } from "@/lib/priceChange";
 import { ulaanbaatarDay } from "@/lib/day";
@@ -402,9 +403,21 @@ export async function applyLiveQuotes(
   rows: DashboardRow[],
   options: { extraCaCerts?: string } = {},
 ): Promise<LiveRows> {
-  const [quotes, movers] = await Promise.all([
+  const [quotes, movers, headings] = await Promise.all([
     fetchLiveQuotes(options).catch(() => new Map<number, LiveQuote>()),
     fetchExchangeMovers().catch(() => ({ gainers: [], losers: [] })),
+    // The funds are in neither of the two above, so in every list they sat
+    // at the trading table's close — up to a day behind their own pages.
+    // There are four; their page headings are asked alongside.
+    headingQuotesFor(
+      rows
+        .filter((row) => row.classification === "fund")
+        .map((row) => ({
+          symbol: row.symbol,
+          companyCode: row.companyCode,
+          newestStoredClose: row.lastPrice,
+        })),
+    ).catch(() => new Map<number, LiveQuote>()),
   ]);
 
   // The exchange's own board of what moved today, keyed by ticker. It is the
@@ -414,7 +427,7 @@ export async function applyLiveQuotes(
     [...movers.gainers, ...movers.losers].map((m) => [m.symbol, m]),
   );
 
-  if (quotes.size === 0 && board.size === 0) {
+  if (quotes.size === 0 && board.size === 0 && headings.size === 0) {
     return { rows, session: latestSessionDate(rows), board: movers };
   }
 
@@ -443,7 +456,7 @@ export async function applyLiveQuotes(
   }
 
   const updated = rows.map((row) => {
-    const live = quotes.get(row.companyCode);
+    const live = quotes.get(row.companyCode) ?? headings.get(row.companyCode);
 
     // The quote comes first and the board only fills in behind it.
     //
