@@ -87,7 +87,9 @@ export const PROVIDER_CATALOG: Record<ProviderName, ProviderCatalogEntry> = {
   },
   nvidia: {
     label: "NVIDIA NIM",
-    defaultModel: "deepseek-ai/deepseek-v4-flash-0731",
+    // deepseek-v4-flash-0731 until NVIDIA retired it on 2026-09-21; see the
+    // measurements beside MODEL_PREFERENCES.nvidia for why this replaced it.
+    defaultModel: "google/gemma-4-31b-it",
     env: "NVIDIA_MODEL",
     baseUrl: "https://integrate.api.nvidia.com/v1",
   },

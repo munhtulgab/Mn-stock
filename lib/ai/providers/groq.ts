@@ -26,6 +26,8 @@ export async function callGroq(
   prompt: AnalystPrompt,
   /** Overrides the catalogue default; set on the settings page. */
   model?: string,
+  /** A prompt trimmed to the ceiling a 413 states; see `callOpenAiCompatible`. */
+  resize?: (limitTokens: number, requestedTokens: number) => AnalystPrompt | null,
 ): Promise<ProviderResult> {
   return callOpenAiCompatible({
     provider: "groq",
@@ -34,5 +36,6 @@ export async function callGroq(
     model: resolveModel("groq", model),
     prompt,
     optionalBody: { response_format: { type: "json_object" } },
+    resize,
   });
 }

@@ -10,24 +10,18 @@ import { resolveModel } from "./catalog";
  * one provider here that is a catalogue rather than a house: eighty-two
  * models on this key, several of which are the flagships of other labs.
  *
- * `deepseek-v4-flash` was chosen by measurement, not by size. Four models
- * were run against this app's own prompt and the discriminator was not
- * speed — it was Mongolian:
+ * The model is chosen by measurement, not by size, and the discriminator is
+ * Mongolian. `deepseek-v4-flash` answered fluently in 28-61s until NVIDIA
+ * retired it on 2026-09-21, after which every run came back `410 Gone`. Its
+ * successors in the catalogue were measured against this app's own prompt on
+ * 2026-10-03 and are listed with the figures beside MODEL_PREFERENCES.nvidia:
+ * the reasoning models all think for longer than the panel can wait, and
+ * `gemma-4-31b-it`, which does not reason first, answers in about twenty
+ * seconds in Mongolian that cites the figures it was given.
  *
- *   deepseek-v4-flash    28-61s   443 Cyrillic  fluent, cites the figures
- *   deepseek-v4-pro      120s     1042 Cyrillic fluent, four times slower
- *   nemotron-3-super     15-18s   0 Cyrillic    a perfect English answer
- *   gpt-oss-20b          73s      0 Cyrillic    the same
- *
- * The two NVIDIA models are the fastest things on the panel by a wide margin
- * and both answer a page of Mongolian in English, which is a card nobody
- * reading this app can use. Between the two DeepSeeks, flash is the same
- * analysis at a third of the wait.
- *
- * Several well-known names in the catalogue — mistral-large-2,
- * palmyra-fin-70b, kimi-k2.6, the nemotron nanos — answer 404 "Not found for
- * account" on this key, so MODEL_PREFERENCES below lists only what was seen
- * to work.
+ * A retired or unreachable name — the default, or one pinned on the settings
+ * page — is now recognised as such and substituted from that list, rather
+ * than reported on every run.
  */
 export async function callNvidia(
   apiKey: string,
@@ -41,7 +35,9 @@ export async function callNvidia(
     apiKey,
     model: resolveModel("nvidia", model),
     prompt,
-    // Eight thousand because this model reasons before it answers and that
+    // Eight thousand for the substitutes that reason before they answer —
+    // glm-5.3 and the DeepSeeks in MODEL_PREFERENCES.nvidia. The retired
+    // deepseek-v4-flash did, and that
     // is charged here: measured runs spent 3,683, 3,733 and 5,557 tokens to
     // produce the same eight-hundred-token verdict. At four thousand it hit
     // `finish_reason: "length"` with the answer unwritten — the ceiling was
