@@ -4,6 +4,7 @@ import {
   MODEL_PREFERENCES,
   isChatModel,
   isModelNotAllowed,
+  isModelAtCapacity,
   isModelNotFound,
   isModelUnusable,
   pickModel,
@@ -136,4 +137,12 @@ test("a listed model this NVIDIA key cannot call is one to substitute", () => {
   const body =
     '{"status":404,"title":"Not Found","detail":"Function \'7fadd4de\': Not found for account \'K4uc\'"}';
   assert.equal(isModelNotFound(404, body), true);
+});
+
+test("Mistral's free-tier capacity refusal is a model to substitute, not a wait", () => {
+  const body =
+    '{"object":"error","message":"Service tier capacity exceeded for this model.","type":"service_tier_capacity_exceeded","param":null,"code":"3505"}';
+  assert.equal(isModelAtCapacity(429, body), true);
+  assert.equal(isModelUnusable(429, body), true);
+  assert.equal(isModelUnusable(429, '{"message":"Requests rate limit exceeded"}'), false);
 });

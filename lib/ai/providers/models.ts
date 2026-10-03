@@ -114,9 +114,26 @@ export function isModelNotAllowed(status: number, body: string): boolean {
   );
 }
 
-/** Either way of being told to use a different model. */
+/**
+ * Whether a 429 is "this model is full for your tier", not "slow down".
+ *
+ * Mistral's free tier answers `429 {"type":"service_tier_capacity_exceeded",
+ * "message":"Service tier capacity exceeded for this model."}` for the
+ * larger models when they are busy. Waiting a second does not help and the
+ * smaller model beside it answers, so it is a model to substitute, the same
+ * as a refusal by tier.
+ */
+export function isModelAtCapacity(status: number, body: string): boolean {
+  return status === 429 && /service_tier_capacity|capacity exceeded/i.test(body);
+}
+
+/** Any way of being told to use a different model. */
 export function isModelUnusable(status: number, body: string): boolean {
-  return isModelNotFound(status, body) || isModelNotAllowed(status, body);
+  return (
+    isModelNotFound(status, body) ||
+    isModelNotAllowed(status, body) ||
+    isModelAtCapacity(status, body)
+  );
 }
 
 /**
@@ -128,17 +145,18 @@ export function isModelUnusable(status: number, body: string): boolean {
  * an entry that no longer exists simply does not match anything.
  */
 export const MODEL_PREFERENCES: Record<string, string[]> = {
+  // What the free tier still serves as of 2026-10: llama-3.3-70b-versatile
+  // answers 404, and the chat models left are gpt-oss-120b, gpt-oss-20b and
+  // qwen3.8-27b, each at 8K tokens a minute. Older names stay at the end in
+  // case a paid key still reaches them.
   groq: [
-    "llama-3.3-70b",
+    "gpt-oss-120b",
+    "qwen3",
+    "gpt-oss-20b",
     "llama-4-maverick",
     "llama-4-scout",
-    "gpt-oss-120b",
     "kimi-k2",
-    "qwen3-32b",
-    "llama-3.1-70b",
-    "llama3-70b",
-    "llama-3.1-8b",
-    "gemma2-9b",
+    "llama-3.3-70b",
   ],
   // Flash only, and deliberately so. Z.AI's `/models` returns the billed
   // catalogue — glm-4.5 through glm-5.3 — and none of the free flash models

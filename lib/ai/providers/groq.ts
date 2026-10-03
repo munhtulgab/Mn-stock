@@ -35,7 +35,11 @@ export async function callGroq(
     apiKey,
     model: resolveModel("groq", model),
     prompt,
-    optionalBody: { response_format: { type: "json_object" } },
+    // `reasoning_effort` because the free tier's models now all reason
+    // before they answer, and that thinking comes out of the same fifteen
+    // hundred tokens the answer has. Optional, so a model that does not know
+    // the field drops it rather than failing.
+    optionalBody: { response_format: { type: "json_object" }, reasoning_effort: "low" },
     resize,
   });
 }

@@ -16,8 +16,25 @@ import { completionTokensFor, type ProviderName, type ProviderResult } from "./t
 function extractRetrySeconds(res: Response, bodyText: string): number | null {
   const header = res.headers.get("retry-after");
   if (header && Number.isFinite(Number(header))) return Number(header);
-  const inBody = bodyText.match(/try again in (\d+(?:\.\d+)?)s/i);
-  return inBody ? Number(inBody[1]) : null;
+  return retrySecondsInBody(bodyText);
+}
+
+/**
+ * "try again in 7.2s", "in 1m19.5s", "in 2h3m" — read whole.
+ *
+ * Groq writes a wait over a minute with its minutes in front, and reading
+ * only the seconds took "1m19s" for nineteen: the panel told the reader to
+ * come back in nineteen seconds, and the retry below waited nineteen seconds
+ * for a meter that would not refill for eighty.
+ */
+export function retrySecondsInBody(bodyText: string): number | null {
+  const match = /try again in ((?:\d+(?:\.\d+)?[hms]\s*)+)/i.exec(bodyText);
+  if (!match) return null;
+  let seconds = 0;
+  for (const [, value, unit] of match[1].matchAll(/(\d+(?:\.\d+)?)([hms])/gi)) {
+    seconds += Number(value) * (unit.toLowerCase() === "h" ? 3600 : unit.toLowerCase() === "m" ? 60 : 1);
+  }
+  return seconds > 0 ? seconds : null;
 }
 
 
