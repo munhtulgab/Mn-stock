@@ -232,9 +232,29 @@ test("a busy provider that never clears gives up rather than looping", async () 
   const res = await callZai("k", prompt);
   restore();
   assert.equal(res.ok, false);
-  // The first attempt plus the retries it is allowed, and no more.
-  assert.equal(calls.length, 6);
+  // The first attempt plus the retries it is allowed, one look at the
+  // listing, and one try of the provider's other free model — no more.
+  const asked = calls.filter((c) => c.url.endsWith("/chat/completions")).map((c) => c.body.model);
+  assert.equal(asked.length, 7);
+  assert.equal(asked.at(-1), "glm-4.5-flash");
   assert.match(res.error ?? "", /1305/);
+});
+
+test("a free model that stays busy hands over to the provider's other free one", async () => {
+  const { calls, restore } = stubFetch([
+    overloaded, overloaded, overloaded, overloaded, overloaded, overloaded,
+    { status: 200, body: JSON.stringify({ data: [] }) },
+    ok(ANSWER),
+  ]);
+  try {
+    const res = await callZai("k-busy", prompt);
+    assert.equal(res.ok, true, res.error);
+    const asked = calls.filter((c) => c.url.endsWith("/chat/completions")).map((c) => c.body.model);
+    assert.equal(asked[0], "glm-4.7-flash");
+    assert.equal(asked.at(-1), "glm-4.5-flash");
+  } finally {
+    restore();
+  }
 });
 
 test("a rate limit that clears in seconds is waited out once, then answered", async () => {

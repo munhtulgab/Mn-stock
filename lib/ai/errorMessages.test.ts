@@ -121,3 +121,20 @@ test("Groq's 413 is still a request too large", () => {
     'groq API 413: {"error":{"message":"Request too large for model `llama-3.3-70b-versatile` on tokens per minute (TPM): Limit 12000, Requested 13042"}}';
   assert.match(humanizeProviderError("groq", raw), /минут тутмын токений хязгаар/);
 });
+
+test("Z.AI's overload is called an overload, not a full quota", () => {
+  const raw =
+    'zai API 429: {"error":{"code":"1305","message":"The service may be temporarily overloaded, please try again later"}}';
+  const message = humanizeProviderError("zai", raw);
+  assert.match(message, /түр ачаалалтай/);
+  assert.doesNotMatch(message, /quota/);
+  assert.equal(humanizeProviderError("zai", message), message);
+});
+
+test("Mistral's account rate limit points at the account's limits", () => {
+  const raw =
+    'mistral API 429: {"object":"error","message":"Rate limit exceeded","type":"rate_limited","param":null,"code":"1300","raw_status_code":429}';
+  const message = humanizeProviderError("mistral", raw);
+  assert.match(message, /console\.mistral\.ai/);
+  assert.equal(humanizeProviderError("mistral", message), message);
+});
