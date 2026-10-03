@@ -9,6 +9,7 @@ import {
 } from "./models";
 import { TRANSIENT_RETRIES, isTransientStatus, retryDelayMs, sleep } from "./transient";
 import { completionTokensFor, type ProviderName, type ProviderResult } from "./types";
+import { PROVIDER_CATALOG } from "./catalog";
 
 /** Standard `Retry-After` header (seconds, or a delay per some providers),
  * falling back to the "try again in 1.23s" phrasing Groq/OpenAI-style APIs
@@ -198,6 +199,9 @@ export async function callOpenAiCompatible(opts: {
   let substitutions = 0;
   /** The listing, read at most once however many models get refused. */
   let available: string[] | null = null;
+  /** Models that answered "busy" on this call; not held beyond it. */
+  const busy = new Set<string>();
+  let substitutedForBusy = false;
   /** Whether the hopeful fields above are still on the request. */
   let sendOptional = optionalBody !== undefined;
 
@@ -300,6 +304,29 @@ export async function callOpenAiCompatible(opts: {
           }
         }
 
+        // Still busy after every retry: the provider's other model, once.
+        // Z.AI's free glm-4.7-flash answered "temporarily overloaded" six
+        // times running on 3 October while glm-4.5-flash, free on the same
+        // key, was there to ask. Not remembered — being busy is about the
+        // moment, and the better model is the one to start on next time.
+        if (temporary && substitutions < MODEL_SUBSTITUTIONS && Date.now() + requestMs <= deadline) {
+          busy.add(using);
+          available ??= await listModels(baseUrl, apiKey, extraHeaders);
+          const pool = [...new Set([...available, ...(PROVIDER_CATALOG[provider].extraModels ?? [])])];
+          const other = pickModel(
+            pool,
+            MODEL_PREFERENCES[provider] ?? [],
+            new Set([...refused, ...busy]),
+          );
+          if (other) {
+            substitutions++;
+            substitutedForBusy = true;
+            console.warn(`${provider}: ${using} still busy (${res.status}), trying ${other}`);
+            using = other;
+            continue;
+          }
+        }
+
         const retrySeconds = extractRetrySeconds(res, body);
 
         // Too large for the ceiling the provider states: trimmed to it and
@@ -362,7 +389,7 @@ export async function callOpenAiCompatible(opts: {
       const parsed = parseAiSignal(raw);
       // Remembered now rather than when it was chosen: what makes a
       // substitute the answer is that it answered.
-      if (using !== model) resolvedModels.set(cacheKey, using);
+      if (using !== model && !substitutedForBusy) resolvedModels.set(cacheKey, using);
       return { provider, ok: true, raw, parsed };
     }
   } catch (err) {

@@ -66,6 +66,28 @@ const RULES: Rule[] = [
       `${p}: Дансны үлдэгдэл хүрэлцэхгүй байна. Үнэгүй загвар сонгох (жишээ нь Z.AI дээр glm-4.7-flash), эсвэл дансаа цэнэглэнэ үү.`,
   },
   {
+    // Above the rate-limit rule: Z.AI sends "temporarily overloaded" (code
+    // 1305) with a 429, and calling that a full quota sent the reader to
+    // check an allowance that had plenty left. It is the provider's servers,
+    // and by the time it reaches the card it has already been retried and
+    // tried on the provider's other free model.
+    test: (m) => /\b1305\b|temporarily overloaded|түр ачаалалтай/i.test(m),
+    message: (p) =>
+      `${p}: Үйлчилгээний сервер түр ачаалалтай байна — хэд хэдэн удаа, өөр загвараар ч оролдсон. Квот дүүрээгүй; хэсэг хугацааны дараа дахин оролдоно уу.`,
+  },
+  {
+    // Mistral's account-level limit. It arrives with no wait stated, on the
+    // first request of a run, minutes after the last one, and a retry two
+    // seconds later gets the same — so it is the account's allowance at
+    // Mistral rather than this app's pace, and the place to look is the
+    // account's own limits page.
+    test: (m) =>
+      /"type":"rate_limited"|"code":"1300"|дансны хүсэлтийн хязгаар/i.test(m) &&
+      extractRetryAfterSeconds(m) === null,
+    message: (p) =>
+      `${p}: Mistral таны дансны хүсэлтийн хязгаарт хүрсэн гэж хариулж байна ("Rate limit exceeded"). Энэ апп нэг шинжилгээнд ганц хүсэлт илгээж, хүлээгээд дахин оролдсон. console.mistral.ai → Limits хэсгээс дансны хязгаарыг шалгах, эсвэл багцаа шинэчлэх шаардлагатай.`,
+  },
+  {
     test: (m) => /RESOURCE_EXHAUSTED|429|rate.?limit|quota/i.test(m),
     message: (p, retrySeconds) =>
       retrySeconds !== null

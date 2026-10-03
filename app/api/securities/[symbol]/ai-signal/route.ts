@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
+import { getCurrentUser } from "@/lib/auth";
 import { getStockDetailFresh } from "@/lib/data";
 import { fetchCompanyNews } from "@/lib/mse/news";
 import {
@@ -114,6 +115,14 @@ export async function GET(
   const { symbol } = await params;
   const force = req.nextUrl.searchParams.get("force") === "1";
   const db = await getDb();
+
+  // Signed in only. Every run spends free-tier allowances at seven providers,
+  // and this answered anyone who knew the address — `?force=1` from outside
+  // the app could empty Groq's minute and Mistral's day for the reader who
+  // actually opened the page. The page itself is behind the login already.
+  if (!(await getCurrentUser(db))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   // The stored answer is looked for first. Everything below it — a live
   // price sync, the newsroom, the models — is the expensive part, and a
