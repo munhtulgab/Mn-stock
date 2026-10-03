@@ -177,6 +177,15 @@ export async function generateMultiProviderSignal(
     return { ...r, parsed: check.value };
   });
 
+  // The provider's own words, before they are translated for the card. The
+  // card's Mongolian is chosen from a handful of shapes and cannot say which
+  // of a provider's several 429s it was — Mistral sends at least three, and
+  // each needs a different fix. Nothing here carries a key: the bodies are
+  // the provider's error JSON, cut short.
+  for (const r of results) {
+    if (!r.ok && r.error) console.warn(`ai provider failed: ${r.error.slice(0, 400)}`);
+  }
+
   const successful = results.filter((r) => r.ok && r.parsed);
   if (successful.length === 0) {
     throw new AllProvidersFailedError(results);
