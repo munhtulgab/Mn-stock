@@ -85,7 +85,7 @@ const RULES: Rule[] = [
       /"type":"rate_limited"|"code":"1300"|дансны хүсэлтийн хязгаар/i.test(m) &&
       extractRetryAfterSeconds(m) === null,
     message: (p) =>
-      `${p}: Mistral таны дансны хүсэлтийн хязгаарт хүрсэн гэж хариулж байна ("Rate limit exceeded"). Энэ апп нэг шинжилгээнд ганц хүсэлт илгээж, хүлээгээд дахин оролдсон. console.mistral.ai → Limits хэсгээс дансны хязгаарыг шалгах, эсвэл багцаа шинэчлэх шаардлагатай.`,
+      `${p}: Mistral таны дансны хүсэлтийн хязгаарт хүрсэн гэж хариулж байна ("Rate limit exceeded"). Энэ апп жижигсгэсэн нэг хүсэлт илгээж, хүлээгээд дахин, өөр загвараар ч оролдсон. console.mistral.ai → Limits хэсгээс дансны хязгаарыг шалгах, эсвэл багцаа шинэчлэх шаардлагатай.`,
   },
   {
     test: (m) => /RESOURCE_EXHAUSTED|429|rate.?limit|quota/i.test(m),

@@ -39,6 +39,15 @@ export const PROVIDER_TOKEN_BUDGET: Partial<Record<ProviderName, number>> = {
   // second margin on top of that was costing this provider a section of the
   // analysis it had room for.
   groq: 12_000,
+  // Mistral's free tier meters tokens a minute per workspace, and no longer
+  // publishes the figure — it varies by account and is shown only in the
+  // console. The full prompt, unbounded, is the largest request in the panel
+  // and the one most likely to be over whatever this account's minute is;
+  // the account in use answered "Rate limit exceeded" (code 1300) to it on
+  // the first request of every run. Sixteen thousand is the floor every
+  // metered provider is built to plus the four thousand Mistral's answer is
+  // allowed, so it sends what Groq sends with room to answer at length.
+  mistral: 16_000,
   // Workers AI's Llama models carry a 24k context.
   cloudflare: 24_000,
 };

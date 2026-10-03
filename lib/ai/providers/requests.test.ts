@@ -285,7 +285,9 @@ test("a rate limit with a long wait is reported with the wait, not slept through
   try {
     const res = await callGroq("k", prompt);
     assert.equal(res.ok, false);
-    assert.equal(calls.length, 1);
+    // One request: no sleeping through the wait, and no other model the
+    // listing offers to try instead.
+    assert.equal(calls.filter((c) => c.url.endsWith("/chat/completions")).length, 1);
   } finally {
     restore();
   }
@@ -331,7 +333,7 @@ test("a wait of a minute and more is reported, not slept through as nineteen sec
   try {
     const res = await callGroq("k", prompt);
     assert.equal(res.ok, false);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.filter((c) => c.url.endsWith("/chat/completions")).length, 1);
     assert.match(res.error ?? "", /retry_after_seconds=79/);
   } finally {
     restore();
@@ -353,6 +355,27 @@ test("Mistral at capacity on one model moves to the next instead of failing", as
     assert.equal(res.ok, true, res.error);
     const asked = calls.filter((c) => c.url.endsWith("/chat/completions")).map((c) => c.body.model);
     assert.deepEqual(asked, ["mistral-medium-latest", "mistral-small-latest"]);
+  } finally {
+    restore();
+  }
+});
+
+test("a model still rate limited after the wait hands over to another of the provider's models", async () => {
+  const limited = {
+    status: 429,
+    body: '{"object":"error","message":"Rate limit exceeded","type":"rate_limited","code":"1300"}',
+  };
+  const { calls, restore } = stubFetch([
+    limited,
+    limited,
+    { status: 200, body: JSON.stringify({ data: [{ id: "mistral-small-latest" }, { id: "open-mistral-nemo" }] }) },
+    ok(ANSWER),
+  ]);
+  try {
+    const res = await callMistral("k-ratelimited", prompt, "mistral-small-latest");
+    assert.equal(res.ok, true, res.error);
+    const asked = calls.filter((c) => c.url.endsWith("/chat/completions")).map((c) => c.body.model);
+    assert.deepEqual(asked, ["mistral-small-latest", "mistral-small-latest", "open-mistral-nemo"]);
   } finally {
     restore();
   }
