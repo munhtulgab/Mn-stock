@@ -43,6 +43,70 @@ export const maxDuration = 180;
 
 const CACHE_MS = 6 * 60 * 60 * 1000; // 6 hours
 
+/**
+ * One panel at a time per company.
+ *
+ * Every provider here is on a free tier metered by the minute or the second:
+ * Groq allows 8K tokens a minute, which is one prompt; a free Mistral key
+ * allows one request a second. Two runs for the same company inside a minute
+ * — a reader pressing Дахин тооцоолох while the page's own request is still
+ * out, or two tabs — sent two full panels, and the second found every meter
+ * spent and came back as a row of quota errors. That is what was on screen
+ * on 3 October: two requests six seconds apart, Groq and Mistral both "rate
+ * limit" on the second.
+ *
+ * So the second waits for the first and is answered with what it produced.
+ * The claim is an upsert on the company code; one older than the route's own
+ * time limit is a run that died and is taken over.
+ */
+const RUN_LOCK_MS = 3 * 60 * 1000;
+const RUN_POLL_MS = 2_000;
+/** Inside the route's 180s, with room to answer. */
+const RUN_WAIT_MS = 170_000;
+
+type RunClaim = { _id: number; startedAt: Date };
+
+async function claimRun(
+  db: Awaited<ReturnType<typeof getDb>>,
+  companyCode: number,
+): Promise<{ mine: true; startedAt: Date } | { mine: false; startedAt: Date }> {
+  const runs = db.collection<RunClaim>("aiSignalRuns");
+  const now = new Date();
+  try {
+    await runs.updateOne(
+      { _id: companyCode, startedAt: { $lt: new Date(now.getTime() - RUN_LOCK_MS) } },
+      { $set: { startedAt: now } },
+      { upsert: true },
+    );
+    return { mine: true, startedAt: now };
+  } catch (err) {
+    if ((err as { code?: number }).code !== 11000) throw err;
+    const held = await runs.findOne({ _id: companyCode });
+    return { mine: false, startedAt: held?.startedAt ?? now };
+  }
+}
+
+/** The answer the run already under way produces, once it has. */
+async function awaitRun(
+  db: Awaited<ReturnType<typeof getDb>>,
+  companyCode: number,
+  startedAt: Date,
+): Promise<AiSignal | null> {
+  const until = Date.now() + RUN_WAIT_MS;
+  while (Date.now() < until) {
+    const done = await db
+      .collection<AiSignal>("aiSignals")
+      .findOne({ companyCode, createdAt: { $gte: startedAt } }, { sort: { createdAt: -1 } });
+    if (done) return done;
+    const still = await db.collection<RunClaim>("aiSignalRuns").findOne({ _id: companyCode });
+    // Released without writing anything: that run failed, and this one may
+    // as well report the stored answer than start the same failure again.
+    if (!still || still.startedAt.getTime() !== startedAt.getTime()) return null;
+    await new Promise((resolve) => setTimeout(resolve, RUN_POLL_MS));
+  }
+  return null;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ symbol: string }> },
@@ -70,6 +134,32 @@ export async function GET(
     }
   }
 
+  const claim = await claimRun(db, security.companyCode);
+  if (!claim.mine) {
+    const produced = await awaitRun(db, security.companyCode, claim.startedAt);
+    const fallback =
+      produced ??
+      (await db
+        .collection<AiSignal>("aiSignals")
+        .findOne({ companyCode: security.companyCode }, { sort: { createdAt: -1 } }));
+    if (fallback) return NextResponse.json(refreshProviderErrors(fallback));
+    return NextResponse.json(
+      { error: "AI_RUN_IN_PROGRESS", message: "Шинжилгээ хийгдэж байна, түр хүлээгээд дахин оролдоно уу." },
+      { status: 409 },
+    );
+  }
+
+  try {
+    return await runPanel(db, symbol);
+  } finally {
+    await db
+      .collection<RunClaim>("aiSignalRuns")
+      .deleteOne({ _id: security.companyCode, startedAt: claim.startedAt })
+      .catch(() => {});
+  }
+}
+
+async function runPanel(db: Awaited<ReturnType<typeof getDb>>, symbol: string) {
   const detail = await getStockDetailFresh(db, symbol);
   if (!detail) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

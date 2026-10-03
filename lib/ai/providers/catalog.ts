@@ -61,7 +61,9 @@ export const PROVIDER_CATALOG: Record<ProviderName, ProviderCatalogEntry> = {
   },
   groq: {
     label: "Groq",
-    defaultModel: "llama-3.3-70b-versatile",
+    // llama-3.3-70b-versatile until Groq took it off the free tier (404 in
+    // production on 2026-10-03, every run spent a request finding out).
+    defaultModel: "openai/gpt-oss-120b",
     env: "GROQ_MODEL",
     baseUrl: "https://api.groq.com/openai/v1",
   },
@@ -73,7 +75,12 @@ export const PROVIDER_CATALOG: Record<ProviderName, ProviderCatalogEntry> = {
   },
   mistral: {
     label: "Mistral",
-    defaultModel: "mistral-large-latest",
+    // Small, because the free tier refuses large (403) and turns medium away
+    // as over capacity (429) — three requests a run before the one that
+    // answers, against a plan that allows one a second, so the third was
+    // refused as a rate limit. A paid key can pick a larger one on the
+    // settings page.
+    defaultModel: "mistral-small-latest",
     env: "MISTRAL_MODEL",
     baseUrl: "https://api.mistral.ai/v1",
   },

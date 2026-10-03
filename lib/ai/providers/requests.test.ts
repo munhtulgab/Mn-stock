@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { callGemini } from "./gemini";
 import { callGroq } from "./groq";
 import { callZai } from "./zai";
+import { callMistral } from "./mistral";
+import { retrySecondsInBody } from "./openaiCompatible";
 import type { AnalystPrompt } from "@/lib/ai/prompt";
 
 const prompt: AnalystPrompt = { system: "заавар", user: "асуулт" };
@@ -289,6 +291,48 @@ test("a request too large for Groq is sent again trimmed to the ceiling it state
     assert.equal(calls.length, 2);
     const messages = calls[1].body.messages as { content: string }[];
     assert.equal(messages[1].content, "богино");
+  } finally {
+    restore();
+  }
+});
+
+test("a wait over a minute is read whole, not as its seconds", () => {
+  assert.equal(retrySecondsInBody("Please try again in 7.2s."), 7.2);
+  assert.equal(retrySecondsInBody("Please try again in 1m19.5s."), 79.5);
+  assert.equal(retrySecondsInBody("Please try again in 2h3m."), 7380);
+  assert.equal(retrySecondsInBody("no wait stated"), null);
+});
+
+test("a wait of a minute and more is reported, not slept through as nineteen seconds", async () => {
+  const { calls, restore } = stubFetch([
+    { status: 429, body: '{"error":{"message":"Rate limit reached on tokens per day (TPD). Please try again in 1m19s."}}' },
+    ok(ANSWER),
+  ]);
+  try {
+    const res = await callGroq("k", prompt);
+    assert.equal(res.ok, false);
+    assert.equal(calls.length, 1);
+    assert.match(res.error ?? "", /retry_after_seconds=79/);
+  } finally {
+    restore();
+  }
+});
+
+test("Mistral at capacity on one model moves to the next instead of failing", async () => {
+  const { calls, restore } = stubFetch([
+    {
+      status: 429,
+      body: '{"object":"error","message":"Service tier capacity exceeded for this model.","type":"service_tier_capacity_exceeded","code":"3505"}',
+    },
+    // The listing the substitution reads.
+    { status: 200, body: JSON.stringify({ data: [{ id: "mistral-medium-latest" }, { id: "mistral-small-latest" }] }) },
+    ok(ANSWER),
+  ]);
+  try {
+    const res = await callMistral("k-capacity", prompt, "mistral-medium-latest");
+    assert.equal(res.ok, true, res.error);
+    const asked = calls.filter((c) => c.url.endsWith("/chat/completions")).map((c) => c.body.model);
+    assert.deepEqual(asked, ["mistral-medium-latest", "mistral-small-latest"]);
   } finally {
     restore();
   }
