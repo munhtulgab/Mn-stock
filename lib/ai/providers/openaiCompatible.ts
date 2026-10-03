@@ -103,6 +103,8 @@ const RATE_LIMIT_RETRIES = 1;
 const RATE_LIMIT_WAIT_MS = 2_000;
 /** Longer than this and the reader is told the wait instead. */
 const MAX_RATE_LIMIT_WAIT_MS = 20_000;
+/** Between a rate-limited model and the next one tried. */
+const MODEL_SWITCH_GAP_MS = 1_200;
 /**
  * 429s that are not about the minute: Z.AI's empty balance (code 1113) and
  * the monthly allowances. Waiting does not refill those.
@@ -363,6 +365,38 @@ export async function callOpenAiCompatible(opts: {
           if (wait <= MAX_RATE_LIMIT_WAIT_MS && Date.now() + wait + requestMs <= deadline) {
             rateLimitRetries++;
             await sleep(wait);
+            continue;
+          }
+        }
+
+        // Still limited after the wait, or limited for longer than is worth
+        // waiting: another of the provider's models, once. Groq meters each
+        // model separately, and Mistral's limit on one model is not always its
+        // limit on the next. Spaced by a little over a second, because a free
+        // Mistral key allows one request a second and the listing was one.
+        // Not remembered, like a busy model.
+        if (
+          res.status === 429 &&
+          !temporary &&
+          !NOT_A_WAIT.test(body) &&
+          substitutions < MODEL_SUBSTITUTIONS &&
+          Date.now() + MODEL_SWITCH_GAP_MS + requestMs <= deadline
+        ) {
+          busy.add(using);
+          available ??= await listModels(baseUrl, apiKey, extraHeaders);
+          const pool = [...new Set([...available, ...(PROVIDER_CATALOG[provider].extraModels ?? [])])];
+          const other = pickModel(
+            pool,
+            MODEL_PREFERENCES[provider] ?? [],
+            new Set([...refused, ...busy]),
+          );
+          if (other) {
+            substitutions++;
+            substitutedForBusy = true;
+            console.warn(`${provider}: ${using} rate limited, trying ${other}`);
+            await sleep(MODEL_SWITCH_GAP_MS);
+            using = other;
+            rateLimitRetries = 0;
             continue;
           }
         }
