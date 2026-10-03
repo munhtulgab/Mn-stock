@@ -75,10 +75,19 @@ export async function listModels(
   }
 }
 
-/** Whether a refusal is "that model is gone" rather than anything else. */
+/**
+ * Whether a refusal is "that model is gone" rather than anything else.
+ *
+ * 410 as well as 404 and 400. NVIDIA retires a model with `410 Gone` and
+ * "has reached its end of life … and is no longer available", and this only
+ * knew the 404 wording — so the substitution never started, and the panel
+ * reported a dead model on every run from the day it was retired. The same
+ * catalogue answers `404 "Function …: Not found for account"` for a model it
+ * lists but this key cannot call, which wants the same answer.
+ */
 export function isModelNotFound(status: number, body: string): boolean {
-  if (status !== 404 && status !== 400) return false;
-  return /model_not_found|model .*(does not exist|not found|is not available|decommissioned)/i.test(
+  if (status !== 404 && status !== 400 && status !== 410) return false;
+  return /model_not_found|model .*(does not exist|not found|is not available|decommissioned)|end of life|no longer available|not found for account/i.test(
     body,
   );
 }
@@ -137,19 +146,21 @@ export const MODEL_PREFERENCES: Record<string, string[]> = {
   // would walk a working free key onto a model it has no balance for and
   // report an insufficient-balance error as though the key were spent.
   zai: ["4.7-flash", "4.5-flash", "flash"],
-  // Only what was seen to answer on a real key. This catalogue lists other
-  // labs' flagships — mistral-large-2, palmyra-fin-70b, kimi-k2.6 — and
-  // answers 404 "Not found for account" to most of them, so a preference
-  // list written from the listing would keep picking models the account
-  // cannot call. Ordered by Mongolian rather than by size: the nemotrons
-  // are the fastest things here and both answer in English.
-  nvidia: [
-    "deepseek-v4-flash",
-    "deepseek-v4-pro",
-    "kimi-k3",
-    "nemotron-3-super",
-    "gpt-oss-20b",
-  ],
+  // Only what was seen to answer this app's own prompt on a real key, in
+  // Mongolian, inside the ninety seconds the call allows. Measured on
+  // 2026-10-03 with the full fifteen-thousand-token prompt:
+  //
+  //   gemma-4-31b-it         20-23s  ~350 Cyrillic, cites the figures
+  //   glm-5.3                >90s    answers a short prompt in Mongolian
+  //   deepseek-v4.1-flash    >90s    did not answer a short prompt in 60s
+  //   nemotron-3.5-lightning >90s
+  //   kimi-k3                returns no content
+  //
+  // and 404 "Not found for account" for mistral-large, nemotron-4-340b,
+  // llama-3.1-nemotron-70b/ultra, jamba-1.5-large and gemma-3-12b. The
+  // reasoning models are not too weak, they are too slow: each thinks for
+  // longer than the panel can wait. Gemma does not think first.
+  nvidia: ["gemma-4-31b", "glm-5.3", "deepseek-v4"],
   // Largest first, as everywhere here. A free account is refused the first
   // two and lands on `mistral-small-latest`, which is the substitution above
   // walking down rather than a list that has to be kept in step with a plan.

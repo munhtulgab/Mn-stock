@@ -234,3 +234,62 @@ test("a busy provider that never clears gives up rather than looping", async () 
   assert.equal(calls.length, 6);
   assert.match(res.error ?? "", /1305/);
 });
+
+test("a rate limit that clears in seconds is waited out once, then answered", async () => {
+  // Groq when an earlier request in the same minute has used part of the
+  // meter. Reported straight away, this cost an analyst a run for a wait of
+  // under two seconds.
+  const { calls, restore } = stubFetch([
+    {
+      status: 429,
+      body: '{"error":{"message":"Rate limit reached for model on tokens per minute (TPM): Limit 12000, Used 9000, Requested 4000. Please try again in 0.1s."}}',
+    },
+    ok(ANSWER),
+  ]);
+  try {
+    const res = await callGroq("k", prompt);
+    assert.equal(res.ok, true, res.error);
+    assert.equal(calls.length, 2);
+  } finally {
+    restore();
+  }
+});
+
+test("a rate limit with a long wait is reported with the wait, not slept through", async () => {
+  const { calls, restore } = stubFetch([
+    { status: 429, body: '{"error":{"message":"Rate limit reached. Please try again in 45s."}}' },
+    ok(ANSWER),
+  ]);
+  try {
+    const res = await callGroq("k", prompt);
+    assert.equal(res.ok, false);
+    assert.equal(calls.length, 1);
+  } finally {
+    restore();
+  }
+});
+
+test("a request too large for Groq is sent again trimmed to the ceiling it states", async () => {
+  const { calls, restore } = stubFetch([
+    {
+      status: 413,
+      body: '{"error":{"message":"Request too large for model on tokens per minute (TPM): Limit 6000, Requested 11500"}}',
+    },
+    ok(ANSWER),
+  ]);
+  const asked: [number, number][] = [];
+  const smaller: AnalystPrompt = { system: "заавар", user: "богино" };
+  try {
+    const res = await callGroq("k", prompt, undefined, (limit, requested) => {
+      asked.push([limit, requested]);
+      return smaller;
+    });
+    assert.equal(res.ok, true, res.error);
+    assert.deepEqual(asked, [[6000, 11500]]);
+    assert.equal(calls.length, 2);
+    const messages = calls[1].body.messages as { content: string }[];
+    assert.equal(messages[1].content, "богино");
+  } finally {
+    restore();
+  }
+});

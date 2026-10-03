@@ -79,6 +79,18 @@ const MODEL_SUBSTITUTIONS = 3;
  */
 const REQUEST_MS = 40_000;
 
+/** One wait-and-retry for a rate limit; see where it is used. */
+const RATE_LIMIT_RETRIES = 1;
+/** What a 429 without a stated wait is given before the one retry. */
+const RATE_LIMIT_WAIT_MS = 2_000;
+/** Longer than this and the reader is told the wait instead. */
+const MAX_RATE_LIMIT_WAIT_MS = 20_000;
+/**
+ * 429s that are not about the minute: Z.AI's empty balance (code 1113) and
+ * the monthly allowances. Waiting does not refill those.
+ */
+const NOT_A_WAIT = /Insufficient balance|no resource package|\b1113\b|per month|monthly|billing/i;
+
 export async function callOpenAiCompatible(opts: {
   provider: ProviderName;
   baseUrl: string;
@@ -126,6 +138,17 @@ export async function callOpenAiCompatible(opts: {
    * started when there is room for a whole attempt inside what is left.
    */
   budgetMs?: number;
+  /**
+   * A smaller prompt, for a provider that refuses this one as too large.
+   *
+   * Groq meters tokens a minute, and its 413 states both the ceiling and what
+   * was asked: "Limit 12000, Requested 13042". The builder's own estimate is
+   * deliberately high, but it is an estimate, and a model swapped on the
+   * settings page can carry a lower ceiling than the one the prompt was
+   * built for. Given this, the refusal is answered with a prompt trimmed to
+   * the stated ceiling instead of being reported. Asked once per call.
+   */
+  resize?: (limitTokens: number, requestedTokens: number) => AnalystPrompt | null;
 }): Promise<ProviderResult> {
   const {
     provider,
@@ -141,7 +164,11 @@ export async function callOpenAiCompatible(opts: {
     transientRetries = TRANSIENT_RETRIES,
     requestMs = REQUEST_MS,
     budgetMs,
+    resize,
   } = opts;
+  let current = prompt;
+  let resized = false;
+  let rateLimitRetries = 0;
 
   const deadline = budgetMs === undefined ? Infinity : Date.now() + budgetMs;
 
@@ -182,8 +209,8 @@ export async function callOpenAiCompatible(opts: {
           temperature: 0.3,
           max_tokens: maxTokens ?? completionTokensFor(provider),
           messages: [
-            { role: "system", content: prompt.system },
-            { role: "user", content: prompt.user },
+            { role: "system", content: current.system },
+            { role: "user", content: current.user },
           ],
           ...extraBody,
           ...(sendOptional ? optionalBody : {}),
@@ -257,6 +284,45 @@ export async function callOpenAiCompatible(opts: {
         }
 
         const retrySeconds = extractRetrySeconds(res, body);
+
+        // Too large for the ceiling the provider states: trimmed to it and
+        // sent once more. See `resize`.
+        if (!resized && resize && (res.status === 413 || /request too large/i.test(body))) {
+          const stated = /Limit (\d+), Requested (\d+)/i.exec(body);
+          const smaller = stated ? resize(Number(stated[1]), Number(stated[2])) : null;
+          resized = true;
+          if (smaller) {
+            console.warn(`${provider}: ${res.status} too large, retrying trimmed`);
+            current = smaller;
+            continue;
+          }
+        }
+
+        // A rate limit that clears in seconds is waited out, once. Groq's
+        // per-minute token meter says "try again in 7.2s" when an earlier
+        // request in the same minute used part of it, and a free Mistral
+        // account allows one request a second — which the model substitution
+        // above can exceed on its own. Reported straight away, either cost
+        // an analyst a run for a wait shorter than the slowest provider on
+        // the panel. A long wait, or a quota that waiting does not refill,
+        // is still reported with the wait attached.
+        // Not a 429 the provider's own rule already called temporary: those
+        // have had their retries above.
+        if (
+          res.status === 429 &&
+          !temporary &&
+          rateLimitRetries < RATE_LIMIT_RETRIES &&
+          !NOT_A_WAIT.test(body)
+        ) {
+          const wait =
+            retrySeconds !== null ? Math.ceil(retrySeconds * 1000) + 250 : RATE_LIMIT_WAIT_MS;
+          if (wait <= MAX_RATE_LIMIT_WAIT_MS && Date.now() + wait + requestMs <= deadline) {
+            rateLimitRetries++;
+            await sleep(wait);
+            continue;
+          }
+        }
+
         throw new Error(
           withRetryAfter(`${provider} API ${res.status}: ${body.slice(0, 300)}`, retrySeconds),
         );

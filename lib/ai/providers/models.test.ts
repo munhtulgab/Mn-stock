@@ -122,3 +122,18 @@ test("every model refused leaves nothing to substitute", () => {
     null,
   );
 });
+
+test("a model NVIDIA has retired is recognised as gone", () => {
+  // Every run came back with this from 2026-09-21 and nothing substituted,
+  // because only the 404 wording was known.
+  const body =
+    '{"type":"about:blank","title":"Gone","status":410,"detail":"The model \'deepseek-ai/deepseek-v4-flash-0731\' has reached its end of life on 2026-09-21T08:00:00Z and is no longer available."}';
+  assert.equal(isModelNotFound(410, body), true);
+  assert.equal(isModelUnusable(410, body), true);
+});
+
+test("a listed model this NVIDIA key cannot call is one to substitute", () => {
+  const body =
+    '{"status":404,"title":"Not Found","detail":"Function \'7fadd4de\': Not found for account \'K4uc\'"}';
+  assert.equal(isModelNotFound(404, body), true);
+});

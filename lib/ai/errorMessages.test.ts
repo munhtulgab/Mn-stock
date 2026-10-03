@@ -107,3 +107,17 @@ test("the balance message survives being read back from storage", () => {
   const once = humanizeProviderError("zai", 'zai API 429: {"code":"1113"}');
   assert.equal(humanizeProviderError("zai", once), once);
 });
+
+test("Groq's per-minute rate limit is a wait, not a request too large", () => {
+  const raw =
+    'groq API 429: {"error":{"message":"Rate limit reached for model `llama-3.3-70b-versatile` on tokens per minute (TPM): Limit 12000, Used 9000, Requested 4000. Please try again in 5.2s.","type":"tokens","code":"rate_limit_exceeded"}}';
+  const message = humanizeProviderError("groq", raw);
+  assert.doesNotMatch(message, /мэдээний эх сурвалжийн тоог цөөлөх/);
+  assert.match(message, /хязгаар/);
+});
+
+test("Groq's 413 is still a request too large", () => {
+  const raw =
+    'groq API 413: {"error":{"message":"Request too large for model `llama-3.3-70b-versatile` on tokens per minute (TPM): Limit 12000, Requested 13042"}}';
+  assert.match(humanizeProviderError("groq", raw), /минут тутмын токений хязгаар/);
+});

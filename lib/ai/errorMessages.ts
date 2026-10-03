@@ -33,8 +33,15 @@ const RULES: Rule[] = [
     // document is put back through here every time it is read, and without
     // it the rule below would claim its own output on the second pass and
     // rewrite this into a different error entirely.
+    //
+    // Not "tokens per minute" on its own. Groq names its meter in the 429
+    // for a minute already partly used ("Rate limit reached … on tokens per
+    // minute (TPM): Limit 12000, Used 9000 … try again in 7.2s") as well as
+    // in the 413 for a request that can never fit, and reading the 429 as
+    // the 413 told the reader to cut news sources when waiting seconds was
+    // the whole fix.
     test: (m) =>
-      /\b413\b|Request too large|tokens per minute|\bTPM\b|минут тутмын токений хязгаар/i.test(m),
+      /\b413\b|Request too large|минут тутмын токений хязгаар/i.test(m),
     message: (p) =>
       `${p}: Илгээсэн хүсэлт үйлчилгээний минут тутмын токений хязгаараас давлаа. Тохиргоо хуудсан дээрх мэдээний эх сурвалжийн тоог цөөлөх, эсвэл багцаа шинэчлэх шаардлагатай.`,
   },

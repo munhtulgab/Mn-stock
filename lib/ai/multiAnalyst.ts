@@ -107,6 +107,29 @@ export async function generateMultiProviderSignal(
     return built;
   };
 
+  /**
+   * The same prompt built for the ceiling a provider's refusal states.
+   *
+   * Scaled from the budget the first one was built to by the ratio the
+   * refusal reports, with a twentieth off so the second request is not
+   * refused by a rounding error. Null where that is no smaller than before.
+   */
+  const resizedPrompt = (
+    provider: ProviderName,
+    limit: number,
+    requested: number,
+  ): AnalystPrompt | null => {
+    if (!(limit > 0) || !(requested > limit)) return null;
+    const was = PROVIDER_TOKEN_BUDGET[provider] ?? requested;
+    const budget = Math.floor(was * (limit / requested) * 0.95);
+    if (budget >= was) return null;
+    return buildPrompt({
+      ...input,
+      budgetTokens: budget,
+      completionTokens: completionTokensFor(provider),
+    });
+  };
+
   /** Whatever the settings page picked, or nothing where it picked nothing. */
   const modelFor = (provider: ProviderName): string | undefined =>
     settings.aiModels?.[provider];
@@ -115,7 +138,13 @@ export async function generateMultiProviderSignal(
   if (anthropicKey)
     calls.push(callAnthropic(anthropicKey, messageFor("anthropic"), modelFor("anthropic")));
   if (geminiKey) calls.push(callGemini(geminiKey, messageFor("gemini"), modelFor("gemini")));
-  if (groqKey) calls.push(callGroq(groqKey, messageFor("groq"), modelFor("groq")));
+  if (groqKey) {
+    calls.push(
+      callGroq(groqKey, messageFor("groq"), modelFor("groq"), (limit, requested) =>
+        resizedPrompt("groq", limit, requested),
+      ),
+    );
+  }
   if (openrouterKey)
     calls.push(callOpenRouter(openrouterKey, messageFor("openrouter"), modelFor("openrouter")));
   if (mistralKey)
