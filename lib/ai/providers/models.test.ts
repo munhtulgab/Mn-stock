@@ -138,7 +138,6 @@ test("a listed model this NVIDIA key cannot call is one to substitute", () => {
     '{"status":404,"title":"Not Found","detail":"Function \'7fadd4de\': Not found for account \'K4uc\'"}';
   assert.equal(isModelNotFound(404, body), true);
 });
-<<<<<<< HEAD
 
 test("Mistral's free-tier capacity refusal is a model to substitute, not a wait", () => {
   const body =
@@ -147,5 +146,3 @@ test("Mistral's free-tier capacity refusal is a model to substitute, not a wait"
   assert.equal(isModelUnusable(429, body), true);
   assert.equal(isModelUnusable(429, '{"message":"Requests rate limit exceeded"}'), false);
 });
-=======
->>>>>>> origin/claude/mongolia-exchange-rate-system-s60i43
