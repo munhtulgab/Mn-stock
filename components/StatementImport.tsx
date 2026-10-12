@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Num from "@/components/Num";
+import { useToast } from "@/components/Toast";
 import {
   AlertIcon,
   CheckIcon,
@@ -43,10 +44,16 @@ interface Result {
  * the fills it contains.
  *
  * Two buttons rather than one, because the safe half of this is worth having
- * on its own: the first shows what would be written and writes nothing, and
- * only the second writes. Statements already imported are kept — a new file
+ * on its own: Урьдчилж харах shows what would be written and writes nothing,
+ * and only Хадгалах writes. Statements already imported are kept — a new file
  * contributes its own period — but the positions are rebuilt from the whole
  * history each time, so seeing the list before agreeing to it is worth a tap.
+ *
+ * The writing button was called Импортлох, and readers went looking for a
+ * Хадгалах that was not there: the word every other form in the app saves
+ * with. It is called that now, and it is offered again under a preview —
+ * the list runs to a dozen rows and more, and the button at the top has
+ * scrolled away by the time the reader has read down to agreeing with it.
  */
 export default function StatementImport() {
   const [files, setFiles] = useState<File[]>([]);
@@ -54,6 +61,7 @@ export default function StatementImport() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"preview" | "import" | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const toast = useToast();
 
   /**
    * Added to what is already chosen, not swapped for it.
@@ -96,6 +104,13 @@ export default function StatementImport() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setResult(data);
+      if (!dryRun) {
+        toast({
+          variant: "success",
+          title: "Багц хадгалагдлаа",
+          body: `${data.positions?.length ?? 0} хувьцаа · ${data.added ?? 0} шинэ гүйлгээ`,
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setResult(null);
@@ -164,7 +179,7 @@ export default function StatementImport() {
         <button
           onClick={() => run(true)}
           disabled={busy !== null || files.length === 0}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-app-border px-4 py-2 text-sm font-medium text-app-text disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-app-border px-3 py-2 text-sm font-medium text-app-text disabled:opacity-50"
         >
           <EyeIcon size={15} />
           {busy === "preview" ? "Уншиж байна..." : "Урьдчилж харах"}
@@ -172,10 +187,10 @@ export default function StatementImport() {
         <button
           onClick={() => run(false)}
           disabled={busy !== null || files.length === 0}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-brand px-3 py-2 text-sm font-semibold text-black disabled:opacity-50"
         >
           <SaveIcon size={15} />
-          {busy === "import" ? "Бичиж байна..." : "Импортлох"}
+          {busy === "import" ? "Хадгалж байна..." : "Хадгалах"}
         </button>
       </div>
 
@@ -192,8 +207,8 @@ export default function StatementImport() {
             {result.dryRun ? <AlertIcon size={16} /> : <CheckIcon size={16} />}
             <span>
               {result.dryRun
-                ? "Урьдчилсан харагдац — юу ч бичээгүй"
-                : "Багц шинэчлэгдлээ"}
+                ? "Урьдчилсан харагдац — хадгалаагүй байна"
+                : "Багц хадгалагдлаа"}
             </span>
           </div>
           <div className="rounded-xl border border-app-border divide-y divide-app-divider text-sm">
@@ -225,6 +240,19 @@ export default function StatementImport() {
             {result.excluded.length > 0 &&
               ` · энэ аппад бүртгэлгүй тул үнэлгээнд ороогүй: ${result.excluded.join(", ")}`}
           </p>
+
+          {/* Where the reader is once they have read the list: the same
+              Хадгалах as at the top, which by now has scrolled out of view. */}
+          {result.dryRun && (
+            <button
+              onClick={() => run(false)}
+              disabled={busy !== null || files.length === 0}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-full bg-brand px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
+            >
+              <SaveIcon size={15} />
+              {busy === "import" ? "Хадгалж байна..." : "Хадгалах"}
+            </button>
+          )}
         </div>
       )}
     </div>
