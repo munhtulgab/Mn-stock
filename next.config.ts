@@ -31,10 +31,14 @@ const nextConfig: NextConfig = {
    * Temporary, not permanent: a 308 is kept by the browser for good, and an
    * address this page has already moved from once should stay free to move
    * again without every phone that ever opened it remembering the old rule.
+   *
+   * /profile/edit was the account form's page for an hour, before Засах
+   * started opening the form under the card on Профайл itself.
    */
   redirects() {
     return Promise.resolve([
       { source: "/settings", destination: "/profile/import", permanent: false },
+      { source: "/profile/edit", destination: "/profile", permanent: false },
     ]);
   },
 };
