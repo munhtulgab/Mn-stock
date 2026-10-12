@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   StatementError,
+  combinePositions,
   positionsFrom,
   summarise,
   type StatementFill,
@@ -157,4 +158,83 @@ test("a symbol left out of the valuation is not reported as sold", () => {
   ];
   const summary = summarise(fills, positionsFrom(fills, ["ETT"]));
   assert.deepEqual(summary.closed, ["GOV"]);
+});
+
+test("shares held from before the history close at nothing when they are sold", () => {
+  // Mandal's MFG: held before the statement starts, then sold to the last
+  // unit. Told to expect that, the sale closes the position instead of
+  // calling the history broken — and what is bought afterwards is held at
+  // what it cost, not at a figure blended with a cost nobody knows.
+  const fills = [
+    fill({ symbol: "MFG", date: "2024-08-07", side: "SELL", quantity: 55_210, price: 961.5 }),
+    fill({ symbol: "MFG", date: "2025-01-06", quantity: 100, price: 900, settled: 90_900 }),
+  ];
+  assert.throws(() => positionsFrom(fills), StatementError);
+  const [position] = positionsFrom(fills, [], { carriedIn: true });
+  assert.equal(position.quantity, 100);
+  assert.equal(position.avgCost, 909);
+});
+
+test("a sale of more than was bought sells the bought shares too", () => {
+  // 10 bought and 15 sold: five were there before the history, and the ten
+  // went with them. Nothing is left, not five shares owed.
+  const positions = positionsFrom(
+    [fill({ quantity: 10 }), fill({ date: "2024-04-01", side: "SELL", quantity: 15 })],
+    [],
+    { carriedIn: true },
+  );
+  assert.deepEqual(positions, []);
+});
+
+test("shares carried in and sold count as sold out", () => {
+  const fills = [
+    fill({ symbol: "MFG", date: "2024-08-07", side: "SELL", quantity: 55_210, price: 961.5 }),
+    fill({ symbol: "NEH", date: "2024-04-30", quantity: 30, price: 17, settled: 515.1 }),
+  ];
+  const summary = summarise(fills, positionsFrom(fills, [], { carriedIn: true }));
+  assert.deepEqual(summary.closed, ["MFG"]);
+});
+
+test("shares carried in, sold and bought back are held, not sold out", () => {
+  const fills = [
+    fill({ symbol: "MFG", date: "2024-08-07", side: "SELL", quantity: 500 }),
+    fill({ symbol: "MFG", date: "2025-01-06", quantity: 100 }),
+  ];
+  const summary = summarise(fills, positionsFrom(fills, [], { carriedIn: true }));
+  assert.deepEqual(summary.closed, []);
+});
+
+test("one company at two brokers is one position at the cost of both", () => {
+  // NEH at Golomt and at Mandal: 4,385 for 50,416₮ and 30 for 515.10₮.
+  const golomt = positionsFrom([
+    fill({ symbol: "NEH", companyCode: 71, quantity: 4385, price: 11, settled: 50_416 }),
+  ]);
+  const mandal = positionsFrom([
+    fill({ symbol: "NEH", companyCode: 71, quantity: 30, price: 17, settled: 515.1 }),
+    fill({ symbol: "MFG", companyCode: 4002, quantity: 10, price: 950, settled: 9_595 }),
+  ]);
+  const combined = combinePositions(golomt, mandal);
+  assert.deepEqual(
+    combined.map((p) => p.symbol),
+    ["MFG", "NEH"],
+  );
+  const neh = combined.find((p) => p.symbol === "NEH")!;
+  assert.equal(neh.quantity, 4415);
+  assert.equal(Math.round(neh.quantity * neh.avgCost * 100) / 100, 50_931.1);
+  // Added up, not changed: the inputs are what they were.
+  assert.equal(golomt[0].quantity, 4385);
+});
+
+test("a sale at one broker leaves the other broker's cost alone", () => {
+  // Bought at 100 through Golomt and at 200 through Mandal; Mandal sells its
+  // ten. Run as one history the sale would take out the blended 150 and leave
+  // Golomt's ten at 150 — they cost 100.
+  const golomt = positionsFrom([fill({ quantity: 10, price: 100, settled: 1_000 })]);
+  const mandal = positionsFrom([
+    fill({ quantity: 10, price: 200, settled: 2_000 }),
+    fill({ date: "2024-03-01", side: "SELL", quantity: 10, price: 250, settled: 2_500 }),
+  ]);
+  const [position] = combinePositions(golomt, mandal);
+  assert.equal(position.quantity, 10);
+  assert.equal(position.avgCost, 100);
 });

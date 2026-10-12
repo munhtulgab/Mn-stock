@@ -21,12 +21,16 @@ interface Position {
 interface Result {
   ok: boolean;
   dryRun?: boolean;
+  /** Whose statements were read, by name. */
+  broker?: string;
   positions: Position[];
   costBasis: number;
   fills: number;
   fees: number;
   closed: string[];
   excluded: string[];
+  /** Held from before the statements began and sold within them. */
+  carriedOut?: { symbol: string; quantity: number }[];
   files: number;
   added: number;
   kept: number;
@@ -123,11 +127,16 @@ export default function StatementImport() {
     // No heading of its own: the page it is on is called Багц импортлох, and
     // a card under that title saying it again was the same words twice.
     <div className="rounded-2xl border border-app-border bg-app-card p-4">
+      {/* Both brokers print the same report, so the one picker takes either;
+          the server tells them apart and keeps each broker's statements to
+          themselves, which is why one upload is one broker's. */}
       <p className="text-xs text-app-muted mb-3">
-        Голомт Капиталын гүйлгээний түүхийн PDF-ээ сонгоно уу. Өмнө оруулсан
+        Голомт Капитал эсвэл Мандал Капитал Маркетсийн гүйлгээний түүхийн
+        PDF-ээ сонгоно уу — нэг удаад нэг брокерынхыг. Өмнө оруулсан
         хуулгууд{" "}<strong className="text-app-text">хэвээр үлдэнэ</strong> —
         зөвхөн шинэ хугацааных нь нэмэгдэнэ. Нэг хугацааг дахин оруулбал
-        тэр хугацаа нь шинэчлэгдэнэ.
+        тэр хугацаа нь шинэчлэгдэнэ. Хоёр брокерын хувьцаа багцад нийлж
+        харагдана.
       </p>
 
       <input
@@ -231,12 +240,18 @@ export default function StatementImport() {
             </div>
           </div>
           <p className="mt-2 text-xs text-app-muted">
+            {result.broker && `${result.broker} · `}
             {result.from} — {result.to} · шинээр {result.added}
             {result.kept > 0 && `, өмнөхөөс ${result.kept}`} гүйлгээ · нийт{" "}
             {result.fills} · шимтгэл{" "}
             <Num value={result.fees} digits={2} suffix="₮" /> · брокерын үлдэгдэлтэй{" "}
             {result.reconciledDays} өдөр тулгав
             {result.closed.length > 0 && ` · зарж дуусгасан: ${result.closed.join(", ")}`}
+            {result.carriedOut &&
+              result.carriedOut.length > 0 &&
+              ` · хуулгын өмнөөс эзэмшиж байгаад зарсан (авсан үнэ нь хуулгад байхгүй): ${result.carriedOut
+                .map((c) => `${c.symbol} ${c.quantity.toLocaleString("en-US")}ш`)
+                .join(", ")}`}
             {result.excluded.length > 0 &&
               ` · энэ аппад бүртгэлгүй тул үнэлгээнд ороогүй: ${result.excluded.join(", ")}`}
           </p>

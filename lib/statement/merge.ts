@@ -22,16 +22,16 @@ export interface Period {
  * rather than adding to it — which is what keeps importing the same period
  * twice from doubling every fill in it.
  */
-export function withoutPeriod(stored: StatementFill[], period: Period): StatementFill[] {
+export function withoutPeriod<F extends StatementFill>(stored: F[], period: Period): F[] {
   return stored.filter((f) => f.date < period.from || f.date > period.to);
 }
 
 /** Stored and new as one history, oldest first. */
-export function mergeFills(
-  stored: StatementFill[],
-  incoming: StatementFill[],
+export function mergeFills<F extends StatementFill>(
+  stored: F[],
+  incoming: F[],
   period: Period,
-): StatementFill[] {
+): F[] {
   return [...withoutPeriod(stored, period), ...incoming].sort((a, b) =>
     a.date.localeCompare(b.date),
   );
@@ -52,7 +52,10 @@ export function positionsBefore(
   for (const fill of fills) {
     if (fill.date >= date) continue;
     const signed = fill.side === "BUY" ? fill.quantity : -fill.quantity;
-    held.set(fill.symbol, (held.get(fill.symbol) ?? 0) + signed);
+    // Never below nothing. A history can sell shares it never bought — held
+    // from before its first statement, and let in because they were sold to
+    // the last one (see `soldOut`) — and afterwards they are gone, not owed.
+    held.set(fill.symbol, Math.max(0, (held.get(fill.symbol) ?? 0) + signed));
   }
   return held;
 }
@@ -85,4 +88,35 @@ export function shortfalls(
     }))
     .filter((s) => Math.abs(s.stated - s.known) > 0.001)
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
+}
+
+/**
+ * The shortfalls a statement goes on to sell all the way out of.
+ *
+ * Shares a statement opens with that nothing explains have no known cost,
+ * which is why a shortfall stops an import. But a holding the statement
+ * itself takes down to nothing leaves no position behind whose cost depends
+ * on them: once the account holds none of a company, whatever it buys next
+ * is bought at a price the statement states. What is lost is the profit on
+ * the shares sold, and nothing in the portfolio claims to know that.
+ *
+ * Mandal's 55,210 MFG are the case: held before its statement begins, sold
+ * to the last unit on 2024-08-07, and never bought anywhere it records.
+ *
+ * Run from what the statement says it opened with, not from what the history
+ * explains, because the unexplained shares are sold along with the rest.
+ */
+export function soldOut(missing: Shortfall[], incoming: StatementFill[]): Shortfall[] {
+  return missing.filter(({ symbol, stated, known }) => {
+    // More explained than the statement holds is not shares of unknown cost
+    // but shares the history thinks are there and the broker says are not.
+    if (stated < known) return false;
+    let held = stated;
+    for (const fill of incoming) {
+      if (fill.symbol !== symbol) continue;
+      held += fill.side === "BUY" ? fill.quantity : -fill.quantity;
+      if (held <= 1e-9) return true;
+    }
+    return false;
+  });
 }

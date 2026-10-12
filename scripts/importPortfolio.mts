@@ -13,6 +13,11 @@
  *
  * Re-running is safe. Imported rows are tagged, so a second run replaces the
  * first rather than doubling every position.
+ *
+ * It knows Golomt's statement and nothing else, and it replaces every
+ * imported row and every holding — a Mandal statement imported in the app
+ * along with them. An account with more than one broker is re-imported
+ * through Багц импортлох, which keeps each broker's history apart.
  */
 
 import { readFileSync } from "node:fs";
