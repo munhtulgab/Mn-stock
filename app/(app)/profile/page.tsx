@@ -2,14 +2,13 @@ import Link from "next/link";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
-import Avatar from "@/components/Avatar";
+import ProfileCard from "@/components/ProfileCard";
 import NotificationBell from "@/components/NotificationBell";
 import InstallPwaButton from "@/components/InstallPwaButton";
 import LogoutButton from "@/components/LogoutButton";
 import {
   DownloadIcon,
   ChevronRightIcon,
-  EditIcon,
   LockIcon,
   MailIcon,
   PhoneIcon,
@@ -22,33 +21,19 @@ export default async function ProfilePage() {
   const db = await getDb();
   const user = await getCurrentUser(db);
   const admin = await isAdmin(db, user);
-  const displayName = user?.fullName || user?.username || "";
 
   return (
     <div className="space-y-6 px-4 pt-6 pb-4">
       <PageHeader title="Профайл" />
 
       <div>
-        <div className="flex items-center gap-4 rounded-3xl border border-app-border bg-app-card p-5">
-          <Avatar src={user?.avatar || ""} name={displayName} size={56} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-semibold text-app-text">{displayName}</div>
-            <div className="truncate text-sm text-app-muted">@{user?.username}</div>
-          </div>
-          {/* A word, not a disc. This was a bare pencil with nothing but an
-              aria-label on it, and it was the only way to the one Хадгалах
-              button on this side of the app — so a reader who came here to
-              change their details found a page of text with nothing on it to
-              press. It says what it does now, and what it opens is the form
-              on a page of its own: it shared Тохиргоо with the statement
-              import until that page became Багц импортлох. */}
-          <Link
-            href="/profile/edit"
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-app-elevated px-3.5 py-2 text-sm font-semibold text-app-text transition-transform active:scale-95"
-          >
-            <EditIcon /> Засах
-          </Link>
-        </div>
+        <ProfileCard
+          username={user?.username || ""}
+          fullName={user?.fullName || ""}
+          email={user?.email || ""}
+          phone={user?.phone || ""}
+          avatar={user?.avatar || ""}
+        />
 
         <div className="mt-6 divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border bg-app-card">
           <div className="flex items-center justify-between px-4 py-3.5">
@@ -73,7 +58,7 @@ export default async function ProfilePage() {
       <div className="divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border bg-app-card">
         <NotificationBell />
         <InstallPwaButton />
-        {/* Was Тохиргоо. With the account form moved behind Засах above, the
+        {/* Was Тохиргоо. With the account form moved under Засах above, the
             import was all that page held, so the row names it. */}
         <Link
           href="/profile/import"

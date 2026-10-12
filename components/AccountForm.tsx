@@ -64,20 +64,17 @@ function toSquareDataUrl(file: File): Promise<string> {
 /**
  * The account, as the person it belongs to may change it.
  *
- * Open, always. It used to be the second half of the profile card: the
- * details were printed read-only and a bare pencil disc in the corner turned
- * them into a form. That disc was the only way to a Хадгалах button anywhere
- * on the reader's side of the app, and it carried no word — so a reader
- * looking for somewhere to save what they had come to change found a page of
- * text with nothing on it to press.
+ * It drops down under the card on Профайл when Засах is pressed — see
+ * `ProfileCard` — and folds away again once it has saved. It has lived on
+ * Тохиргоо and, briefly, on a page of its own; both meant leaving Профайл to
+ * change a name and coming back to see it.
  *
- * So the form lives on Тохиргоо now, which is the page that name promises,
- * and it is a form from the moment it is opened. There is nothing here that
- * costs anything to look at, and the one control that could be tripped by
- * accident — the password — is still ignored while it is left empty.
+ * The thing that went wrong the first time it sat behind the card was not
+ * that it was behind the card: it was that the way in was a bare pencil disc
+ * with no word on it, and nobody found it. Засах says what it does.
  *
- * Профайл keeps the card. It answers "who am I signed in as"; this answers
- * "and change it", and Засах on that card is the way across.
+ * Nothing here costs anything to look at, and the one control that could be
+ * tripped by accident — the password — is still ignored while it is empty.
  */
 export default function AccountForm({
   username,
@@ -85,12 +82,15 @@ export default function AccountForm({
   email,
   phone,
   avatar,
+  onSaved,
 }: {
   username: string;
   fullName: string;
   email: string;
   phone: string;
   avatar: string;
+  /** Told once a save has gone through, so whatever holds the form can close. */
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -172,6 +172,7 @@ export default function AccountForm({
         body: rekeying ? "Бусад төхөөрөмж дээрх нэвтрэлт цуцлагдлаа." : undefined,
       });
       router.refresh();
+      onSaved?.();
     } finally {
       setSaving(false);
     }

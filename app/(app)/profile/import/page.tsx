@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
  * Loading a broker statement into this account's portfolio.
  *
  * This was Тохиргоо, which by the end held two unrelated things: the account
- * form and the import. The form went to Профайл → Засах, where a reader
- * looks to change their name or picture, and what was left is the import —
- * so the page is called what it does, and the row that opens it on Профайл
- * says the same. `/settings` still arrives here; see `next.config.ts`.
+ * form and the import. The form drops down under Засах on Профайл now, where
+ * a reader looks to change their name or picture, and what was left is the
+ * import — so the page is called what it does, and the row that opens it on
+ * Профайл says the same. `/settings` still arrives here; see `next.config.ts`.
  */
 export default function ImportPage() {
   return (
