@@ -6,7 +6,6 @@ import {
   AlertIcon,
   CheckIcon,
   CloseIcon,
-  DownloadIcon,
   EyeIcon,
   SaveIcon,
 } from "@/components/icons";
@@ -106,11 +105,9 @@ export default function StatementImport() {
   }
 
   return (
+    // No heading of its own: the page it is on is called Багц импортлох, and
+    // a card under that title saying it again was the same words twice.
     <div className="rounded-2xl border border-app-border bg-app-card p-4">
-      <div className="flex items-center gap-2 mb-1">
-        <DownloadIcon />
-        <h2 className="font-semibold text-app-text">Багц импортлох</h2>
-      </div>
       <p className="text-xs text-app-muted mb-3">
         Голомт Капиталын гүйлгээний түүхийн PDF-ээ сонгоно уу. Өмнө оруулсан
         хуулгууд{" "}<strong className="text-app-text">хэвээр үлдэнэ</strong> —

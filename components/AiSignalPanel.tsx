@@ -92,9 +92,12 @@ export default function AiSignalPanel({ symbol }: { symbol: string }) {
 
       {state.status === "not_configured" && (
         <p className="text-xs text-app-muted">
+          {/* The keys are the installation's, under Удирдлага → Систем. This
+              linked to the reader's own settings page after the keys had
+              left it, and that page is the statement import now. */}
           AI дүн шинжилгээ ажиллуулахын тулд{" "}
-          <a href="/settings" className="underline text-brand font-medium">
-            Тохиргоо
+          <a href="/admin/settings" className="underline text-brand font-medium">
+            Удирдлага → Систем
           </a>{" "}
           хуудсан дээр дор хаяж нэг API түлхүүр (Claude, Gemini, Groq эсвэл
           OpenRouter) тохируулах шаардлагатай.
