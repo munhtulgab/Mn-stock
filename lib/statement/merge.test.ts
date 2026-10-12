@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { mergeFills, positionsBefore, shortfalls, withoutPeriod } from "./merge";
+import { mergeFills, positionsBefore, shortfalls, soldOut, withoutPeriod } from "./merge";
 import type { StatementFill } from "@/lib/statementImport";
 
 function fill(over: Partial<StatementFill> = {}): StatementFill {
@@ -77,4 +77,43 @@ test("a symbol the history has never seen is short by all of it", () => {
   assert.deepEqual(shortfalls([{ symbol: "MLG", quantity: 593 }], new Map()), [
     { symbol: "MLG", stated: 593, known: 0 },
   ]);
+});
+
+test("shares sold that the history never bought are gone, not owed", () => {
+  // MFG carried into an earlier statement and sold there. A later statement
+  // that opens holding MFG again is short by what it holds, not by that plus
+  // the 55,210 the history never saw bought.
+  const fills = [fill({ symbol: "MFG", date: "2024-08-07", side: "SELL", quantity: 55_210 })];
+  assert.equal(positionsBefore(fills, "2025-01-01").get("MFG"), 0);
+});
+
+test("a shortfall the statement sells to the last share is no hole in the portfolio", () => {
+  const missing = shortfalls([{ symbol: "MFG", quantity: 55_210 }], new Map());
+  const incoming = [fill({ symbol: "MFG", date: "2024-08-07", side: "SELL", quantity: 55_210 })];
+  assert.deepEqual(soldOut(missing, incoming), missing);
+});
+
+test("a shortfall sold only in part still is", () => {
+  // 30,000 of 55,210 sold: the rest are still held, at a cost nobody knows.
+  const missing = shortfalls([{ symbol: "MFG", quantity: 55_210 }], new Map());
+  const incoming = [fill({ symbol: "MFG", date: "2024-08-07", side: "SELL", quantity: 30_000 })];
+  assert.deepEqual(soldOut(missing, incoming), []);
+});
+
+test("sold out once is enough, whatever is bought afterwards", () => {
+  // Down to nothing and bought again: the new shares have a price.
+  const missing = shortfalls([{ symbol: "MFG", quantity: 500 }], new Map());
+  const incoming = [
+    fill({ symbol: "MFG", date: "2024-08-07", side: "SELL", quantity: 500 }),
+    fill({ symbol: "MFG", date: "2024-09-02", quantity: 100 }),
+  ];
+  assert.deepEqual(soldOut(missing, incoming), missing);
+});
+
+test("more explained than the statement holds is never let through", () => {
+  // The history has 800 and the statement opens with 500: not shares of
+  // unknown cost but a statement missing from the run, selling 300.
+  const missing = shortfalls([{ symbol: "APU", quantity: 500 }], new Map([["APU", 800]]));
+  const incoming = [fill({ date: "2026-03-09", side: "SELL", quantity: 500 })];
+  assert.deepEqual(soldOut(missing, incoming), []);
 });

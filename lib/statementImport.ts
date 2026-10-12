@@ -80,6 +80,20 @@ export function positionsFrom(
    * inventing one would put a number on the home card that nothing supports.
    */
   exclude: string[] = [],
+  {
+    carriedIn = false,
+  }: {
+    /**
+     * Whether a sale of more than the history has bought is shares the account
+     * held before its first statement, rather than a broken history.
+     *
+     * Off by default, because without a reason to believe it, it is the
+     * latter. The importer turns it on once it has checked the reason: a
+     * statement that opens holding shares nothing explains is accepted only
+     * when it goes on to sell every one of them — see `soldOut`.
+     */
+    carriedIn?: boolean;
+  } = {},
 ): StatementPosition[] {
   const dropped = new Set(exclude);
   const quantity = new Map<string, number>();
@@ -105,9 +119,18 @@ export function positionsFrom(
     }
 
     if (fill.quantity > held + 1e-9) {
-      throw new StatementError(
-        `${fill.symbol} ${fill.date}: sold ${fill.quantity} holding ${held}`,
-      );
+      if (!carriedIn) {
+        throw new StatementError(
+          `${fill.symbol} ${fill.date}: sold ${fill.quantity} holding ${held}`,
+        );
+      }
+      // Some of these were held from before the history starts, at a cost no
+      // statement states. The sale leaves none of anything, so it closes the
+      // position and its cost at nothing — which is what lets the next
+      // purchase start again from a price that is known.
+      quantity.set(fill.symbol, 0);
+      cost.set(fill.symbol, 0);
+      continue;
     }
     // Sold at the average of the moment, so the rest is untouched by the sale.
     const average = held > 0 ? basis / held : 0;
@@ -151,6 +174,7 @@ export function summarise(
     const signed = fill.side === "BUY" ? fill.quantity : -fill.quantity;
     net.set(fill.symbol, (net.get(fill.symbol) ?? 0) + signed);
   }
+  const held = new Set(positions.map((p) => p.symbol));
 
   return {
     fills: fills.length,
@@ -159,10 +183,38 @@ export function summarise(
     costBasis: positions.reduce((sum, p) => sum + p.quantity * p.avgCost, 0),
     fees: fills.reduce((sum, f) => sum + f.fee, 0),
     closed: [...net.entries()]
-      .filter(([, held]) => Math.round(held * 1e4) === 0)
+      // Below nothing is shares held from before the history and sold in it,
+      // which is sold out as surely as bought and sold again. Unless it was
+      // bought back afterwards, which is what the positions are asked for.
+      .filter(([symbol, n]) => Math.round(n * 1e4) <= 0 && !held.has(symbol))
       .map(([symbol]) => symbol)
       .sort(),
   };
+}
+
+/**
+ * Positions held at several brokers, as the one portfolio they make up.
+ *
+ * Each broker's are worked out from that broker's fills and only then added
+ * together, rather than run as one history: a sale through Mandal takes out
+ * shares at what they cost at Mandal, not at an average blended with what was
+ * paid through Golomt. The broker sold what it held.
+ */
+export function combinePositions(...brokers: StatementPosition[][]): StatementPosition[] {
+  const combined = new Map<string, { position: StatementPosition; cost: number }>();
+  for (const position of brokers.flat()) {
+    const cost = position.quantity * position.avgCost;
+    const seen = combined.get(position.symbol);
+    if (!seen) {
+      combined.set(position.symbol, { position: { ...position }, cost });
+      continue;
+    }
+    seen.position.quantity += position.quantity;
+    seen.cost += cost;
+  }
+  return [...combined.values()]
+    .map(({ position, cost }) => ({ ...position, avgCost: cost / position.quantity }))
+    .sort((a, b) => a.symbol.localeCompare(b.symbol));
 }
 
 /** A position as the app stores one. */
