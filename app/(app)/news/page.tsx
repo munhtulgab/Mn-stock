@@ -2,6 +2,7 @@ import Link from "next/link";
 import { after } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { getCurrentUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/roles";
 import {
   byNewest,
   countNewSince,
@@ -123,6 +124,7 @@ export default async function NewsPage() {
     getCurrentUser(db),
     getMarketNews(db),
   ]);
+  const admin = await isAdmin(db, user);
   // The reports come out of the feed — they are headlines already in it.
   //
   // The weekly review is no longer anchored to the exchange's article. It
@@ -212,9 +214,15 @@ export default async function NewsPage() {
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-app-border p-6 text-center text-sm text-app-muted space-y-2">
           <p>{stale ? "Мэдээ бэлдэж байна." : `Сүүлийн ${WINDOW_DAYS} хоногт мэдээ олдсонгүй.`}</p>
-          <Link href="/settings" className="text-brand font-semibold">
-            Мэдээллийн сайт нэмэх
-          </Link>
+          {/* The sources are the installation's, set under Удирдлага → Систем.
+              This pointed at the reader's own settings page after the sources
+              had left it, and that page is the statement import now. Shown to
+              the people who can add one; anyone else would be turned away. */}
+          {admin && (
+            <Link href="/admin/settings" className="text-brand font-semibold">
+              Мэдээллийн сайт нэмэх
+            </Link>
+          )}
         </div>
       ) : (
         // One column at every width: two columns put a Monday beside a

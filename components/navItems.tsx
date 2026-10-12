@@ -40,7 +40,8 @@ export function isActive(pathname: string, href: string): boolean {
     case "/portfolio":
       return pathname.startsWith("/portfolio") || pathname.startsWith("/orders");
     case "/profile":
-      return pathname.startsWith("/profile") || pathname === "/settings";
+      // Its edit form and the statement import are both under /profile.
+      return pathname.startsWith("/profile");
     default:
       return pathname.startsWith(href);
   }

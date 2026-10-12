@@ -7,7 +7,7 @@ import NotificationBell from "@/components/NotificationBell";
 import InstallPwaButton from "@/components/InstallPwaButton";
 import LogoutButton from "@/components/LogoutButton";
 import {
-  GearIcon,
+  DownloadIcon,
   ChevronRightIcon,
   EditIcon,
   LockIcon,
@@ -39,10 +39,11 @@ export default async function ProfilePage() {
               aria-label on it, and it was the only way to the one Хадгалах
               button on this side of the app — so a reader who came here to
               change their details found a page of text with nothing on it to
-              press. It says what it does now, and what it opens is a page
-              that is a form from the top. */}
+              press. It says what it does now, and what it opens is the form
+              on a page of its own: it shared Тохиргоо with the statement
+              import until that page became Багц импортлох. */}
           <Link
-            href="/settings"
+            href="/profile/edit"
             className="flex shrink-0 items-center gap-1.5 rounded-full bg-app-elevated px-3.5 py-2 text-sm font-semibold text-app-text transition-transform active:scale-95"
           >
             <EditIcon /> Засах
@@ -72,12 +73,14 @@ export default async function ProfilePage() {
       <div className="divide-y divide-app-divider overflow-hidden rounded-2xl border border-app-border bg-app-card">
         <NotificationBell />
         <InstallPwaButton />
+        {/* Was Тохиргоо. With the account form moved behind Засах above, the
+            import was all that page held, so the row names it. */}
         <Link
-          href="/settings"
+          href="/profile/import"
           className="flex w-full items-center justify-between px-4 py-3.5"
         >
           <span className="flex items-center gap-3 text-sm text-app-text">
-            <GearIcon /> Тохиргоо
+            <DownloadIcon /> Багц импортлох
           </span>
           <span className="text-app-muted">
             <ChevronRightIcon />
