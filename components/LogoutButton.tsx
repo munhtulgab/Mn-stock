@@ -10,6 +10,9 @@ export default function LogoutButton() {
     setBusy(true);
     try {
       await fetch("/api/auth/logout", { method: "POST" });
+      // The number on the app's icon was this account's alerts, and the
+      // next person to sign in on this phone has no business seeing it.
+      if ("clearAppBadge" in navigator) await navigator.clearAppBadge().catch(() => {});
       window.location.href = "/login";
     } catch {
       setBusy(false);

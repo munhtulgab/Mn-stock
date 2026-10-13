@@ -41,3 +41,30 @@ export function subscribeUnread(listener: () => void): () => void {
     listeners.delete(listener);
   };
 }
+
+/**
+ * The reader's own changes to their alerts — opened, swiped away — that have
+ * been sent and not yet answered.
+ *
+ * Asking the server for the count while one of those is on its way gets the
+ * count from before it. Tapping an alert marks it read and opens what it is
+ * about in the same moment, the new page asks for the count, and the answer
+ * could beat the change there: the bell and the app's icon went back to the
+ * number the reader had just brought down. So whoever asks waits for these
+ * first — see {@link settled}.
+ */
+const pending = new Set<Promise<unknown>>();
+
+/** Holds back any count asked for until this change has been answered. */
+export function track(change: Promise<unknown>): void {
+  pending.add(change);
+  const done = () => {
+    pending.delete(change);
+  };
+  change.then(done, done);
+}
+
+/** Resolves once every change sent so far has been answered, either way. */
+export async function settled(): Promise<void> {
+  await Promise.allSettled([...pending]);
+}

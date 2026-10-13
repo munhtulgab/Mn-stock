@@ -1,13 +1,8 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
-import {
-  readUnread,
-  setUnread,
-  subscribeUnread,
-  unreadOnServer,
-} from "@/lib/unreadCount";
+import { readUnread, subscribeUnread, unreadOnServer } from "@/lib/unreadCount";
 
 /**
  * The bell, with the number of alerts waiting on it.
@@ -21,46 +16,20 @@ import {
  * So it prefers what this browser already knows, which the feed writes down
  * as the reader clears and opens things, and falls back to the page's own
  * figure on a fresh load where there is nothing written down yet. Asking the
- * server was the first fix for this and it is still here, but only behind
+ * server was the first fix for this and it still happens, but only behind
  * those two: on its own it left the old number on screen for the length of a
  * round trip, which is the delay this is no longer waiting out.
  *
- * Checked again whenever the tab is looked at, so a bell left open in a
- * background tab is not a stale one either.
+ * The asking is done by `UnreadSync` in the layout now — on every page, when
+ * the app is looked at again, and when a push changes the count — because
+ * the same number goes on the app's icon, and the icon is not only on the
+ * four pages that have a bell.
  */
 export default function UnreadBell({ initial }: { initial: number }) {
   // Null until this browser has been told a number, which is what makes the
   // server's figure the answer on a fresh load and never on a stale one.
   const known = useSyncExternalStore(subscribeUnread, readUnread, unreadOnServer);
   const unread = known ?? initial;
-
-  useEffect(() => {
-    let live = true;
-
-    const check = async () => {
-      try {
-        const res = await fetch("/api/notifications/count", { cache: "no-store" });
-        if (!res.ok) return;
-        const data: { unread?: number } = await res.json();
-        if (live && typeof data.unread === "number") setUnread(data.unread);
-      } catch {
-        // The number on screen is the last one known to be true, which is a
-        // better thing to show than nothing.
-      }
-    };
-
-    void check();
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void check();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    return () => {
-      live = false;
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-    };
-  }, []);
 
   return (
     <Link

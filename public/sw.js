@@ -41,8 +41,41 @@ self.addEventListener("push", (event) => {
     tag: data.tag || "mse-signal",
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, options),
+      showUnread(data.unread).catch(() => {}),
+    ]),
+  );
 });
+
+/**
+ * The number on the app's icon, the way a native app carries one.
+ *
+ * iOS puts no count on a web app's icon of its own accord, whatever arrives:
+ * the app has to set it, and when a push lands there is no page open to do
+ * that. So the worker does, from the count the server sent along — what the
+ * reader on this device has not opened yet, this alert included. An open
+ * window is told as well, so its bell moves with the icon instead of waiting
+ * until it is looked at again.
+ *
+ * A push without a count leaves the icon alone; it was sent to a device
+ * nobody is signed in on.
+ */
+async function showUnread(unread) {
+  if (typeof unread !== "number") return;
+  try {
+    if ("setAppBadge" in self.navigator) {
+      if (unread > 0) await self.navigator.setAppBadge(unread);
+      else await self.navigator.clearAppBadge();
+    }
+  } catch {
+    // Refused without notification permission, or not supported: the
+    // banner is what matters, and it is shown either way.
+  }
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of windows) client.postMessage({ type: "unread", unread });
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
