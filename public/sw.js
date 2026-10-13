@@ -1,27 +1,25 @@
-const CACHE_NAME = "mse-terminal-v1";
-
-self.addEventListener("install", (event) => {
-  self.skipWaiting();
-});
+/*
+ * This worker is here for push and nothing else: the alert banner, the count
+ * on the icon, and opening the app when a banner is tapped.
+ *
+ * It used to sit in front of every request too, re-fetching each one and
+ * handing the response on — said to be needed to make the app installable,
+ * which it is not any more, and with a cache fallback that never had anything
+ * in it. All it did was put every page load inside the worker's lifetime,
+ * and that is the likeliest reason the app stuck on its start-up splash on
+ * the first launch after an update: the new worker took over the moment it
+ * had installed, which stops the old one, and on iOS a page the old one was
+ * still answering can stop where it got to. Requests now go to the network
+ * as they would with no worker at all.
+ *
+ * And a new version waits its turn. `skipWaiting` swapped workers under an
+ * app that was still loading; without it, the old worker finishes the launch
+ * it is part of and the new one takes over once the app has been closed —
+ * the next launch, which for push is soon enough.
+ */
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
-});
-
-// Minimal network-first fetch handler — required for PWA installability
-// criteria (a controlling service worker with a fetch handler). We don't do
-// offline caching of dynamic/price data since it goes stale immediately.
-//
-// GET only, and deliberately so. Re-issuing `event.request` is safe for a
-// request with no body and is not safe for one that has: on iOS the body of a
-// re-fetched POST goes missing, which is how a statement PDF that was plainly
-// attached reached the server as an empty request and came back "attach a
-// statement". Anything with a body is left for the browser to send itself.
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request)),
-  );
 });
 
 self.addEventListener("push", (event) => {

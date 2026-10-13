@@ -14,6 +14,14 @@
  * a line of text saying so as well is a second thing to read on a screen that
  * exists because there is nothing to read yet. The label is still there for a
  * screen reader, which has no animation to go by.
+ *
+ * Except when the wait has gone on far longer than starting up takes. Then it
+ * is not starting up any more, and an animation that runs for ever says the
+ * opposite of what is happening — the app stuck here once, on the first
+ * launch after an update, with nothing on the screen to do about it but
+ * close it. A way out appears after twelve seconds: a plain link, which
+ * needs none of the app's own code to work, because whatever stopped the
+ * page may well have stopped that too.
  */
 export default function AppSplash() {
   return (
@@ -36,7 +44,9 @@ export default function AppSplash() {
           Width and height are on the tag as well, so the square is the size
           it will be before the image arrives rather than collapsing to
           nothing and pushing the tile open when it lands. */}
-      <div className="rounded-3xl bg-white p-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
+      {/* The way out hangs below the tile rather than sitting under it in the
+          flow, so the tile stays where it is when it appears. */}
+      <div className="relative rounded-3xl bg-white p-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
         {/* eslint-disable-next-line @next/next/no-img-element --
             `next/image` would route this through `/_next/image`, which is a
             request to the server — the thing this screen exists because we
@@ -57,6 +67,19 @@ export default function AppSplash() {
           decoding="async"
           fetchPriority="high"
         />
+        <div className="splash-retry absolute left-1/2 top-full mt-8 flex w-max -translate-x-1/2 flex-col items-center gap-3">
+          <p className="text-sm text-app-muted">Удаж байна.</p>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages --
+              A full load of the start, not a client-side one: `Link` needs
+              the app's own code to have run, and a page stuck here may be
+              stuck because it never did. */}
+          <a
+            href="/"
+            className="rounded-full border border-app-border bg-app-card px-5 py-2.5 text-sm font-semibold text-app-text"
+          >
+            Дахин ачаалах
+          </a>
+        </div>
       </div>
     </div>
   );
