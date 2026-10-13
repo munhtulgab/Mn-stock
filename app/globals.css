@@ -137,6 +137,30 @@ body {
   animation: nav-hint-in 150ms linear 100ms forwards;
 }
 
+/*
+ * The start-up splash's way out, for a start-up that has stopped. Nothing to
+ * see for the twelve seconds a slow start can honestly take; after that, a
+ * link to start again. See `AppSplash`.
+ */
+@keyframes splash-retry-in {
+  to {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.splash-retry {
+  opacity: 0;
+  visibility: hidden;
+  animation: splash-retry-in 300ms ease-out 12s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-retry {
+    animation-duration: 1ms;
+  }
+}
+
 @keyframes ticker-scroll {
   from {
     transform: translateX(0);
