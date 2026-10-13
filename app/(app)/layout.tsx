@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { isServiceAdmin } from "@/lib/roles";
 import BottomNav from "@/components/BottomNav";
 import MarketTicker from "@/components/MarketTicker";
+import UnreadSync from "@/components/UnreadSync";
 
 /**
  * One shell, one shape.
@@ -46,6 +47,9 @@ export default async function AppLayout({
       <BottomNav />
       {/* Renders nothing; keeps the market watched while the app is open. */}
       <MarketTicker />
+      {/* Renders nothing; keeps the alert count current, on the bell and on
+          the app's icon. */}
+      <UnreadSync />
     </div>
   );
 }

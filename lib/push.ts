@@ -1,5 +1,7 @@
 import webpush from "web-push";
 import type { Db } from "mongodb";
+import { getUnreadCount } from "@/lib/notifications";
+import type { User } from "@/lib/types";
 
 export interface PushSubscriptionDoc {
   endpoint: string;
@@ -124,6 +126,12 @@ async function deliver(
     .collection<PushSubscriptionDoc>("pushSubscriptions")
     .find(filter)
     .toArray();
+  // The icon's count is a nicety and the banner is the point: a count that
+  // cannot be worked out is left off rather than holding the push back.
+  const unread = await unreadByReader(db, subs).catch((err) => {
+    console.error("unread count for push failed", err);
+    return new Map<string, number>();
+  });
 
   let sent = 0;
   let pruned = 0;
@@ -137,7 +145,10 @@ async function deliver(
             endpoint: sub.endpoint,
             keys: sub.keys,
           },
-          JSON.stringify(payload),
+          JSON.stringify({
+            ...payload,
+            unread: sub.userId ? unread.get(sub.userId) : undefined,
+          }),
         );
         sent++;
       } catch (err) {
@@ -158,4 +169,34 @@ async function deliver(
   );
 
   return { sent, pruned, errors };
+}
+
+/**
+ * What each device's reader has not opened yet, for the number on the app's
+ * icon — see `public/sw.js`.
+ *
+ * Counted as the push leaves, which is after the alert it announces has been
+ * written: every caller records the feed row first, so the count includes
+ * it. And counted here rather than on the phone, because the phone cannot
+ * ask. iOS wakes the service worker for the push and nothing else, with no
+ * page open, to show a banner; the number has to arrive with it.
+ *
+ * A device nobody is signed in on is sent none. There is nobody whose alerts
+ * it would be counting.
+ */
+async function unreadByReader(
+  db: Db,
+  subs: PushSubscriptionDoc[],
+): Promise<Map<string, number>> {
+  const readers = [...new Set(subs.flatMap((sub) => (sub.userId ? [sub.userId] : [])))];
+  if (readers.length === 0) return new Map();
+  const users = await db
+    .collection<User>("users")
+    .find({ _id: { $in: readers } } as never)
+    .toArray();
+  return new Map(
+    await Promise.all(
+      users.map(async (user) => [String(user._id), await getUnreadCount(db, user)] as const),
+    ),
+  );
 }

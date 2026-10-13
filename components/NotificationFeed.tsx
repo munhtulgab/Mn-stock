@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import NotificationList from "./NotificationList";
 import { BellIcon } from "./icons";
-import { setUnread } from "@/lib/unreadCount";
+import { setUnread, track } from "@/lib/unreadCount";
 import type { FeedNotification } from "@/lib/notifications";
 
 export interface FeedGroup {
@@ -107,8 +107,12 @@ export default function NotificationFeed({ groups }: { groups: FeedGroup[] }) {
 }
 
 function send(id: string, method: "POST" | "DELETE") {
-  fetch(`/api/notifications/${id}`, { method, keepalive: true }).catch(() => {
-    // Nothing to say to the reader: the row has already moved, and the next
-    // page load reads the server's answer either way.
-  });
+  // Tracked, so a count asked for before the server has this is not the
+  // count from before it — see `track`.
+  track(
+    fetch(`/api/notifications/${id}`, { method, keepalive: true }).catch(() => {
+      // Nothing to say to the reader: the row has already moved, and the next
+      // page load reads the server's answer either way.
+    }),
+  );
 }
