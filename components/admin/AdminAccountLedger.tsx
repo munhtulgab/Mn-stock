@@ -37,9 +37,17 @@ export default function AdminAccountLedger({ user }: { user: AdminUserDetail }) 
     <div className="grid items-start gap-3 lg:grid-cols-2">
       {/* Pinned while the history scrolls. Somebody's whole order history is
           several screens tall, and a filter you have to scroll back up to
-          change is a filter that gets used once. */}
-      <div className="lg:sticky lg:top-4">
+          change is a filter that gets used once.
+
+          And no taller than the screen it is pinned to. Twelve positions are
+          eight hundred pixels of list, and a laptop is seven hundred and
+          sixty high: pinned at full height, the last holding and the foot of
+          the card hung off the bottom of the screen, and stayed there however
+          far the history was scrolled. Capped, the list scrolls inside the
+          card instead, under its heading. */}
+      <div className="lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100dvh-2rem)] lg:flex-col">
         <Panel
+          bounded
           title="Эзэмшиж буй хувьцаа"
           note={
             user.holdings.length > 0
