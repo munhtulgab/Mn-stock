@@ -15,6 +15,11 @@
  * by default, because a panel in a column of panels should be as tall as what
  * is in it and no taller.
  *
+ * `bounded` is for a panel whose parent caps its height — a pinned column
+ * that must fit the screen. The heading stays and the body scrolls under it,
+ * rather than the bottom of the card running off the screen where nothing
+ * can reach it.
+ *
  * `icon` puts a mark in front of the name. On a page of four panels stacked
  * two by two, the titles are the only thing telling them apart and they are
  * all the same weight, size and colour; a mark is found before a word is
@@ -27,6 +32,7 @@ export default function Panel({
   icon,
   flush,
   fill,
+  bounded,
   children,
 }: {
   title: string;
@@ -37,13 +43,15 @@ export default function Panel({
   flush?: boolean;
   /** Take the whole row's height and give the extra to the body. */
   fill?: boolean;
+  /** Fit a height the parent caps, scrolling the body under the heading. */
+  bounded?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <section
       className={`overflow-hidden rounded-2xl border border-app-border bg-app-card ${
         fill ? "flex h-full flex-col" : ""
-      }`}
+      } ${bounded ? "flex min-h-0 flex-col" : ""}`}
     >
       <div
         className={`flex items-center justify-between gap-3 px-5 pt-5 ${
@@ -62,7 +70,11 @@ export default function Panel({
         </div>
         {note && <span className="shrink-0 text-[13px] text-app-muted">{note}</span>}
       </div>
-      <div className={`${flush ? "" : "px-5 pt-4 pb-5"} ${fill ? "flex-1" : ""}`}>
+      <div
+        className={`${flush ? "" : "px-5 pt-4 pb-5"} ${fill ? "flex-1" : ""} ${
+          bounded ? "min-h-0 overflow-y-auto overscroll-contain" : ""
+        }`}
+      >
         {children}
       </div>
     </section>
