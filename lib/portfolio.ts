@@ -223,21 +223,40 @@ export async function valuePortfolio(
   } = {},
 ): Promise<PortfolioSummary> {
   const companyCodes = holdingDocs.map((h) => h.companyCode);
-  const [securities, pricesByCode, feedPrices] = await Promise.all([
+  // Asked first and awaited last: the feed is the slow part of this, and the
+  // two reads beside it are the database's.
+  const feed = livePricesFor(companyCodes, options.quoteWaitMs);
+  const [securities, pricesByCode] = await Promise.all([
     db
       .collection<Security>("securities")
       .find({ companyCode: { $in: companyCodes } })
       .toArray(),
     getLatestTwoPricesForMany(db, companyCodes),
-    livePricesFor(companyCodes, options.quoteWaitMs),
   ]);
   const securityByCode = new Map(securities.map((s) => [s.companyCode, s]));
-  const livePrices = await currentPricesFor(
-    holdingDocs,
-    pricesByCode,
-    feedPrices,
-    options.quoteWaitMs,
-  );
+
+  // A fund is never on the live feed — its price is only on its own page —
+  // so that page is asked for now, beside the feed, rather than once the
+  // feed has answered without it. One after the other, the two waits added
+  // up: an account holding ALTT and FTI sat through the feed's allowance and
+  // then the pages' on top of it, which on the administration page was four
+  // seconds of skeleton for figures that need two.
+  const isFund = (h: Holding) => securityByCode.get(h.companyCode)?.classification === "fund";
+  const [feedPrices, fundPrices] = await Promise.all([
+    feed,
+    currentPricesFor(holdingDocs.filter(isFund), pricesByCode, new Map(), options.quoteWaitMs),
+  ]);
+  // The feed's own figure still wins, should it ever carry a fund: the
+  // second map is every feed price plus the pages for whatever it lacked.
+  const livePrices = new Map([
+    ...fundPrices,
+    ...(await currentPricesFor(
+      holdingDocs.filter((h) => !isFund(h)),
+      pricesByCode,
+      feedPrices,
+      options.quoteWaitMs,
+    )),
+  ]);
 
   let holdingsValue = 0;
   let totalCostBasis = 0;
