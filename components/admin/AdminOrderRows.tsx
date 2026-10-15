@@ -210,6 +210,7 @@ export default function AdminOrderRows({
                   <RowMenu
                     className="@lg:hidden"
                     label={`${order.symbol} захиалгын үйлдэл`}
+                    detail={<OrderLine order={order} />}
                     actions={actionsFor(order)}
                   />
                 </div>

@@ -30,11 +30,11 @@ export interface SelectOption {
  *    Space choose, Escape closes, and the list is a `listbox` with the chosen
  *    row marked, so a screen reader is told the same thing the eye is.
  *
- * The list is drawn through a portal for the reason `RowMenu`'s is: the
- * filter bar is a rounded, `overflow-hidden` card, and a list opened from the
- * bottom row of it would be clipped by the very rule that keeps its corners
- * round. Being fixed to the button's rectangle also means it can flip above
- * the control when the control is near the foot of the screen.
+ * The list is drawn through a portal because the filter bar is a rounded,
+ * `overflow-hidden` card, and a list opened from the bottom row of it would
+ * be clipped by the very rule that keeps its corners round. Being fixed to
+ * the button's rectangle also means it can flip above the control when the
+ * control is near the foot of the screen.
  *
  * Because a portal renders into `<body>`, outside the element that makes the
  * administration sheet light, the panel copies the surface class off the

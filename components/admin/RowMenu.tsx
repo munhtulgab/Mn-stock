@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useAnchoredPanel } from "@/components/ui/useAnchoredPanel";
+import { CloseIcon } from "@/components/icons";
 
 export interface RowAction {
   key: string;
@@ -22,64 +22,55 @@ export interface RowAction {
  * 36px button costs nothing and puts the three a tap away, named, which is
  * the same trade every mobile list makes.
  *
- * Rendered through a portal rather than positioned inside the row. The panel
- * this list sits in is `overflow-hidden` so its corners stay round, and a
- * menu opened on the last row would be cut off by exactly that. Fixed to the
- * button's own rectangle instead, which also means it does not care how deep
- * in the page the row is.
+ * What the tap opens is a sheet from the foot of the screen — a dialog in
+ * the middle of it from `sm` up — rather than a dropdown hung off the
+ * button. The dropdown had to be drawn in `<body>`, out of the rounded,
+ * clipping panel the row sits in, and so placed by hand from the button's
+ * measured position and re-placed on every scroll. On an iPhone that chase
+ * was always a frame behind: the menu opened somewhere other than its
+ * button and ran after it as the page moved. A sheet has no position to
+ * work out. It sits where the thumb is, says which order it is about, and
+ * nothing behind it can move it.
  *
  * Because a portal renders into `<body>`, outside the element that makes the
- * administration sheet light, the panel carries `admin-surface` itself — the
- * same reason `ConfirmDialog` does.
- *
- * It closes on a click elsewhere or on Escape, and otherwise follows its
- * button: where it is drawn is `useAnchoredPanel`'s job, which re-measures on
- * every scroll and every move of the visible viewport rather than placing it
- * once and hoping. See the note there for why one measurement was not enough.
+ * administration sheet light, the overlay carries `admin-surface` itself —
+ * the same reason `ConfirmDialog` does. It closes on Болих, on a tap on the
+ * backdrop, or on Escape.
  */
 export default function RowMenu({
   actions,
   label,
+  detail,
   className = "",
 }: {
   actions: RowAction[];
   /** What the button announces, since ⋯ says nothing on its own. */
   label: string;
+  /** The row the actions are about, shown at the top of the sheet. */
+  detail?: React.ReactNode;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-  const panel = useRef<HTMLDivElement>(null);
-  // Right-aligned: the ⋯ is the last thing on the row, so a menu hanging off
-  // its left edge is a menu inside the page rather than off it.
-  const at = useAnchoredPanel({ open, anchor: button, panel, align: "right" });
+  const cancel = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const away = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (!panel.current?.contains(target) && !button.current?.contains(target)) {
-        setOpen(false);
-      }
-    };
+    // Focus on Болих, so a stray Enter closes the sheet rather than starting
+    // whichever action happens to be first.
+    cancel.current?.focus();
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", away);
     document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      document.removeEventListener("keydown", key);
-    };
+    return () => document.removeEventListener("keydown", key);
   }, [open]);
 
   return (
     <>
       <button
-        ref={button}
         type="button"
-        onClick={() => setOpen((was) => !was)}
-        aria-haspopup="menu"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={label}
         className={`flex h-11 w-9 shrink-0 items-center justify-center rounded-lg border border-app-border text-app-muted hover:bg-app-elevated hover:text-app-text ${className}`}
@@ -95,34 +86,50 @@ export default function RowMenu({
         typeof document !== "undefined" &&
         createPortal(
           <div
-            ref={panel}
-            role="menu"
-            aria-label={label}
-            style={{
-              top: at?.top ?? 0,
-              left: at?.left ?? 0,
-              // Hidden until measured and placed, which happens before paint.
-              visibility: at ? "visible" : "hidden",
+            // `touch-none`: a drag on the open sheet does not scroll the page
+            // out from under the order it is about.
+            className="admin-surface fixed inset-0 z-50 flex touch-none items-end justify-center bg-black/45 sm:items-center sm:p-4"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setOpen(false);
             }}
-            className="admin-surface fixed z-50 w-44 overflow-hidden rounded-xl border border-app-border bg-app-card py-1 shadow-[0_16px_40px_-12px_rgba(16,24,40,0.28)]"
           >
-            {actions.map((action) => (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={label}
+              className="w-full max-w-[420px] rounded-t-[22px] border border-app-border bg-app-card p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-12px_40px_rgba(15,19,25,0.18)] sm:rounded-[18px] sm:pb-3"
+            >
+              {detail && (
+                <div className="mb-3 rounded-2xl bg-app-bg p-3 text-sm text-app-text">{detail}</div>
+              )}
+              <div className="overflow-hidden rounded-2xl border border-app-border">
+                {actions.map((action, index) => (
+                  <button
+                    key={action.key}
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      action.onSelect();
+                    }}
+                    className={`flex w-full items-center gap-3 px-4 py-3.5 text-left text-[15px] font-semibold hover:bg-app-elevated ${
+                      index > 0 ? "border-t border-app-divider" : ""
+                    } ${action.danger ? "text-app-negative" : "text-app-text"}`}
+                  >
+                    {action.icon}
+                    {action.label}
+                  </button>
+                ))}
+              </div>
               <button
-                key={action.key}
+                ref={cancel}
                 type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpen(false);
-                  action.onSelect();
-                }}
-                className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-semibold hover:bg-app-elevated ${
-                  action.danger ? "text-app-negative" : "text-app-text"
-                }`}
+                onClick={() => setOpen(false)}
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-app-border px-4 py-3.5 text-[15px] font-semibold text-app-text"
               >
-                {action.icon}
-                {action.label}
+                <CloseIcon size={15} />
+                Болих
               </button>
-            ))}
+            </div>
           </div>,
           document.body,
         )}

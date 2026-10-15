@@ -14,12 +14,17 @@ export interface PanelAt {
 /**
  * Keeps a panel drawn in `<body>` glued to the control that opened it.
  *
- * Both of the popups in this application — the dropdown's list and a row's ⋯
- * menu — are rendered through a portal, because the cards they open from are
- * rounded and `overflow-hidden` and would otherwise clip them. That means
- * they are positioned by hand, and the obvious way to do it is to measure the
- * button once on the click and leave the panel there. That is what this
- * replaces, and it was wrong in two ways.
+ * The dropdown's list is rendered through a portal, because the cards it
+ * opens from are rounded and `overflow-hidden` and would otherwise clip it.
+ * That means it is positioned by hand, and the obvious way to do it is to
+ * measure the button once on the click and leave the panel there. That is
+ * what this replaces, and it was wrong in two ways.
+ *
+ * A row's ⋯ menu used to be placed by this too, and on an iPhone it opened
+ * away from its button and chased it through a scroll; it is a sheet now
+ * and needs no placing — see `RowMenu`. A list a frame behind its field is
+ * a smaller thing than a menu of destructive actions a frame behind its row,
+ * but it is the same chase, and the same way out if it ever matters.
  *
  * It was wrong *later*: a `fixed` panel placed from one measurement stays
  * where it was put while the page moves under it. The first version closed on
