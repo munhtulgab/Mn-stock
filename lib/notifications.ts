@@ -1,5 +1,5 @@
 import type { Db } from "mongodb";
-import { dayHeading, todayAndYesterday, ulaanbaatarDay, ulaanbaatarTime } from "@/lib/day";
+import { dayHeading, todayAndYesterday, ulaanbaatarDateTime, ulaanbaatarDay } from "@/lib/day";
 import type { AppNotification, User } from "@/lib/types";
 
 /**
@@ -222,7 +222,11 @@ export interface FeedNotification
   extends Omit<AppNotification, "_id" | "createdAt"> {
   /** The alert's own id, for marking it read and for swiping it away. */
   id: string;
-  /** `HH:MM` in Ulaanbaatar. */
+  /**
+   * `YYYY-MM-DD HH:MM` in Ulaanbaatar. The date as well as the time, though
+   * the rows sit under a day's heading: a row is read on its own too, and
+   * "18:08" alone is a time on no particular day.
+   */
   time: string;
   /** Not yet opened by this reader. */
   isNew: boolean;
@@ -271,7 +275,7 @@ export async function getNotificationFeed(
       previousSignal: n.previousSignal,
       mine: n.mine,
       changePct: n.changePct,
-      time: ulaanbaatarTime(createdAt),
+      time: ulaanbaatarDateTime(createdAt),
       isNew,
     });
   }
