@@ -82,11 +82,29 @@ function Heading({ verb, at, who }: { verb: string; at: Date; who?: string }) {
 }
 
 /**
+ * The label over a row an administrator put there, rather than the account
+ * holder: on its own line at the top, so the row under it reads the way
+ * every other row in the history does — what, and how much, then when.
+ */
+function AdminTag({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-block rounded-full bg-app-elevated px-2 py-0.5 text-[10px] font-bold tracking-wide text-app-muted">
+      {children}
+    </span>
+  );
+}
+
+/**
  * An order an administrator deleted, standing where it used to.
  *
  * Struck through, because it no longer counts towards anything; kept,
  * because a history that silently loses a trade the reader remembers making
  * is a history they stop trusting.
+ *
+ * Laid out in lines rather than in two columns: the label, then the order
+ * and its price, then its date and total, and then the note across the whole
+ * row. Squeezed into the column beside the figures, the note — the sentence
+ * that says the row counts for nothing — broke over three lines.
  */
 export function DeletedOrderRow({
   edit,
@@ -99,35 +117,42 @@ export function DeletedOrderRow({
 }) {
   const order = edit.before;
   return (
-    <div className={`flex items-start gap-3 opacity-80 ${className}`}>
-      <StockAvatar symbol={edit.symbol} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-sm font-semibold text-app-text line-through">{edit.symbol}</span>
-          <span className="rounded-full bg-app-elevated px-2 py-0.5 text-[11px] font-semibold text-app-muted">
-            {order.side === "BUY" ? "АВСАН" : "ЗАРСАН"}
-          </span>
-          <span className="rounded-full bg-app-negative-bg px-2 py-0.5 text-[10px] font-bold tracking-wide text-app-negative">
-            УСТГАСАН
-          </span>
-        </div>
-        <div className="text-xs text-app-muted">{ulaanbaatarDateTime(order.createdAt)}</div>
-        <div className="mt-1 text-[11px] text-app-muted">
-          <span className="font-semibold text-app-text">Админ устгасан</span>
-          {" · "}
-          {ulaanbaatarDateTime(edit.at)}
-          {showWho ? ` · ${edit.by}` : ""} — мөнгө, хувьцаанд тооцогдохгүй.
+    <div className={`opacity-80 ${className}`}>
+      <div className="flex items-start gap-3">
+        <StockAvatar symbol={edit.symbol} />
+        <div className="min-w-0 flex-1">
+          <AdminTag>АДМИН УСТГАСАН</AdminTag>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <span className="text-sm font-semibold text-app-text line-through">
+                {edit.symbol}
+              </span>
+              <span className="rounded-full bg-app-elevated px-2 py-0.5 text-[11px] font-semibold text-app-muted">
+                {order.side === "BUY" ? "АВСАН" : "ЗАРСАН"}
+              </span>
+              <span className="rounded-full bg-app-negative-bg px-2 py-0.5 text-[10px] font-bold tracking-wide text-app-negative">
+                УСТГАСАН
+              </span>
+            </div>
+            <span className="shrink-0 text-right text-sm text-app-muted line-through">
+              <span className="text-xs">{order.quantity} ш × </span>
+              <Num value={order.price} digits={2} suffix="₮" />
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-xs text-app-muted">
+            <span>{ulaanbaatarDateTime(order.createdAt)}</span>
+            <span className="shrink-0 line-through">
+              <Num value={order.total} digits={2} suffix="₮" />
+            </span>
+          </div>
         </div>
       </div>
-      <div className="shrink-0 text-right text-app-muted line-through">
-        <div className="text-sm">
-          <span className="text-xs">{order.quantity} ш × </span>
-          <Num value={order.price} digits={2} suffix="₮" />
-        </div>
-        <div className="text-xs">
-          <Num value={order.total} digits={2} suffix="₮" />
-        </div>
-      </div>
+      <p className="mt-2 text-[11px] text-app-muted">
+        <span className="font-semibold text-app-text">Админ устгасан</span>
+        {" · "}
+        {ulaanbaatarDateTime(edit.at)}
+        {showWho ? ` · ${edit.by}` : ""} — мөнгө, хувьцаанд тооцогдохгүй.
+      </p>
     </div>
   );
 }
@@ -135,6 +160,12 @@ export function DeletedOrderRow({
 /**
  * A cash balance an administrator set by hand, in the history with the
  * orders: the one change to the balance that no order explains.
+ *
+ * In the same lines as a deleted order: the label on top, then what changed
+ * with the amount at the right, then when with the balance before and after
+ * at the right. The label used to sit beside the title and dropped under it
+ * whenever the amount took the room — so one row of this kind read one way
+ * and the next another.
  */
 export function CashEditRow({
   edit,
@@ -156,31 +187,33 @@ export function CashEditRow({
         ₮
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-sm font-semibold text-app-text">Мөнгөн үлдэгдэл</span>
-          <span className="rounded-full bg-app-elevated px-2 py-0.5 text-[10px] font-bold tracking-wide text-app-muted">
-            АДМИН ӨӨРЧИЛСӨН
+        <AdminTag>АДМИН ӨӨРЧИЛСӨН</AdminTag>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <span className="min-w-0 truncate text-sm font-semibold text-app-text">
+            Мөнгөн үлдэгдэл
+          </span>
+          <span
+            className="shrink-0 text-right text-sm"
+            style={{ color: up ? "var(--app-positive)" : "var(--app-negative)" }}
+          >
+            <Num value={delta} digits={2} suffix="₮" showSign={up} />
           </span>
         </div>
-        <div className="text-xs text-app-muted">
-          {ulaanbaatarDateTime(edit.at)}
-          {showWho ? ` · ${edit.by}` : ""}
-        </div>
-        <div className="mt-1 text-[11px] text-app-muted">
-          <span className="line-through">
-            <Num value={edit.before} digits={2} suffix="₮" />
+        <div className="flex items-center justify-between gap-3 text-xs text-app-muted">
+          <span className="min-w-0 truncate">
+            {ulaanbaatarDateTime(edit.at)}
+            {showWho ? ` · ${edit.by}` : ""}
           </span>
-          {" → "}
-          <span className="text-app-text">
-            <Num value={edit.after} digits={2} suffix="₮" />
+          <span className="shrink-0 text-right">
+            <span className="line-through">
+              <Num value={edit.before} digits={2} suffix="₮" />
+            </span>
+            {" → "}
+            <span className="text-app-text">
+              <Num value={edit.after} digits={2} suffix="₮" />
+            </span>
           </span>
         </div>
-      </div>
-      <div
-        className="shrink-0 text-right text-sm"
-        style={{ color: up ? "var(--app-positive)" : "var(--app-negative)" }}
-      >
-        <Num value={delta} digits={2} suffix="₮" showSign={up} />
       </div>
     </div>
   );
