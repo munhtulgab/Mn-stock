@@ -2,10 +2,35 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import NotificationList from "./NotificationList";
 import { BellIcon } from "./icons";
 import { setUnread, track } from "@/lib/unreadCount";
 import type { FeedNotification } from "@/lib/notifications";
+
+type Tab = "all" | "news" | "holds" | "watches";
+
+/**
+ * The four ways to read the feed. Мэдээ is the market's stories; Багц and
+ * Хяналт are the alerts raised for a company the reader holds or watches.
+ * The market's own signal rows and a test push are under Бүгд only.
+ */
+const TABS: { key: Tab; label: string }[] = [
+  { key: "all", label: "Бүгд" },
+  { key: "news", label: "Мэдээ" },
+  { key: "holds", label: "Багц" },
+  { key: "watches", label: "Хяналт" },
+];
+
+function tabOf(value: string | undefined): Tab {
+  return TABS.find((tab) => tab.key === value)?.key ?? "all";
+}
+
+function inTab(n: FeedNotification, tab: Tab): boolean {
+  if (tab === "all") return true;
+  if (tab === "news") return n.kind === "news";
+  return n.mine === tab;
+}
 
 export interface FeedGroup {
   day: string;
@@ -30,6 +55,16 @@ export default function NotificationFeed({ groups }: { groups: FeedGroup[] }) {
   // server's reply: the reader has already watched it go.
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [read, setRead] = useState<string[]>([]);
+  // The filter lives in the address and is read from it, not held as state:
+  // going back from an alert restores this page as it was rendered, and a
+  // state of its own came back as Бүгд under an address saying ?tab=holds.
+  const tab = tabOf(useSearchParams().get("tab") ?? undefined);
+
+  function choose(next: Tab) {
+    // Written to the address without a navigation — the list is all here
+    // already — and the router hands the new value back to the line above.
+    window.history.replaceState(null, "", next === "all" ? "/notifications" : `?tab=${next}`);
+  }
 
   const days = groups
     .map((group) => ({
@@ -53,17 +88,56 @@ export default function NotificationFeed({ groups }: { groups: FeedGroup[] }) {
   // React is what an effect is for; it is not this component's state.
   useEffect(() => setUnread(unread), [unread]);
 
+  // The bell counts the whole feed whatever is picked here; the line under
+  // the heading counts what the reader is looking at.
+  const shown = days
+    .map((group) => ({ ...group, items: group.items.filter((n) => inTab(n, tab)) }))
+    .filter((group) => group.items.length > 0);
+  const shownTotal = shown.reduce((n, group) => n + group.items.length, 0);
+  const shownUnread = shown.reduce(
+    (n, group) => n + group.items.filter((item) => item.isNew).length,
+    0,
+  );
+
   return (
     <div className="px-4 pt-6 pb-4 space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-app-text">Мэдэгдэл</h1>
-        <p className="text-xs text-app-muted mt-0.5">
-          {unread > 0
-            ? `${unread} шинэ · нийт ${total}`
-            : total > 0
-              ? `${total} мэдэгдэл`
-              : "Дохио өөрчлөгдөхөд энд харагдана"}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-app-text">Мэдэгдэл</h1>
+          <p className="text-xs text-app-muted mt-0.5">
+            {shownUnread > 0
+              ? `${shownUnread} шинэ · нийт ${shownTotal}`
+              : shownTotal > 0
+                ? `${shownTotal} мэдэгдэл`
+                : total > 0
+                  ? "Энэ ангилалд алга"
+                  : "Дохио өөрчлөгдөхөд энд харагдана"}
+          </p>
+        </div>
+        {total > 0 && (
+          <div
+            role="tablist"
+            aria-label="Мэдэгдлийн ангилал"
+            className="mt-0.5 flex shrink-0 items-center gap-0.5 rounded-full bg-app-elevated p-0.5"
+          >
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                onClick={() => choose(t.key)}
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  tab === t.key
+                    ? "bg-app-card text-app-text shadow-[0_1px_3px_rgba(0,0,0,0.12)]"
+                    : "text-app-muted"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {total === 0 ? (
@@ -80,9 +154,13 @@ export default function NotificationFeed({ groups }: { groups: FeedGroup[] }) {
             Зах зээл харах
           </Link>
         </div>
+      ) : shown.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-app-border p-8 text-center">
+          <p className="text-sm text-app-muted">Энэ ангилалд мэдэгдэл алга.</p>
+        </div>
       ) : (
         <div className="space-y-5">
-          {days.map((group) => (
+          {shown.map((group) => (
             <section key={group.day}>
               <h2 className="text-xs font-semibold text-app-muted mb-2">
                 {group.heading}

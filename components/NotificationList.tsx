@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import StockAvatar from "./StockAvatar";
 import SignalBadge from "./SignalBadge";
-import { BellIcon, ChevronRightIcon, NewsIcon, TrashIcon } from "./icons";
+import { BellIcon, NewsIcon, TrashIcon } from "./icons";
 import type { FeedNotification } from "@/lib/notifications";
 
 /**
@@ -196,18 +196,16 @@ function Row({ n }: { n: FeedNotification }) {
           {n.signal && <SignalBadge signal={n.signal} size="sm" />}
           {typeof n.changePct === "number" && <MoveChip pct={n.changePct} />}
         </div>
-        <div className="text-xs text-app-muted mt-0.5 break-words">{n.body}</div>
-        <div className="mt-1 flex items-baseline justify-between gap-3 text-[11px]">
-          <span className="flex items-baseline gap-2 text-app-muted">
-            {n.time}
-            {n.mine && <MineTag mine={n.mine} />}
-          </span>
-          {n.url && (
-            <span className="text-brand font-medium inline-flex items-center gap-0.5 shrink-0">
-              Дэлгэрэнгүй
-              <ChevronRightIcon size={12} />
-            </span>
-          )}
+        {!restatesFooter(n) && (
+          <div className="text-xs text-app-muted mt-0.5 break-words">{n.body}</div>
+        )}
+        {/* When, and where it comes from: the reader's own portfolio or
+            watchlist, or the site a story was published on. That used to be
+            "Дэлгэрэнгүй" — but the whole row opens it, and saying where it
+            leads is more use than saying that it leads somewhere. */}
+        <div className="mt-1 flex items-center justify-between gap-3 text-[11px]">
+          <span className="shrink-0 text-app-muted tabular-nums">{n.time}</span>
+          <Source n={n} />
         </div>
       </div>
     </div>
@@ -243,4 +241,31 @@ function MineTag({ mine }: { mine: "holds" | "watches" }) {
       {mine === "holds" ? "Таны багц" : "Хяналт"}
     </span>
   );
+}
+
+/** The host a story was published on, without its `www.` — or nothing. */
+function siteOf(url: string | undefined): string | null {
+  if (!url || url.startsWith("/")) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A story's body is its source and its date — "bloombergtv.mn · 2026-10-21"
+ * — and the line under it now says both: the time it arrived and the site.
+ * Shown again it would be the same words twice in a row.
+ */
+function restatesFooter(n: FeedNotification): boolean {
+  return n.kind === "news" && siteOf(n.url) !== null && /^.+ · \d{4}-\d{2}-\d{2}$/.test(n.body);
+}
+
+/** Where an alert comes from, at the right of its last line. */
+function Source({ n }: { n: FeedNotification }) {
+  if (n.mine) return <MineTag mine={n.mine} />;
+  const site = n.kind === "news" ? siteOf(n.url) : null;
+  if (!site) return null;
+  return <span className="min-w-0 truncate font-medium text-brand">{site}</span>;
 }
