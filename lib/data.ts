@@ -4,7 +4,7 @@ import { syncPricesForCompany } from "@/lib/sync";
 import { fetchLiveQuotes, type LiveQuote } from "@/lib/marketinfo/quotes";
 import { headingQuotesFor } from "@/lib/mse/quote";
 import { fetchExchangeMovers, type ExchangeMovers } from "@/lib/mse/movers";
-import { sessionChangePct } from "@/lib/priceChange";
+import { amountFromPct, priorClose as sessionPriorClose, sessionChangePct } from "@/lib/priceChange";
 import { ulaanbaatarDay } from "@/lib/day";
 import { needsPriceRefresh } from "@/lib/priceFreshness";
 import { liveCandle } from "@/lib/liveCandle";
@@ -24,6 +24,12 @@ export interface DashboardRow {
   lastPrice: number | null;
   lastDate: string | null;
   changePct: number | null;
+  /**
+   * The same move in tögrög. Optional because snapshots stored before it was
+   * kept do not carry it — read it through {@link rowChange}, which works it
+   * out from the percentage for those.
+   */
+  change?: number | null;
   volume: number | null;
   /**
    * The combined verdict, and null where it could not be built.
@@ -199,6 +205,7 @@ function buildRow(
   const last = prices.at(-1) ?? null;
   const prev = prices.length > 1 ? prices[prices.length - 2] : null;
   const changePct = sessionChangePct(last, prev);
+  const base = sessionPriorClose(last, prev);
 
   return {
     symbol: security.symbol,
@@ -208,6 +215,7 @@ function buildRow(
     lastPrice: last?.close ?? null,
     lastDate: last?.date ?? null,
     changePct,
+    change: changePct !== null && last && base !== null ? last.close - base : null,
     // A close taken from the page heading states no volume; zero would read
     // as a session nobody traded in.
     volume: last?.provisional ? null : (last?.volume ?? null),
@@ -478,6 +486,7 @@ export async function applyLiveQuotes(
         ...row,
         lastPrice: moved.price,
         changePct: moved.changePct,
+        change: amountFromPct(moved.price, moved.changePct),
         lastDate: session ?? row.lastDate,
         sparkline:
           row.sparkline.length > 0
@@ -500,11 +509,26 @@ export async function applyLiveQuotes(
       (priorClose && priorClose > 0
         ? ((live.price - priorClose) / priorClose) * 100
         : row.changePct);
+    // From a close where one is stated — the quote's own, then the row's —
+    // and from the percentage only where neither is.
+    const from =
+      live.previousClose != null && live.previousClose > 0
+        ? live.previousClose
+        : priorClose && priorClose > 0
+          ? priorClose
+          : null;
+    const change =
+      changePct === null
+        ? null
+        : from !== null
+          ? live.price - from
+          : amountFromPct(live.price, changePct);
 
     return {
       ...row,
       lastPrice: live.price,
       changePct,
+      change,
       lastDate: liveDate,
       volume: live.volume ?? row.volume,
       // Keep the line ending where the number says it does.
@@ -798,6 +822,7 @@ async function refreshSnapshotRow(db: Db, security: Security): Promise<void> {
         "rows.$.lastPrice": row.lastPrice,
         "rows.$.lastDate": row.lastDate,
         "rows.$.changePct": row.changePct,
+        "rows.$.change": row.change,
         "rows.$.volume": row.volume,
         "rows.$.sparkline": row.sparkline,
       },
@@ -818,3 +843,12 @@ export async function getStockDetailFresh(
 }
 
 export const __testing = { buildRow, DASHBOARD_SCHEMA_VERSION };
+
+/**
+ * A row's move in tögrög: the one it carries, or — on a snapshot stored
+ * before rows carried one — the price taken back out of the percentage.
+ */
+export function rowChange(row: Pick<DashboardRow, "change" | "changePct" | "lastPrice">): number | null {
+  if (row.change !== undefined) return row.change;
+  return amountFromPct(row.lastPrice, row.changePct);
+}

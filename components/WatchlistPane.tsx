@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Section from "./Section";
 import StockAvatar from "./StockAvatar";
-import Num, { Pct } from "./Num";
+import Num, { Delta, Pct } from "./Num";
+import LiveDot from "./LiveDot";
 import type { getWatchlist } from "@/lib/portfolio";
 
 type WatchlistRow = Awaited<ReturnType<typeof getWatchlist>>[number];
@@ -52,7 +53,14 @@ function stepOf(el: HTMLElement, pages: number): number {
   return (el.scrollWidth - el.clientWidth) / (pages - 1);
 }
 
-export default function WatchlistPane({ items }: { items: WatchlistRow[] }) {
+export default function WatchlistPane({
+  items,
+  live,
+}: {
+  items: WatchlistRow[];
+  /** The exchange is in session: priced cards get the dot in front. */
+  live: boolean;
+}) {
   const pane = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState(1);
   const [page, setPage] = useState(0);
@@ -161,8 +169,20 @@ export default function WatchlistPane({ items }: { items: WatchlistRow[] }) {
           >
             <div className="flex items-center gap-3">
               <StockAvatar symbol={w.symbol} size={40} />
-              <div className="min-w-0">
-                <div className="font-semibold text-app-text text-sm">{w.symbol}</div>
+              <div className="min-w-0 flex-1">
+                {/* The move in tögrög beside the ticker, the percentage under
+                    it beside the price — and the dot in front only on a card
+                    priced from the running session, not on a company that
+                    has not traded today. */}
+                <div className="flex items-center gap-1.5">
+                  {live && w.live && <LiveDot />}
+                  <span className="min-w-0 truncate font-semibold text-app-text text-sm">
+                    {w.symbol}
+                  </span>
+                  <span className="ml-auto shrink-0 text-xs tabular-nums">
+                    <Delta value={w.change} />
+                  </span>
+                </div>
                 <div className="text-xs text-app-muted truncate">{w.name}</div>
               </div>
             </div>

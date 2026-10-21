@@ -5,6 +5,7 @@ import {
   applyLiveQuotes,
   getDashboardRows,
   refreshDashboardSnapshotIfIdle,
+  rowChange,
   tradedSession,
   tradedThisMonth,
   type DashboardRow,
@@ -22,7 +23,8 @@ import Section from "@/components/Section";
 import WatchlistPane from "@/components/WatchlistPane";
 import SignalBadge from "@/components/SignalBadge";
 import Sparkline from "@/components/Sparkline";
-import Num, { Pct } from "@/components/Num";
+import Num, { Delta, Pct } from "@/components/Num";
+import LiveDot from "@/components/LiveDot";
 import PortfolioValueCard from "@/components/PortfolioValueCard";
 import PageHeader from "@/components/PageHeader";
 
@@ -92,6 +94,13 @@ export default async function HomePage() {
         lastPrice: m.price,
         lastDate: session,
         changePct: m.changePct,
+        // The row's own amount where it is measured at this same price —
+        // worked out from a stated close — and the board's percentage
+        // turned back into tögrög where it is not.
+        change:
+          row && row.lastPrice === m.price && row.change != null
+            ? row.change
+            : rowChange({ lastPrice: m.price, changePct: m.changePct }),
         volume: row?.volume ?? null,
         // The board says what moved, not what to do about it. Where the
         // stored row has no verdict this has none either, rather than
@@ -174,12 +183,7 @@ export default async function HomePage() {
                   half its own weight, which is not enough to read as the one
                   thing on the card that is moving. */}
               <div className="flex items-center gap-1.5 text-xs font-semibold text-app-text leading-none">
-                {idx.live && marketOpen === true && (
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-app-positive opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-app-positive" />
-                  </span>
-                )}
+                {idx.live && marketOpen === true && <LiveDot />}
                 <span className="truncate">{idx.label}</span>
               </div>
               {/* Full width of the card, so the trend line is inset the same
@@ -257,7 +261,7 @@ export default async function HomePage() {
         )}
       </Section>
 
-      {watchlist.length > 0 && <WatchlistPane items={watchlist} />}
+      {watchlist.length > 0 && <WatchlistPane items={watchlist} live={marketOpen === true} />}
 
       <Section
         title="Өсөлттэй"
@@ -265,11 +269,11 @@ export default async function HomePage() {
         action={{ href: "/discover", label: "Зах зээл" }}
         className="lg:col-span-2"
       >
-        <MoverList rows={gainers} />
+        <MoverList rows={gainers} live={marketOpen === true} />
       </Section>
 
       <Section title="Уналттай" note={moversSession} className="lg:col-span-2">
-        <MoverList rows={losers} />
+        <MoverList rows={losers} live={marketOpen === true} />
       </Section>
 
       {topPicks.length > 0 && (
@@ -357,7 +361,17 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
-function MoverList({ rows }: { rows: DashboardRow[] }) {
+/**
+ * A row of mover cards.
+ *
+ * The move is there twice, on purpose: in tögrög beside the ticker and in
+ * percent beside the price. +14.98% says how hard a stock moved and +525₮
+ * what that came to a share, and a reader comparing a 4,000₮ stock with a
+ * 17₮ one needs both. `live` puts the in-session dot in front of the ticker
+ * — every card here traded today, so while the exchange is open each of
+ * them is moving.
+ */
+function MoverList({ rows, live }: { rows: DashboardRow[]; live: boolean }) {
   if (rows.length === 0) {
     return <Empty>Арилжааны мэдээлэл алга.</Empty>;
   }
@@ -371,9 +385,15 @@ function MoverList({ rows }: { rows: DashboardRow[] }) {
         >
           <div className="flex items-center gap-1.5">
             <StockAvatar symbol={r.symbol} size={18} />
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-app-text truncate leading-tight">
-                {r.symbol}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                {live && <LiveDot />}
+                <span className="min-w-0 truncate text-sm font-semibold text-app-text leading-tight">
+                  {r.symbol}
+                </span>
+                <span className="ml-auto shrink-0 text-[11px] tabular-nums leading-tight">
+                  <Delta value={rowChange(r)} />
+                </span>
               </div>
               <div className="text-[10px] text-app-muted truncate leading-tight">
                 {r.name}
