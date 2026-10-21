@@ -118,7 +118,9 @@ export function DeletedOrderRow({
   const order = edit.before;
   return (
     <div className={`opacity-80 ${className}`}>
-      <div className="flex items-start gap-3">
+      {/* The logo at the middle of the three lines beside it, as on every
+          other row, rather than level with the label at the top. */}
+      <div className="flex items-center gap-3">
         <StockAvatar symbol={edit.symbol} />
         <div className="min-w-0 flex-1">
           <AdminTag>АДМИН УСТГАСАН</AdminTag>
@@ -179,7 +181,7 @@ export function CashEditRow({
   const delta = edit.after - edit.before;
   const up = delta > 0;
   return (
-    <div className={`flex items-start gap-3 ${className}`}>
+    <div className={`flex items-center gap-3 ${className}`}>
       <span
         aria-hidden
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-elevated text-base font-bold text-app-muted"
