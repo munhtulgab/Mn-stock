@@ -532,8 +532,6 @@ export async function getWatchlist(
     /** Today's move in tögrög, against the same close as `changePct`. */
     change: number | null;
     changePct: number | null;
-    /** Priced from the running feed or the exchange's page, not a stored close. */
-    live: boolean;
   })[]
 > {
   const items = await db
@@ -575,7 +573,6 @@ export async function getWatchlist(
       currentPrice,
       change: moved ? currentPrice - base : null,
       changePct: moved ? ((currentPrice - base) / base) * 100 : null,
-      live: running !== undefined,
     };
   });
 }

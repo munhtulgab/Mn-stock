@@ -5,7 +5,6 @@ import Link from "next/link";
 import Section from "./Section";
 import StockAvatar from "./StockAvatar";
 import Num, { Delta, Pct } from "./Num";
-import LiveDot from "./LiveDot";
 import type { getWatchlist } from "@/lib/portfolio";
 
 type WatchlistRow = Awaited<ReturnType<typeof getWatchlist>>[number];
@@ -53,14 +52,7 @@ function stepOf(el: HTMLElement, pages: number): number {
   return (el.scrollWidth - el.clientWidth) / (pages - 1);
 }
 
-export default function WatchlistPane({
-  items,
-  live,
-}: {
-  items: WatchlistRow[];
-  /** The exchange is in session: priced cards get the dot in front. */
-  live: boolean;
-}) {
+export default function WatchlistPane({ items }: { items: WatchlistRow[] }) {
   const pane = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState(1);
   const [page, setPage] = useState(0);
@@ -171,11 +163,8 @@ export default function WatchlistPane({
               <StockAvatar symbol={w.symbol} size={40} />
               <div className="min-w-0 flex-1">
                 {/* The move in tögrög beside the ticker, the percentage under
-                    it beside the price — and the dot in front only on a card
-                    priced from the running session, not on a company that
-                    has not traded today. */}
+                    it beside the price. */}
                 <div className="flex items-center gap-1.5">
-                  {live && w.live && <LiveDot />}
                   <span className="min-w-0 truncate font-semibold text-app-text text-sm">
                     {w.symbol}
                   </span>
