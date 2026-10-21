@@ -261,19 +261,28 @@ export default async function HomePage() {
         )}
       </Section>
 
-      {watchlist.length > 0 && <WatchlistPane items={watchlist} live={marketOpen === true} />}
+      {watchlist.length > 0 && <WatchlistPane items={watchlist} />}
 
+      {/* The in-session dot on the heading, once for the whole row, rather
+          than on every card under it: everything on the board traded today,
+          so a dot per card said the same thing six times over. */}
       <Section
         title="Өсөлттэй"
+        leading={marketOpen === true ? <LiveDot /> : undefined}
         note={moversSession}
         action={{ href: "/discover", label: "Зах зээл" }}
         className="lg:col-span-2"
       >
-        <MoverList rows={gainers} live={marketOpen === true} />
+        <MoverList rows={gainers} />
       </Section>
 
-      <Section title="Уналттай" note={moversSession} className="lg:col-span-2">
-        <MoverList rows={losers} live={marketOpen === true} />
+      <Section
+        title="Уналттай"
+        leading={marketOpen === true ? <LiveDot /> : undefined}
+        note={moversSession}
+        className="lg:col-span-2"
+      >
+        <MoverList rows={losers} />
       </Section>
 
       {topPicks.length > 0 && (
@@ -367,11 +376,9 @@ function Empty({ children }: { children: React.ReactNode }) {
  * The move is there twice, on purpose: in tögrög beside the ticker and in
  * percent beside the price. +14.98% says how hard a stock moved and +525₮
  * what that came to a share, and a reader comparing a 4,000₮ stock with a
- * 17₮ one needs both. `live` puts the in-session dot in front of the ticker
- * — every card here traded today, so while the exchange is open each of
- * them is moving.
+ * 17₮ one needs both.
  */
-function MoverList({ rows, live }: { rows: DashboardRow[]; live: boolean }) {
+function MoverList({ rows }: { rows: DashboardRow[] }) {
   if (rows.length === 0) {
     return <Empty>Арилжааны мэдээлэл алга.</Empty>;
   }
@@ -387,7 +394,6 @@ function MoverList({ rows, live }: { rows: DashboardRow[]; live: boolean }) {
             <StockAvatar symbol={r.symbol} size={18} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                {live && <LiveDot />}
                 <span className="min-w-0 truncate text-sm font-semibold text-app-text leading-tight">
                   {r.symbol}
                 </span>

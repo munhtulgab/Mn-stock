@@ -2,6 +2,7 @@ import Link from "next/link";
 
 export default function Section({
   title,
+  leading,
   note,
   action,
   aside,
@@ -10,6 +11,8 @@ export default function Section({
   children,
 }: {
   title: string;
+  /** In front of the title — the in-session dot, say. */
+  leading?: React.ReactNode;
   /** Which session the figures belong to, when that isn't obvious. */
   note?: string | null;
   action?: { href: string; label: string };
@@ -41,9 +44,10 @@ export default function Section({
       className={`${fill ? "lg:self-stretch lg:flex lg:flex-col" : ""} ${className}`}
     >
       <div className="flex items-center justify-between mb-3 lg:shrink-0">
-        <h2 className="font-semibold text-app-text text-sm">
+        <h2 className="flex items-center gap-1.5 font-semibold text-app-text text-sm">
+          {leading}
           {title}
-          {note && <span className="text-app-muted font-normal ml-1.5">· {note}</span>}
+          {note && <span className="text-app-muted font-normal">· {note}</span>}
         </h2>
         {aside}
         {action && (
