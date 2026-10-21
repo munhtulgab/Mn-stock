@@ -115,6 +115,48 @@ async function getLatestTwoPricesForMany(
 }
 
 /**
+ * A running price, and what it moved from.
+ *
+ * The previous close travels with the price because the stored history
+ * cannot be trusted to supply it. Once a session's close has been stored —
+ * after the trading table is published, or a heading close is recorded — the
+ * newest stored close *is* the running price, and measuring one against the
+ * other put +0.00% under every company on the watchlist all evening.
+ */
+interface RunningPrice {
+  price: number;
+  /** The close the session opened from, where the source states it. */
+  previousClose: number | null;
+  /** `YYYY-MM-DD` of the session the price belongs to, where known. */
+  date: string | null;
+}
+
+function runningFrom(quote: LiveQuote | undefined): RunningPrice | null {
+  if (quote?.price == null) return null;
+  return {
+    price: quote.price,
+    previousClose: quote.previousClose != null && quote.previousClose > 0 ? quote.previousClose : null,
+    date: quote.at?.slice(0, 10) ?? null,
+  };
+}
+
+/**
+ * What today's move is measured from: the running price's own previous
+ * close where it has one, and otherwise the stored close before the running
+ * session — never a stored close of that same session.
+ */
+function sessionBase(
+  running: RunningPrice | undefined,
+  last: PricePoint | null,
+  prev: PricePoint | null,
+): number | null {
+  if (!running) return priorClose(last, prev);
+  if (running.previousClose !== null) return running.previousClose;
+  if (last && running.date && last.date >= running.date) return priorClose(last, prev);
+  return last?.close ?? null;
+}
+
+/**
  * Running prices for the securities held, keyed by company code.
  *
  * Valuing a portfolio at yesterday's close while every list on screen shows
@@ -124,7 +166,7 @@ async function getLatestTwoPricesForMany(
 async function livePricesFor(
   companyCodes: number[],
   waitMs?: number,
-): Promise<Map<number, number>> {
+): Promise<Map<number, RunningPrice>> {
   if (companyCodes.length === 0) return new Map();
   // Kept in one variable so the request survives a caller that gives up on
   // it: `fetchLiveQuotes` holds the attempt in a module-level cache, so a
@@ -141,10 +183,10 @@ async function livePricesFor(
               timer = setTimeout(() => resolve(new Map()), waitMs);
             }),
           ]);
-    const prices = new Map<number, number>();
+    const prices = new Map<number, RunningPrice>();
     for (const code of companyCodes) {
-      const price = quotes.get(code)?.price;
-      if (price != null) prices.set(code, price);
+      const running = runningFrom(quotes.get(code));
+      if (running) prices.set(code, running);
     }
     return prices;
   } catch {
@@ -163,9 +205,9 @@ async function livePricesFor(
 async function currentPricesFor(
   items: { companyCode: number; symbol: string }[],
   latest: Map<number, { last: PricePoint | null }>,
-  live: Map<number, number>,
+  live: Map<number, RunningPrice>,
   waitMs?: number,
-): Promise<Map<number, number>> {
+): Promise<Map<number, RunningPrice>> {
   const missing = items
     .filter((item) => !live.has(item.companyCode))
     .map((item) => ({
@@ -179,7 +221,8 @@ async function currentPricesFor(
   const headings = await headingQuotesFor(missing, waitMs);
   const prices = new Map(live);
   for (const [code, quote] of headings) {
-    if (quote.price !== null) prices.set(code, quote.price);
+    const running = runningFrom(quote);
+    if (running) prices.set(code, running);
   }
   return prices;
 }
@@ -267,7 +310,8 @@ export async function valuePortfolio(
       last: null,
       prev: null,
     };
-    const currentPrice = livePrices.get(h.companyCode) ?? last?.close ?? null;
+    const running = livePrices.get(h.companyCode);
+    const currentPrice = running?.price ?? last?.close ?? null;
     const marketValue = (currentPrice ?? h.avgCost) * h.quantity;
     const costBasis = h.avgCost * h.quantity;
     const gainLoss = marketValue - costBasis;
@@ -275,9 +319,7 @@ export async function valuePortfolio(
     totalCostBasis += costBasis;
     // Against the previous session's close, so "today" means today whether
     // the price is a running one or the last published close.
-    const base = livePrices.has(h.companyCode)
-      ? (last?.close ?? null)
-      : priorClose(last, prev);
+    const base = sessionBase(running, last, prev);
     if (currentPrice !== null && base !== null) {
       todayGain += (currentPrice - base) * h.quantity;
     }
@@ -483,7 +525,17 @@ export async function getTransactions(db: Db, userId: string): Promise<Transacti
 export async function getWatchlist(
   db: Db,
   userId: string,
-): Promise<(WatchlistItem & { name: string; currentPrice: number | null; changePct: number | null })[]> {
+): Promise<
+  (WatchlistItem & {
+    name: string;
+    currentPrice: number | null;
+    /** Today's move in tögrög, against the same close as `changePct`. */
+    change: number | null;
+    changePct: number | null;
+    /** Priced from the running feed or the exchange's page, not a stored close. */
+    live: boolean;
+  })[]
+> {
   const items = await db
     .collection<WatchlistItem>("watchlist")
     .find({ userId })
@@ -507,18 +559,23 @@ export async function getWatchlist(
       last: null,
       prev: null,
     };
-    const live = livePrices.get(item.companyCode) ?? null;
-    const currentPrice = live ?? last?.close ?? null;
-    const base = live !== null ? (last?.close ?? null) : priorClose(last, prev);
-    const changePct =
-      currentPrice !== null && base !== null && base > 0
-        ? ((currentPrice - base) / base) * 100
-        : null;
+    const running = livePrices.get(item.companyCode);
+    const currentPrice = running?.price ?? last?.close ?? null;
+    const base = sessionBase(running, last, prev);
+    const moved = currentPrice !== null && base !== null && base > 0;
     return {
-      ...item,
+      // Field by field rather than the whole document: its own id is an
+      // ObjectId, and these rows go to a client component, which takes plain
+      // values and nothing with a toJSON.
+      userId: item.userId,
+      companyCode: item.companyCode,
+      symbol: item.symbol,
+      addedAt: item.addedAt,
       name: securityByCode.get(item.companyCode)?.name ?? item.symbol,
       currentPrice,
-      changePct,
+      change: moved ? currentPrice - base : null,
+      changePct: moved ? ((currentPrice - base) / base) * 100 : null,
+      live: running !== undefined,
     };
   });
 }
@@ -548,3 +605,5 @@ export async function removeFromWatchlist(
     .collection<WatchlistItem>("watchlist")
     .deleteOne({ userId, companyCode: security.companyCode });
 }
+
+export const __testing = { sessionBase };

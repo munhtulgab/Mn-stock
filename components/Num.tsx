@@ -67,3 +67,29 @@ export function Pct({
     </span>
   );
 }
+
+/**
+ * A move in tögrög carrying its own sign and the positive/negative colour —
+ * {@link Pct}'s twin, for where the amount says more than the percentage.
+ * Nothing at all where the move is unknown: it sits beside a figure that
+ * already says "—" for that.
+ */
+export function Delta({
+  value,
+  digits = 2,
+  suffix = "₮",
+  className = "",
+}: {
+  value: number | null;
+  digits?: number;
+  suffix?: string;
+  className?: string;
+}) {
+  if (value === null || Number.isNaN(value)) return null;
+  const tone = value >= 0 ? "text-app-positive" : "text-app-negative";
+  return (
+    <span className={tone}>
+      <Num value={value} digits={digits} suffix={suffix} showSign className={className} />
+    </span>
+  );
+}

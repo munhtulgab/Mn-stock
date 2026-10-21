@@ -54,3 +54,19 @@ export function sessionChangePct(
   if (!last || !(last.close > 0) || base === null || !(base > 0)) return null;
   return ((last.close - base) / base) * 100;
 }
+
+/**
+ * A move in tögrög, where only the price and the percentage are known.
+ *
+ * The exchange's board of gainers and losers states those two and nothing
+ * else, and a stored row built before the amount was kept carries the same.
+ * The close it moved from is the price taken back out of the percentage;
+ * the percentage is rounded to two places, so this can be a few möngö off
+ * the exchange's own figure, which is why a stated previous close is used
+ * wherever there is one.
+ */
+export function amountFromPct(price: number | null, pct: number | null): number | null {
+  if (price === null || pct === null || !Number.isFinite(pct) || pct <= -100) return null;
+  const base = price / (1 + pct / 100);
+  return Math.round((price - base) * 100) / 100;
+}

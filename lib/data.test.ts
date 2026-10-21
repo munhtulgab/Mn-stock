@@ -100,3 +100,27 @@ test("the month comes from the session, not from the clock", () => {
     ["A"],
   );
 });
+
+test("a row's move in tögrög is the one it carries", async () => {
+  const { rowChange } = await import("./data");
+  assert.equal(rowChange({ lastPrice: 4_029, changePct: 14.98, change: 525 }), 525);
+  assert.equal(rowChange({ lastPrice: 4_029, changePct: 14.98, change: null }), null);
+});
+
+test("a row stored before it carried one has its move worked out from the percentage", async () => {
+  const { rowChange } = await import("./data");
+  // 4,029 at +14.98% opened from about 3,504.09: within a few möngö of the
+  // exchange's own 525, which is why a stated close is preferred.
+  assert.equal(rowChange({ lastPrice: 4_029, changePct: 14.98 }), 524.91);
+  assert.equal(rowChange({ lastPrice: 16.94, changePct: -5.89 }), -1.06);
+  assert.equal(rowChange({ lastPrice: null, changePct: 3 }), null);
+});
+
+test("a built row carries its move in tögrög, from the session's stated previous close", () => {
+  const prices = [
+    { companyCode: 1, date: "2026-10-20", open: 3_504, high: 3_504, low: 3_504, close: 3_504, volume: 5, previousClose: 3_500 },
+    { companyCode: 1, date: "2026-10-21", open: 4_029, high: 4_029, low: 4_029, close: 4_029, volume: 9, previousClose: 3_504 },
+  ] as PricePoint[];
+  const row = buildRow(security, prices, undefined);
+  assert.equal(row.change, 525);
+});
